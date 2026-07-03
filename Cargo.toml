@@ -6,6 +6,9 @@ resolver = "2"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/Xuanwo/agenvo"
+homepage = "https://github.com/Xuanwo/agenvo"
 
 [workspace.dependencies]
 agenvo-core = { version = "=0.1.0", path = "agenvo-core" }

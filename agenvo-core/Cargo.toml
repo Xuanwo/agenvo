@@ -3,6 +3,9 @@ name = "agenvo-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Core library for Agenvo room protocol storage and rendering"
 readme = "../README.md"
 

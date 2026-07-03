@@ -1,0 +1,355 @@
+name: Publish Release Assets
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  validate-tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve-version.outputs.version }}
+      is_prerelease: ${{ steps.resolve-version.outputs.is_prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve release version
+        id: resolve-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ -z "${version}" ]]; then
+            echo "Failed to parse version from tag: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+          is_prerelease="true"
+          if [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            is_prerelease="false"
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "is_prerelease=${is_prerelease}" >> "${GITHUB_OUTPUT}"
+
+  build-native:
+    name: Build native binary for ${{ matrix.platform.target }}
+    needs: validate-tag
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: agenvo
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: agenvo
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            binary: agenvo
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary: agenvo
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: agenvo.exe
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            binary: agenvo.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Inject release version into Cargo manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare_cargo_release.py \
+            --version "${{ needs.validate-tag.outputs.version }}"
+
+      - name: Refresh lockfile for injected version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        shell: bash
+        run: cargo build --locked --release -p agenvo-cli --target ${{ matrix.platform.target }}
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate-tag.outputs.version }}"
+          archive_name="agenvo-${version}-${{ matrix.platform.target }}.tar.gz"
+          mkdir -p dist/release
+
+          tar -czf "dist/release/${archive_name}" \
+            -C "target/${{ matrix.platform.target }}/release" \
+            "${{ matrix.platform.binary }}"
+
+      - name: Upload release archive artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ matrix.platform.target }}
+          path: dist/release/*.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub release assets
+    runs-on: ubuntu-latest
+    needs:
+      - validate-tag
+      - build-native
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v7
+        with:
+          path: dist/release
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Generate checksums and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate-tag.outputs.version }}"
+          release_tag="v${version}"
+
+          cd dist/release
+          shopt -s nullglob
+          archives=(agenvo-"${version}"-*.tar.gz)
+          if [[ ${#archives[@]} -eq 0 ]]; then
+            echo "No release archives found."
+            exit 1
+          fi
+
+          sha256sum "${archives[@]}" | sort > checksums.txt
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["VERSION"]
+          release_tag = os.environ["RELEASE_TAG"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          checksums_path = Path("checksums.txt")
+
+          artifacts: dict[str, dict[str, str]] = {}
+          for line in checksums_path.read_text(encoding="utf-8").splitlines():
+              sha256, filename = line.split("  ", maxsplit=1)
+              prefix = f"agenvo-{version}-"
+              suffix = ".tar.gz"
+              if not filename.startswith(prefix) or not filename.endswith(suffix):
+                  continue
+              target = filename[len(prefix) : -len(suffix)]
+              artifacts[target] = {
+                  "filename": filename,
+                  "sha256": sha256,
+                  "url": f"https://github.com/{repo}/releases/download/{release_tag}/{filename}",
+              }
+
+          if not artifacts:
+              raise RuntimeError("No artifacts generated from checksums.txt.")
+
+          manifest = {
+              "version": version,
+              "release_tag": release_tag,
+              "artifacts": artifacts,
+          }
+          Path("manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          PY
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+          RELEASE_TAG: v${{ needs.validate-tag.outputs.version }}
+
+      - name: Upload release metadata artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-metadata
+          path: |
+            dist/release/checksums.txt
+            dist/release/manifest.json
+          if-no-files-found: error
+
+      - name: Publish release assets
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="${{ needs.validate-tag.outputs.version }}"
+          tag="v${version}"
+
+          shopt -s nullglob
+          archives=(dist/release/agenvo-"${version}"-*.tar.gz)
+          if [[ ${#archives[@]} -eq 0 ]]; then
+            echo "No release archives found for ${tag}"
+            exit 1
+          fi
+
+          files=("${archives[@]}" dist/release/checksums.txt dist/release/manifest.json)
+          prerelease_flag=()
+          if [[ "${{ needs.validate-tag.outputs.is_prerelease }}" == "true" ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${files[@]}" --clobber
+          else
+            gh release create "${tag}" "${files[@]}" \
+              --title "${tag}" \
+              --verify-tag \
+              "${prerelease_flag[@]}"
+          fi
+
+  publish-crates:
+    name: Publish crates.io packages
+    runs-on: ubuntu-latest
+    needs:
+      - validate-tag
+      - publish-release
+    environment:
+      name: crates-io
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      RELEASE_VERSION: ${{ needs.validate-tag.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Inject release version into Cargo manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare_cargo_release.py --version "${RELEASE_VERSION}"
+
+      - name: Refresh lockfile for injected version
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Authenticate with crates.io
+        id: crates-auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Verify agenvo-core package
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          cargo package --allow-dirty --locked -p agenvo-core
+
+      - name: Publish agenvo-core
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          publish_output="$(mktemp)"
+          if cargo publish --allow-dirty --locked -p agenvo-core >"${publish_output}" 2>&1; then
+            cat "${publish_output}"
+            exit 0
+          fi
+
+          cat "${publish_output}"
+          if grep -qiE "already uploaded|already exists|previously uploaded" "${publish_output}"; then
+            echo "agenvo-core ${RELEASE_VERSION} is already published."
+            exit 0
+          fi
+          exit 1
+
+      - name: Wait for agenvo-core index visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            if python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          crate = "agenvo-core"
+          version = os.environ["RELEASE_VERSION"]
+          url = f"https://crates.io/api/v1/crates/{crate}"
+
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  payload = json.load(response)
+          except Exception as exc:
+              print(f"crates.io lookup failed: {exc}")
+              sys.exit(1)
+
+          versions = [item["num"] for item in payload["versions"]]
+          if version in versions:
+              print(f"{crate} {version} is visible in crates.io index.")
+              sys.exit(0)
+
+          print(f"{crate} {version} is not visible yet.")
+          sys.exit(1)
+          PY
+            then
+              exit 0
+            fi
+
+            echo "Waiting for agenvo-core ${RELEASE_VERSION} to appear on crates.io... (${attempt}/60)"
+            sleep 10
+          done
+
+          echo "Timed out waiting for agenvo-core ${RELEASE_VERSION} to appear on crates.io."
+          exit 1
+
+      - name: Verify agenvo-cli package
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          cargo package --allow-dirty --locked -p agenvo-cli
+
+      - name: Publish agenvo-cli
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          publish_output="$(mktemp)"
+          if cargo publish --allow-dirty --locked -p agenvo-cli >"${publish_output}" 2>&1; then
+            cat "${publish_output}"
+            exit 0
+          fi
+
+          cat "${publish_output}"
+          if grep -qiE "already uploaded|already exists|previously uploaded" "${publish_output}"; then
+            echo "agenvo-cli ${RELEASE_VERSION} is already published."
+            exit 0
+          fi
+          exit 1
