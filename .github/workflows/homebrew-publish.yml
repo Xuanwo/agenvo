@@ -1,0 +1,162 @@
+name: Publish Homebrew Formula
+
+on:
+  workflow_run:
+    workflows:
+      - Publish Release Assets
+    types:
+      - completed
+
+jobs:
+  update-homebrew-tap:
+    name: Update Homebrew tap formula
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    env:
+      TAP_REPO: Xuanwo/homebrew-tap
+      TAP_BRANCH: main
+      FORMULA_PATH: Formula/agenvo.rb
+      HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+    steps:
+      - name: Validate required secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_GITHUB_TOKEN}" ]]; then
+            echo "Missing required secret: HOMEBREW_TAP_GITHUB_TOKEN"
+            echo "Create a token with write access to ${TAP_REPO} and store it in repository secrets."
+            exit 1
+          fi
+
+      - name: Download release metadata
+        uses: actions/download-artifact@v7
+        with:
+          name: release-metadata
+          path: dist/release
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read release version
+        id: read-manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("dist/release/manifest.json").read_text(encoding="utf-8"))
+          print(manifest["version"])
+          PY
+          )"
+
+          if [[ -z "${version}" ]]; then
+            echo "Failed to read version from dist/release/manifest.json"
+            exit 1
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Clone Homebrew tap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone \
+            "https://x-access-token:${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/${TAP_REPO}.git" \
+            tap-repo
+
+      - name: Update formula content
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import textwrap
+          from pathlib import Path
+
+          formula_path = Path(os.environ["FORMULA_FILE"])
+          manifest = json.loads(Path("dist/release/manifest.json").read_text(encoding="utf-8"))
+          artifacts = manifest["artifacts"]
+
+          required_targets = {
+              "aarch64-apple-darwin",
+              "x86_64-apple-darwin",
+              "aarch64-unknown-linux-gnu",
+              "x86_64-unknown-linux-gnu",
+          }
+          missing = sorted(required_targets - artifacts.keys())
+          if missing:
+              raise RuntimeError(f"Missing release artifacts for Homebrew targets: {', '.join(missing)}")
+
+          def url(target: str) -> str:
+              return artifacts[target]["url"]
+
+          def sha256(target: str) -> str:
+              return artifacts[target]["sha256"]
+
+          content = textwrap.dedent(
+              f"""\
+              class Agenvo < Formula
+                desc "Temporary room-based conversation log for agents"
+                homepage "https://github.com/Xuanwo/agenvo"
+                license "Apache-2.0"
+
+                on_macos do
+                  if Hardware::CPU.arm?
+                    url "{url("aarch64-apple-darwin")}"
+                    sha256 "{sha256("aarch64-apple-darwin")}"
+                  else
+                    url "{url("x86_64-apple-darwin")}"
+                    sha256 "{sha256("x86_64-apple-darwin")}"
+                  end
+                end
+
+                on_linux do
+                  if Hardware::CPU.arm?
+                    url "{url("aarch64-unknown-linux-gnu")}"
+                    sha256 "{sha256("aarch64-unknown-linux-gnu")}"
+                  else
+                    url "{url("x86_64-unknown-linux-gnu")}"
+                    sha256 "{sha256("x86_64-unknown-linux-gnu")}"
+                  end
+                end
+
+                def install
+                  bin.install "agenvo"
+                end
+
+                test do
+                  assert_match "Usage: agenvo", shell_output("#{{bin}}/agenvo --help")
+                end
+              end
+              """
+          )
+          formula_path.write_text(content.rstrip() + "\n", encoding="utf-8")
+          PY
+        env:
+          FORMULA_FILE: tap-repo/${{ env.FORMULA_PATH }}
+
+      - name: Commit and push changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.read-manifest.outputs.version }}"
+
+          cd tap-repo
+          git checkout "${TAP_BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- "${FORMULA_PATH}"; then
+            echo "No formula changes detected."
+            exit 0
+          fi
+
+          git add "${FORMULA_PATH}"
+          git commit -m "agenvo ${version}"
+          git push origin "HEAD:${TAP_BRANCH}"

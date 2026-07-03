@@ -89,6 +89,14 @@ jobs:
         shell: bash
         run: cargo build --locked --release -p agenvo-cli --target ${{ matrix.platform.target }}
 
+      - name: Prepare vendor payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "dist/vendor/${{ matrix.platform.target }}/agenvo"
+          cp "target/${{ matrix.platform.target }}/release/${{ matrix.platform.binary }}" \
+             "dist/vendor/${{ matrix.platform.target }}/agenvo/${{ matrix.platform.binary }}"
+
       - name: Package release archive
         shell: bash
         run: |
@@ -106,6 +114,13 @@ jobs:
         with:
           name: release-${{ matrix.platform.target }}
           path: dist/release/*.tar.gz
+          if-no-files-found: error
+
+      - name: Upload vendor artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: vendor-${{ matrix.platform.target }}
+          path: dist/vendor/${{ matrix.platform.target }}
           if-no-files-found: error
 
   publish-release:

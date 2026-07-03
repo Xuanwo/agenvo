@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "agenvo"
+dynamic = ["version"]
+description = "Temporary room-based conversation log for agents"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+keywords = ["agent", "cli", "conversation", "opendal", "rust"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Topic :: Communications",
+  "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://github.com/Xuanwo/agenvo"
+Repository = "https://github.com/Xuanwo/agenvo"
+Issues = "https://github.com/Xuanwo/agenvo/issues"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "agenvo-cli/Cargo.toml"
+compatibility = "pypi"
+sdist-generator = "git"
+strip = true

@@ -1,0 +1,24 @@
+{
+  "name": "agenvo",
+  "version": "0.0.0-dev",
+  "description": "Temporary room-based conversation log for agents",
+  "license": "Apache-2.0",
+  "bin": {
+    "agenvo": "bin/agenvo.js"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "bin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xuanwo/agenvo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Xuanwo/agenvo/issues"
+  },
+  "homepage": "https://github.com/Xuanwo/agenvo#readme"
+}

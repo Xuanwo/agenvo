@@ -8,6 +8,15 @@ agenvo say <room-path> --as <speaker> "message text"
 agenvo hear <room-path> --as <speaker> [--after <message-id>]
 ```
 
+## Installation
+
+```sh
+cargo install agenvo-cli
+npm install -g agenvo
+pipx install agenvo
+brew install xuanwo/tap/agenvo
+```
+
 `<room-path>` is a string. Plain values such as `/tmp/agenvo-room` are treated
 as local filesystem rooms. OpenDAL URIs such as `file:///tmp/agenvo-room`,
 `fs:///tmp/agenvo-room`, and `s3://bucket/path/to/room` are passed to OpenDAL.

@@ -1,0 +1,192 @@
+name: Publish npm Package
+
+on:
+  workflow_run:
+    workflows:
+      - Publish Release Assets
+    types:
+      - completed
+
+jobs:
+  stage-npm:
+    name: Stage npm tarballs
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      version: ${{ steps.read-manifest.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Download release metadata
+        uses: actions/download-artifact@v7
+        with:
+          name: release-metadata
+          path: dist/release
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read release version
+        id: read-manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("dist/release/manifest.json").read_text(encoding="utf-8"))
+          print(manifest["version"])
+          PY
+          )"
+
+          if [[ -z "${version}" ]]; then
+            echo "Failed to read version from dist/release/manifest.json"
+            exit 1
+          fi
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download vendor artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist/vendor-artifacts
+          pattern: vendor-*
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assemble vendor tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/vendor
+
+          shopt -s nullglob
+          for artifact_dir in dist/vendor-artifacts/vendor-*; do
+            target="${artifact_dir##*/vendor-}"
+            mkdir -p "dist/vendor/${target}"
+
+            if [[ -d "${artifact_dir}/${target}" ]]; then
+              cp -R "${artifact_dir}/${target}/." "dist/vendor/${target}/"
+            else
+              cp -R "${artifact_dir}/." "dist/vendor/${target}/"
+            fi
+          done
+
+          find dist/vendor -maxdepth 4 -type f | sort
+
+      - name: Stage npm packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ steps.read-manifest.outputs.version }}"
+          python3 scripts/stage_npm_packages.py \
+            --release-version "${version}" \
+            --vendor-src dist/vendor \
+            --output-dir dist/npm
+          ls -l dist/npm
+
+      - name: Upload npm tarballs
+        uses: actions/upload-artifact@v6
+        with:
+          name: npm-tarballs
+          path: dist/npm/*.tgz
+          if-no-files-found: error
+
+  publish-npm:
+    name: Publish to npm
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    needs: stage-npm
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/agenvo
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Download npm tarballs
+        uses: actions/download-artifact@v7
+        with:
+          name: npm-tarballs
+          path: dist/npm
+
+      - name: Publish npm tarballs
+        shell: bash
+        env:
+          VERSION: ${{ needs.stage-npm.outputs.version }}
+        run: |
+          set -euo pipefail
+          version="${VERSION}"
+
+          npm_tag=""
+          tag_prefix=""
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            npm_tag="next"
+            tag_prefix="next-"
+          fi
+
+          publish_one() {
+            tarball="$1"
+            tag="$2"
+
+            publish_cmd=(npm publish "${tarball}")
+            if [[ -n "${tag}" ]]; then
+              publish_cmd+=(--tag "${tag}")
+            fi
+
+            echo "+ ${publish_cmd[*]}"
+            set +e
+            publish_output="$("${publish_cmd[@]}" 2>&1)"
+            publish_status=$?
+            set -e
+            echo "${publish_output}"
+
+            if [[ ${publish_status} -eq 0 ]]; then
+              return
+            fi
+
+            if grep -qiE "previously published|cannot publish over|version already exists" <<< "${publish_output}"; then
+              echo "Skipping already-published tarball: ${tarball}"
+              return
+            fi
+
+            exit "${publish_status}"
+          }
+
+          shopt -s nullglob
+          platform_tarballs=(dist/npm/agenvo-npm-linux-*-${version}.tgz dist/npm/agenvo-npm-darwin-*-${version}.tgz dist/npm/agenvo-npm-win32-*-${version}.tgz)
+          for tarball in "${platform_tarballs[@]}"; do
+            filename="$(basename "${tarball}")"
+            platform="${filename#agenvo-npm-}"
+            platform="${platform%-${version}.tgz}"
+            publish_one "${tarball}" "${tag_prefix}${platform}"
+          done
+
+          main_tarball="dist/npm/agenvo-npm-${version}.tgz"
+          if [[ ! -f "${main_tarball}" ]]; then
+            echo "Main npm tarball not found: ${main_tarball}"
+            exit 1
+          fi
+          publish_one "${main_tarball}" "${npm_tag}"
