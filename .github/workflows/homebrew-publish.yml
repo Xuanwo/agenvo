@@ -152,7 +152,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- "${FORMULA_PATH}"; then
+          if [[ -z "$(git status --porcelain -- "${FORMULA_PATH}")" ]]; then
             echo "No formula changes detected."
             exit 0
           fi
