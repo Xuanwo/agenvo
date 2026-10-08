@@ -1,3 +1,4 @@
+import { callCode, nativeOutcome } from "./code.js";
 import { stopProcess } from "./process.js";
 import { socketTempDir } from "./environment.js";
 import assert from "node:assert/strict";
@@ -381,11 +382,13 @@ export async function eventsLab(t: TestContext) {
     params: Record<string, unknown> = {},
   ) => {
     const r = await rpc("tools/call", {
-      name: "runtime_call",
-      arguments: { deviceId, instanceId, method, params },
+      name: "execute",
+      arguments: callCode({ deviceId, instanceId, method, params }),
     });
     assert.equal(r.isError, false, JSON.stringify(r));
-    return JSON.parse(r.content[0].text).result;
+    const outcome = nativeOutcome(r);
+    assert.equal(outcome.error, undefined, JSON.stringify(outcome));
+    return outcome.result;
   };
   return {
     cleanup: (action: () => unknown | Promise<unknown>) => {

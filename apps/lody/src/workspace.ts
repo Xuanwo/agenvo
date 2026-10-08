@@ -546,7 +546,7 @@ export class LodyWorkspace {
   async live(session: Session) {
     return this.connection.live(session);
   }
-  async cancel(id: string, turnId?: string) {
+  async cancel(id: string, turnId: string) {
     const session = await this.get(id);
     await this.connection.machineAccess(
       session.machineId,
@@ -554,33 +554,6 @@ export class LodyWorkspace {
         ? session.project.localProjectId
         : undefined,
     );
-    if (!turnId) {
-      const { doc } = await this.document(id);
-      const live = await this.live(session);
-      if (!["running", "waiting", "initializing"].includes(live.state))
-        throw new Fault(
-          live.state === "unknown"
-            ? "runtime_unavailable"
-            : "no_active_execution",
-        );
-      // Local invocation RPC names the exact user turn even before the first
-      // assistant history delta. Cloud live-status has no such identity.
-      turnId = live.turnId;
-      const list = doc.getList("history");
-      if (!turnId)
-        for (let i = list.length - 1; i >= 0; i--) {
-          const turn = readTurn(doc, i);
-          if (turn.role !== "assistant") continue;
-          if (!turn.finished && typeof turn.endedAt !== "number")
-            turnId = turn.id;
-          break;
-        }
-      if (!turnId)
-        throw new Fault(
-          "no_active_execution",
-          "No exact native assistant turn is available to cancel",
-        );
-    }
     const native = await this.connection.call(
       session.machineId,
       "session/cancel",

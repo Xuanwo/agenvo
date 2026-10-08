@@ -4,6 +4,13 @@
   "main": "integration/entry.ts",
   "compatibility_date": "2026-10-06",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["**/*.wasm", "**/wasm"],
+      "fallthrough": true,
+    },
+  ],
   "workers_dev": true,
   "preview_urls": false,
   "durable_objects": {

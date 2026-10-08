@@ -26,7 +26,7 @@ export const backend: Backend<LodyConfig> = {
     "auth-site-url",
   ],
   help: "[--mode cloud --workspace-id ID --token-file PATH] | [--mode local --platform local|cloud --data-dir PATH [--workspace-id ID]]",
-  revision: () => "lody-cloud-3d478711-local-v7-management-v1",
+  revision: () => "lody-cloud-3d478711-local-v7-native-v1",
   async configure(options) {
     if (options.binary || options.cwd)
       throw new Fault(

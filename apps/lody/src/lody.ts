@@ -7,19 +7,28 @@ import {
   type Adapter,
   type Method,
 } from "@agenvo/connector/adapters/adapter";
-import { pagination } from "@agenvo/connector/adapters/management";
 import type { LodyConfig } from "./config.js";
 import { nativeId, turnId } from "./config.js";
 import {
   createInput,
   sendInput,
   permissionInput,
+  permissionOutcome,
   sessionTarget,
   readTurn,
   pendingInteractions,
 } from "./protocol.js";
 import { LodyWorkspace } from "./workspace.js";
-import { LodyManagement } from "./management.js";
+
+const pagination = {
+  cursor: z.string().max(2048).optional(),
+  limit: z.number().int().min(1).max(50).default(20),
+};
+const historyCursor = z.strictObject({
+  sessionId: nativeId,
+  previousId: z.string().min(1).max(256),
+  position: z.number().int().positive(),
+});
 
 type Operation = Method & {
   schema: z.ZodType;
@@ -33,7 +42,6 @@ export class LodyAdapter implements Adapter {
       : "cloud-protocol-3d478711";
   }
   onAvailabilityChange?: () => void;
-  readonly management: LodyManagement;
   private workspace?: LodyWorkspace;
   private operations = new Map<string, Operation>();
   private stopped = false;
@@ -42,7 +50,6 @@ export class LodyAdapter implements Adapter {
   private generation = randomUUID();
   private listeners = new Set<(event: RuntimeEvent) => void>();
   constructor(readonly config: LodyConfig) {
-    this.management = new LodyManagement(this);
     const define = (
       name: string,
       schema: z.ZodType,
@@ -50,6 +57,7 @@ export class LodyAdapter implements Adapter {
       description: string,
       run: Operation["run"],
     ) => {
+      if (this.operations.has(name)) throw new Fault("duplicate_method", name);
       this.operations.set(name, {
         name,
         schema,
@@ -73,7 +81,7 @@ export class LodyAdapter implements Adapter {
         includeArchived: z.boolean().default(false),
       }),
       true,
-      "Discover all accessible workspace Sessions, including other clients' Sessions.",
+      "List work contexts (native Sessions), including other clients' Sessions. Local attachment covers only the attached machine; cloud covers the authorized workspace.",
       async (p) =>
         page(await this.connected().list(p.includeArchived), p.cursor, p.limit),
     );
@@ -81,7 +89,7 @@ export class LodyAdapter implements Adapter {
       "lody.sessions.get",
       sessionTarget,
       true,
-      "Read synchronized native Session metadata. Durable status is not live execution evidence.",
+      "Read synchronized native Session metadata and native status. Durable status is not live execution evidence or task success.",
       (p) => this.connected().get(p.sessionId),
     );
     define(
@@ -96,14 +104,14 @@ export class LodyAdapter implements Adapter {
       "lody.sessions.create",
       createInput,
       false,
-      "Create native Session metadata without user input. No provider prompt is sent.",
+      "Create work context as native Session metadata without user input. No provider prompt is sent.",
       (p) => this.connected().create(p),
     );
     define(
       "lody.sessions.send",
       sendInput,
       false,
-      "Submit full-access input via synchronized history and activation. Native Lody owns busy delivery. No replay or Connector queue.",
+      "Submit input in full access via synchronized history and activation. Native Lody owns busy delivery. No replay or Connector queue.",
       (p) => this.connected().send(p),
     );
     define(
@@ -117,7 +125,7 @@ export class LodyAdapter implements Adapter {
       "lody.sessions.cancel",
       sessionTarget.extend({ turnId }),
       false,
-      "Cancel exactly the specified native assistant turn via native RPC, once.",
+      "Interrupt execution by cancelling exactly the specified native assistant turn via native RPC, once.",
       (p) => this.connected().cancel(p.sessionId, p.turnId),
     );
     define(
@@ -138,7 +146,7 @@ export class LodyAdapter implements Adapter {
       "lody.sessions.history",
       sessionTarget.extend({ ...pagination }),
       true,
-      "Read native history by stable turn identity, independently of observation cursors.",
+      "Read output from native history by stable turn identity. Opening history subscribes to document updates; reconnect requires opening again.",
       (p) => this.history(p.sessionId, p.cursor, p.limit),
     );
     define(
@@ -182,10 +190,36 @@ export class LodyAdapter implements Adapter {
       },
     );
     define(
+      "lody.sessions.subscribe",
+      sessionTarget,
+      false,
+      "Subscribe to Session document updates on this connection. Initial snapshots are not completion events; reconnect requires subscribing again and reading native history for missed output.",
+      async (p) => {
+        await this.connected().document(p.sessionId);
+        return { sessionId: p.sessionId, subscribed: true };
+      },
+    );
+    define(
+      "lody.interactions.list",
+      sessionTarget.extend(pagination),
+      true,
+      "List pending native requests for user input with their response schema. Native sessionId, turnId and requestId identify the response target.",
+      async (p) =>
+        page(
+          (await this.interactions(p.sessionId)).map((r) => ({
+            ...r,
+            sessionId: p.sessionId,
+            responseSchema: z.toJSONSchema(permissionOutcome),
+          })),
+          p.cursor,
+          p.limit,
+        ),
+    );
+    define(
       "lody.interactions.respond",
       permissionInput,
       false,
-      "Write a pending native interaction outcome to the connected peer. This does not acknowledge provider consumption or winning a multi-client race.",
+      "Respond to a pending native request for user input by writing its outcome to the connected peer. This does not acknowledge provider consumption or winning a multi-client race.",
       (p) => this.connected().respond(p),
     );
   }
@@ -214,7 +248,6 @@ export class LodyAdapter implements Adapter {
       this.workspace = undefined;
       this.available = false;
       this.generation = randomUUID();
-      this.management.reset();
       this.onAvailabilityChange?.();
       this.emit("agenvo.resync_required", undefined, {
         reason: `${this.config.mode}_disconnected`,
@@ -227,16 +260,11 @@ export class LodyAdapter implements Adapter {
       });
     };
     workspace.onGap = () => {
-      this.management.observations.reset();
       this.emit("agenvo.resync_required", undefined, {
         reason: `${this.config.mode}_sync_gap`,
       });
     };
     workspace.onEvent = (type, id, native) => {
-      if (id)
-        this.management.observations.append(id, type, native, {
-          sessionId: id,
-        });
       this.emit(type, id, native);
     };
     try {
@@ -264,11 +292,14 @@ export class LodyAdapter implements Adapter {
     const list = doc.getList("history");
     let start = 0;
     if (cursor) {
-      const target = this.management.refs.read<{
-        sessionId: string;
-        previousId: string;
-        position: number;
-      }>(cursor, "history");
+      let target: z.infer<typeof historyCursor>;
+      try {
+        target = historyCursor.parse(
+          JSON.parse(Buffer.from(cursor, "base64url").toString()),
+        );
+      } catch {
+        throw new Fault("invalid_cursor");
+      }
       if (
         target.sessionId !== id ||
         target.position > list.length ||
@@ -310,11 +341,13 @@ export class LodyAdapter implements Adapter {
       items,
       nextCursor:
         position < list.length
-          ? this.management.refs.issue("history", {
-              sessionId: id,
-              position,
-              previousId: readTurn(doc, position - 1).id,
-            })
+          ? Buffer.from(
+              JSON.stringify({
+                sessionId: id,
+                position,
+                previousId: readTurn(doc, position - 1).id,
+              }),
+            ).toString("base64url")
           : undefined,
     };
   }
@@ -323,37 +356,31 @@ export class LodyAdapter implements Adapter {
     return pendingInteractions(doc).map(({ position, itemIndex, ...r }) => r);
   }
   methods() {
-    return [
-      ...this.management.methods(),
-      ...[...this.operations.values()].map(
-        ({ name, description, inputSchema, readOnly }) => ({
-          name,
-          description,
-          inputSchema,
-          readOnly,
-        }),
-      ),
-    ];
+    return [...this.operations.values()].map(
+      ({ name, description, inputSchema, readOnly }) => ({
+        name,
+        description,
+        inputSchema,
+        readOnly,
+      }),
+    );
   }
   async call(method: string, input: Record<string, unknown>): Promise<Outcome> {
     try {
-      if (method.startsWith("management."))
-        return await this.management.call(method, input);
       const op = this.operations.get(method);
       if (!op) throw new Fault("unsupported_capability");
       const parsed = op.schema.safeParse(input);
       if (!parsed.success) throw new Fault("invalid_params");
       const result: any = await op.run(parsed.data);
       const outcome = accepted(result);
-      if (result?.sessionId)
-        outcome.nativeIds = {
-          sessionId: result.sessionId,
-          ...(result.userTurnId ? { userTurnId: result.userTurnId } : {}),
-          ...(result.turnId ? { turnId: result.turnId } : {}),
-        };
+      outcome.nativeIds = lodyIds(result);
       return outcome;
     } catch (error) {
-      if (error instanceof Fault) return error.outcome();
+      if (error instanceof Fault) {
+        const outcome = error.outcome();
+        outcome.nativeIds = lodyIds(error.native);
+        return outcome;
+      }
       return new Fault(
         "native_error",
         "Lody operation failed",
@@ -395,6 +422,15 @@ export class LodyAdapter implements Adapter {
     clearTimeout(this.reconnect);
     this.available = false;
     await this.workspace?.close();
-    this.management.reset();
   }
+}
+
+// Execute receipts must retain identities even when a later script step fails.
+function lodyIds(value: any): Record<string, string> | undefined {
+  const sessionId = value?.sessionId ?? value?.session?.id;
+  if (typeof sessionId !== "string") return;
+  const ids: Record<string, string> = { sessionId };
+  for (const key of ["userTurnId", "turnId", "requestId"])
+    if (typeof value[key] === "string") ids[key] = value[key];
+  return ids;
 }

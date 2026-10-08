@@ -4,7 +4,7 @@
 
 Agenvo 的消费者是能够理解终端和原生状态的 Agent。Agenvo 传递变化和证据，消费者判断工作是否完成、需要继续还是需要输入。`idle`、`done`、`blocked` 都是有用的通知，不要求 Agenvo 先证明业务成功。不引入 run、任务结果数据库或另一套终端状态识别规则。
 
-Herdr 独立运行，Connector 使用它的 `events.subscribe`，跟踪 pane 生命周期和 `pane.agent_status_changed`。Codex 使用 app-server 原生通知；订阅原生 thread 后接收状态和交互变化。输出仍通过 `management.threads.observe` / `read` 获取，不逐 token 唤醒消费者。
+Herdr 独立运行，Connector 使用它的 `events.subscribe`，跟踪 pane 生命周期和 `pane.agent_status_changed`。Codex 使用 app-server 原生通知；订阅原生 thread 后接收状态和交互变化。输出仍通过 原生读取方法和 `notifications.list` 获取，不逐 token 唤醒消费者。
 
 ```mermaid
 flowchart LR
@@ -17,7 +17,7 @@ flowchart LR
 
 ## 事件与生命周期
 
-MCP 暴露 `runtime.changed`。订阅以 deviceId、instanceId 定位实例，可按原生 serviceId、threadId、nativeTypes 缩小范围。事件携带原生类型、原生数据、发生时间及后端身份；不把所有后端强制转换为成功、失败、审批三类。身份过滤采用原生标识，管理引用只作当次调用用途，不持久保存跨 Connector 重启失效的 threadRef。
+MCP 暴露 `runtime.changed`。订阅以 deviceId、instanceId 定位实例，可按原生 serviceId、threadId、nativeTypes 缩小范围。事件携带原生类型、原生数据、发生时间及后端身份；不把所有后端强制转换为成功、失败、审批三类。身份过滤采用原生标识，不另建统一会话引用；后端重启和连接缺口需要重新检查原生状态。
 
 订阅整个实例包含后续出现的服务和 thread。Herdr 状态推送按 pane 订阅，生命周期事件触发更新；目录发现只识别独立启动的服务。Codex 发现已加载 thread 并订阅，不批量恢复历史归档会话。原生事件与快照没有共同序号，重连通知 `agenvo.resync_required`，消费者重新发现并读取当前状态。它会通过原生类型过滤，确保消费者得知观察发生中断。
 

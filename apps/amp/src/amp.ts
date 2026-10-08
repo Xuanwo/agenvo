@@ -8,9 +8,13 @@ import { execa } from "execa";
 import { Fault, LIMITS, type Outcome } from "@agenvo/protocol";
 import type { RuntimeEvent } from "@agenvo/protocol/events";
 import { atomicJson, acquireLock } from "@agenvo/connector/config";
-import type { Adapter } from "@agenvo/connector/adapters/adapter";
-import { executionPolicy, type AmpConfig } from "./config.js";
-import { AmpManagement } from "./management.js";
+import {
+  accepted,
+  registered,
+  type Method,
+  type Adapter,
+} from "@agenvo/connector/adapters/adapter";
+import { type AmpConfig } from "./config.js";
 import {
   nativeSchemas,
   descriptions,
@@ -51,9 +55,8 @@ type Service = {
 export class AmpAdapter implements Adapter {
   available = false;
   version = "unknown";
-  executionPolicy = executionPolicy;
   onAvailabilityChange?: () => void;
-  readonly management: AmpManagement;
+  private readonly catalog: Method[];
   readonly services = new Map<string, Service>();
   private server?: WebSocketServer;
   private release?: () => Promise<void>;
@@ -68,10 +71,23 @@ export class AmpAdapter implements Adapter {
   private listeners = new Set<(event: RuntimeEvent) => void>();
   private heartbeat?: ReturnType<typeof setInterval>;
   constructor(readonly config: AmpConfig) {
-    this.management = new AmpManagement(
-      (method, params) => this.call(method, params),
-      () => [...this.services.values()].map(({ socket, ...s }) => s),
-    );
+    this.catalog = registered([
+      {
+        name: "hosts.list",
+        description:
+          "List connected Amp hosts and their serviceId, working directory and user identity. Use serviceId to target native operations; reconnecting a host changes its identity.",
+        readOnly: true,
+        inputSchema: z.toJSONSchema(z.strictObject({})),
+      },
+      ...Object.entries(nativeSchemas).map(([name, schema]) => ({
+        name,
+        description: descriptions[name as NativeMethod],
+        readOnly: readOnly(name as NativeMethod),
+        inputSchema: z.toJSONSchema(
+          schema.extend({ serviceId: z.string().uuid() }),
+        ),
+      })),
+    ]);
   }
   async init() {
     this.release = await acquireLock(this.config.bridgeDir);
@@ -140,12 +156,6 @@ export class AmpAdapter implements Adapter {
               }
             } else {
               const e = event.parse(packet);
-              this.management.record(
-                serviceId,
-                e.threadId,
-                e.nativeType,
-                e.native,
-              );
               this.emit(serviceId, e.nativeType, e.native, e.threadId);
             }
           } catch {
@@ -172,7 +182,6 @@ export class AmpAdapter implements Adapter {
                 ).outcome(),
               );
             }
-          this.management.observations.reset();
           this.availability();
           this.emit(serviceId, "agenvo.resync_required", {
             reason: "amp_plugin_disconnected",
@@ -202,24 +211,19 @@ export class AmpAdapter implements Adapter {
     }
   }
   methods() {
-    return [
-      ...this.management.methods(),
-      ...Object.entries(nativeSchemas).map(([name, schema]) => ({
-        name,
-        description: descriptions[name as NativeMethod],
-        readOnly: readOnly(name as NativeMethod),
-        inputSchema: z.toJSONSchema(
-          schema.extend({ serviceId: z.string().uuid() }),
-        ),
-      })),
-    ];
+    return this.catalog;
   }
   async call(
     method: string,
     params: Record<string, unknown>,
   ): Promise<Outcome> {
-    if (method.startsWith("management."))
-      return this.management.call(method, params);
+    if (method === "hosts.list") {
+      if (!z.strictObject({}).safeParse(params).success)
+        throw new Fault("invalid_params");
+      return accepted({
+        items: [...this.services.values()].map(({ socket, ...host }) => host),
+      });
+    }
     if (!Object.hasOwn(nativeSchemas, method))
       throw new Fault("unsupported_capability");
     const { serviceId, ...input } = params;

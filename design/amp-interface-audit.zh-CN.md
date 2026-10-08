@@ -21,7 +21,7 @@ sequenceDiagram
     participant C as Amp Connector
     participant P as Amp 插件
     participant N as 原生 Amp
-    A->>R: runtime_call
+    A->>R: execute / call
     R->>C: 已授权请求
     C->>P: 本地认证 WebSocket
     P->>N: 原生 Thread 操作
@@ -33,7 +33,7 @@ sequenceDiagram
 
 | 管理操作 | 原生依据 | 结果边界 |
 | --- | --- | --- |
-| 发现服务 | 已连接插件宿主 | 每个连接是独立 service，重连须重新发现引用 |
+| 发现服务 | 已连接插件宿主 | 通过 `hosts.list` 发现 serviceId，重连后须重新发现宿主 |
 | 列出 Thread | `amp threads list --json` | 用户范围，包含其他客户端创建的 Thread，offset 非快照 |
 | 创建 | `getBuiltinAgent(mode).createThread(...)` | 私有空 Thread，使用选定宿主的本地执行器，不发送提示词 |
 | 查看 | `title.get()`、`state.get()` | 原生活动状态；`idle` 不代表业务成功，`error` 保留原值 |
@@ -42,9 +42,9 @@ sequenceDiagram
 | 读取 | `messages({from:'start', full:true, offset, limit})` | 包含压缩前历史，每页最多 20 条，offset 非快照 |
 | 观察 | `state.subscribe` 与 `agent.start/end` | 状态按 Thread 订阅，生命周期仅来自附着宿主，不提供持久重放 |
 
-原生 `amp.threads.*` schema 与管理方法共同发现。暂不提供归档、取消归档、无输入恢复或结构化对话框回答。用户问题和插件对话框继续由原生 UI 处理。远程 Thread 的权限、执行位置和事件覆盖由 Amp 决定。
+`search` 发现宿主目录 `hosts.list` 和原生 `amp.threads.*` schema；`execute` 使用 serviceId 与原生 threadId 调用。暂不提供归档、取消归档、无输入恢复或结构化对话框回答。用户问题和插件对话框继续由原生 UI 处理。远程 Thread 的权限、执行位置和事件覆盖由 Amp 决定。
 
-`plugin.ts` 负责原生 API、订阅和插件释放；`amp.ts` 负责认证桥接、连接生命周期和请求关联；`management.ts` 负责共同契约、引用和观察游标；`backend.ts` 负责安装配置。共享 Connector 和 Relay 继续负责设备配对、实例授权与 MCP。
+`plugin.ts` 负责原生 API、订阅和插件释放；`amp.ts` 负责认证桥接、连接生命周期和请求关联；`backend.ts` 负责安装配置。共享 Connector 和 Relay 继续负责设备配对、实例授权与 MCP。
 
 ## 生命周期、权限与故障
 
@@ -52,11 +52,11 @@ sequenceDiagram
 
 加载插件会为附着宿主的工具调用返回 `allow`。执行策略公开标明 `full-access-in-attached-host`；它不覆盖企业策略、其他插件的约束和其他执行器权限。设备访问授权与执行策略分别处理。插件入口可留在宿主中独立于 Connector 存活，因此 `disconnect` 不撤销原生工具钩子；删除入口并重新加载插件才会撤销。
 
-桥接有连接数、并发请求、帧大小和订阅数量上限。每次 Connector 启动重建 token。连接断开使在途请求返回 `unknown`，不自动重放写操作，也不取消 Thread。连接代次变化使旧服务/Thread 引用失效，观察日志重置并报告缺口；调用者从原生状态和历史恢复上下文。原生错误保留为 Outcome；超大结果明确返回错误，不伪造完整历史。
+桥接有连接数、并发请求、帧大小和订阅数量上限。每次 Connector 启动重建 token。连接断开使在途请求返回 `unknown`，不自动重放写操作，也不取消 Thread。重连使旧 serviceId 失效；调用者重新发现宿主、建立订阅，并从原生状态和历史恢复上下文。原生错误保留为 Outcome；超大结果明确返回错误，不伪造完整历史。
 
 ## 验证与缺口
 
-- `tests/amp.test.ts` 使用真实插件、WebSocket 与确定性原生 API fixture，覆盖已有 Thread 发现、无提示词创建、发送/引导、历史分页、错误和取消、认证失败、重复所有权，以及断线后的未知结果、引用失效、观察缺口和不重放。
+- `tests/amp.test.ts` 使用真实插件、WebSocket 与确定性原生 API fixture，覆盖已有 Thread 发现、无提示词创建、发送/引导、历史分页、错误和取消、认证失败、重复所有权，以及断线后的未知结果、宿主身份失效和不重放。
 - `tests/integration/amp.test.ts` 通过 HTTPS Relay、配对后的 Connector、MCP 与 webhook，覆盖创建、输入、完成通知、读取和中断。原生 API 仍为 fixture。
 - `tests/packaging/release.test.ts` 在仓库外安装发行包，验证 CLI、独立插件安装、入口冲突与重复配置不覆盖原文件。
 - `tests/adapters/amp-native.test.ts` 在固定版本的真实 Amp CLI 中加载发行插件，隔离环境和凭据，通过 fixture CLI 验证发现请求，再验证原生宿主释放使服务离线。

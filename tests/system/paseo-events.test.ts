@@ -54,35 +54,31 @@ test(
     ]);
     const call = (method: string, params = {}) =>
       lab.call(device, "paseo", method, params);
-    const service = (await call("management.services.list")).items[0];
-    const list = await call("management.threads.list", {
-      serviceRef: service.serviceRef,
-    });
-    const thread = list.items.find((x: any) => x.threadId === external.id);
+    const list = await call("paseo.agents.list");
+    const thread = list.entries.find(
+      (x: any) => x.agent.id === external.id,
+    )?.agent;
     assert.ok(thread, "agents created by another client must be discoverable");
     const baseline = model.requests.length;
-    const created = await call("management.threads.create", {
-      serviceRef: service.serviceRef,
-      providerOptions: {
-        provider: "codex",
-        cwd: lab.root,
-        model: "fixture",
-        title: "Created through MCP",
-      },
+    const created = await call("paseo.agents.create", {
+      provider: "codex",
+      cwd: lab.root,
+      model: "fixture",
+      title: "Created through MCP",
     });
     assert.equal(
       model.requests.length,
       baseline,
       "create must not send a prompt",
     );
-    assert.equal(created.thread.native.currentModeId, "full-access");
-    await call("management.threads.observe", { threadRef: thread.threadRef });
+    assert.equal(created.agent.currentModeId, "full-access");
+    await call("paseo.agents.subscribe", { agentId: thread.id });
     await lab.rpc(
       "events/subscribe",
       lab.subscription(device, "paseo", { threadId: external.id }),
     );
-    await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    await call("paseo.agents.send", {
+      agentId: thread.id,
       text: "Reply with the fixture result.",
     });
     await until(
@@ -94,20 +90,20 @@ test(
       model.requests.length > baseline,
       "the real daemon and real Codex must reach the isolated model",
     );
-    const state = await call("management.threads.get", {
-      threadRef: thread.threadRef,
+    const state = await call("paseo.agents.get", {
+      agentId: thread.id,
     });
-    assert.equal(state.thread.native.currentModeId, "full-access");
+    assert.equal(state.currentModeId, "full-access");
     assert.match(
       JSON.stringify(
-        await call("management.threads.read", { threadRef: thread.threadRef }),
+        await call("paseo.agents.history", { agentId: thread.id }),
       ),
       /ISOLATED_MODEL_RESULT/,
     );
     model.hold();
     const count = model.requests.length;
-    await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    await call("paseo.agents.send", {
+      agentId: thread.id,
       text: "Wait for interruption.",
     });
     await until(
@@ -124,8 +120,8 @@ test(
     const archived = await client.fetchAgent(external.id);
     assert.ok(archived?.agent.archivedAt);
     const archivedCount = model.requests.length;
-    await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    await call("paseo.agents.send", {
+      agentId: thread.id,
       text: "Continue the archived original agent.",
     });
     await until(

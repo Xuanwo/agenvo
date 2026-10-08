@@ -9,7 +9,7 @@ Agenvo 使用 Pino 记录应用日志。每条事件包含可读的 `message`、
 先按 `service = "agenvo"` 筛选应用日志，再搜索 MCP 工具返回的 `requestId`。工具完成记录包含 `tool`、`execution`、`durationMs`，失败时还包含 `errorCode`。运行时调用还包含 `deviceId`、`instanceId` 和 `method`。
 
 ```json
-{"level":"warn","service":"agenvo","component":"relay.mcp","event":"mcp.tool.completed","tool":"runtime_call","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","durationMs":2,"message":"MCP tool runtime_call failed: device_offline"}
+{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call completed"}
 ```
 
 成功调用使用 `info`；设备离线、原生拒绝等失败结果使用 `warn`；内部故障使用 `error`。MCP 调用完成不代表原生任务已经完成；重复写操作前应检查 `execution` 和原生状态。
@@ -25,3 +25,5 @@ Cloudflare 会独立于 Pino 生成平台日志：HTTP 方法与 URL、WebSocket
 ## 记录的数据
 
 应用事件显式选择诊断字段，不包含 bearer token、请求参数、原生结果、审批内容和 WebSocket 关闭原因正文。非预期异常的 `err` 包含错误类型和调用栈位置；不记录任意异常消息与 cause，因为依赖可能在其中嵌入敏感内容。日志仍包含设备标识和栈路径等运维信息，需要限制访问。
+
+execute 的 result.calls 中每次原生调用都有自己的 requestId，对应 runtime.call.completed 日志；外层 requestId 对应整段脚本的 mcp.tool.completed 日志。

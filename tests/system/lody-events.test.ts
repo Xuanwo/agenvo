@@ -67,36 +67,30 @@ test(
     const device = await lab.connect([config]);
     const call = (method: string, params = {}) =>
       lab.call(device, "lody", method, params);
-    const service = (await call("management.services.list")).items[0];
-    const list = await call("management.threads.list", {
-      serviceRef: service.serviceRef,
-    });
-    const thread = list.items.find((s: any) => s.threadId === made.session.id);
-    assert.ok(thread);
-    const created = await call("management.threads.create", {
-      serviceRef: service.serviceRef,
-      providerOptions: {
-        machineId: config.machineId,
-        agentConfigId: "fixture",
-        title: "Created via MCP",
-      },
+    const list = await call("lody.sessions.list");
+    const session = list.items.find((s: any) => s.id === made.session.id);
+    assert.ok(session);
+    const created = await call("lody.sessions.create", {
+      machineId: config.machineId,
+      agentConfigId: "fixture",
+      title: "Created via MCP",
     });
     assert.equal(model.requests.length, 0, "creation must not send a prompt");
     assert.equal(
-      (
-        await external.connected().document(created.thread.threadId)
-      ).doc.getList("history").length,
+      (await external.connected().document(created.session.id)).doc.getList(
+        "history",
+      ).length,
       0,
     );
     await lab.rpc("events/subscribe", lab.subscription(device, "lody"));
-    await call("management.threads.observe", { threadRef: thread.threadRef });
-    const sent = await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    await call("lody.sessions.subscribe", { sessionId: session.id });
+    const sent = await call("lody.sessions.send", {
+      sessionId: session.id,
       text: "Reply with the fixture result.",
     });
     assert.equal(sent.confirmation, "local_input_received");
     await until(
-      () => call("management.threads.read", { threadRef: thread.threadRef }),
+      () => call("lody.sessions.history", { sessionId: session.id }),
       (r) => JSON.stringify(r).includes("ISOLATED_MODEL_RESULT"),
       30000,
     );
@@ -110,8 +104,8 @@ test(
     );
     model.hold();
     const baseline = model.requests.length;
-    await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    await call("lody.sessions.send", {
+      sessionId: session.id,
       text: "Wait until cancelled.",
     });
     await until(
@@ -119,12 +113,13 @@ test(
       (n) => n > baseline,
       15000,
     );
-    await until(
-      () => call("management.threads.get", { threadRef: thread.threadRef }),
-      (r) => r.thread.activity === "working",
+    const active = await until(
+      () => call("lody.sessions.live", { sessionId: session.id }),
+      (r) => r.state === "running" && Boolean(r.turnId),
     );
-    const interrupted = await call("management.threads.interrupt", {
-      threadRef: thread.threadRef,
+    const interrupted = await call("lody.sessions.cancel", {
+      sessionId: session.id,
+      turnId: active.turnId,
     });
     assert.equal(interrupted.interruption, "requested");
     assert.ok(interrupted.turnId);
@@ -133,9 +128,7 @@ test(
     lab.cleanup(() => recovered.close());
     await recovered.init();
     assert.ok(
-      (await recovered.connected().list()).some(
-        (s) => s.id === thread.threadId,
-      ),
+      (await recovered.connected().list()).some((s) => s.id === session.id),
     );
     const denied = await recovered.call("lody.sessions.create", {
       machineId: "another-machine",

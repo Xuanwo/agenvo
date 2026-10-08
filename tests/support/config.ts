@@ -23,15 +23,15 @@ export const descriptor = (
     available,
     version,
     config.kind === "lody"
-      ? "lody-cloud-3d478711-local-v7-management-v1"
+      ? "lody-cloud-3d478711-local-v7-native-v1"
       : config.kind === "paseo"
-        ? "paseo-0.11.1-management-v1"
+        ? "paseo-0.11.1-native-v1"
         : config.kind === "herdr"
-          ? "herdr-0.9.3-management-v1"
+          ? "herdr-0.9.3-native-v1"
           : config.kind === "amp"
-            ? "amp-plugin-management-v1"
+            ? "amp-plugin-native-v1"
             : config.mode === "attach-unix"
-              ? "codex-0.160.1-attach-management-v1"
-              : "codex-0.160.1-management-v1",
+              ? "codex-0.160.1-attach-native-v1"
+              : "codex-0.160.1-native-v1",
     config.kind === "amp" ? executionPolicy.execution : undefined,
   );

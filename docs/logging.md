@@ -6,10 +6,10 @@ Agenvo uses Pino for application logs. Every event includes a readable `message`
 
 ## Find a failed call
 
-Filter application logs by `service = "agenvo"`, then search for the `requestId` returned by the MCP tool. Tool completion records include `tool`, `execution`, `durationMs` and, on failure, `errorCode`. Runtime calls also include `deviceId`, `instanceId` and `method`.
+Filter application logs by `service = "agenvo"`, then search for the `requestId` returned by the MCP tool. Tool completion records include `tool`, `execution`, `durationMs` and, on failure, `errorCode`. Each entry in execute’s `result.calls` has its own requestId; its runtime.call.completed log includes deviceId, instanceId and method.
 
 ```json
-{"level":"warn","service":"agenvo","component":"relay.mcp","event":"mcp.tool.completed","tool":"runtime_call","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","durationMs":2,"message":"MCP tool runtime_call failed: device_offline"}
+{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call completed"}
 ```
 
 Successful calls use `info`; unsuccessful outcomes such as an offline device or a native rejection use `warn`; internal failures use `error`. A completed MCP call does not imply that the native task finished: inspect `execution` and native state before repeating a write.

@@ -387,7 +387,33 @@ export class Relay {
       result: page(items, options.cursor, options.limit),
     } satisfies Outcome;
   }
-  async call(grantId: string, input: Call): Promise<Outcome> {
+  describe(
+    grantId: string,
+    target: {
+      deviceId: string;
+      instanceId: string;
+      query: string;
+      cursor?: string;
+    },
+  ): Promise<Outcome> {
+    return this.dispatch(grantId, {
+      deviceId: target.deviceId,
+      instanceId: target.instanceId,
+      type: "describe",
+      params: { query: target.query, cursor: target.cursor },
+    });
+  }
+  call(grantId: string, input: Call): Promise<Outcome> {
+    return this.dispatch(grantId, { ...input, type: "call" });
+  }
+  private async dispatch(
+    grantId: string,
+    input: Pick<Call, "deviceId" | "instanceId"> &
+      (
+        | { type: "call"; method: string; params: Record<string, unknown> }
+        | { type: "describe"; params: { query: string; cursor?: string } }
+      ),
+  ): Promise<Outcome> {
     const requestId = crypto.randomUUID();
     const reject = (code: string) => ({ ...failure(code), requestId });
     if (!this.allowed(grantId, input.deviceId, input.instanceId))
@@ -406,11 +432,11 @@ export class Relay {
       return reject("resource_exhausted");
     const packet = JSON.stringify({
       v: PROTOCOL,
-      type: "call",
+      type: input.type,
       requestId,
       instanceId: input.instanceId,
       fingerprint: i.fingerprint,
-      method: input.method,
+      ...(input.type === "call" ? { method: input.method } : {}),
       params: input.params,
     });
     if (bytes(packet) > LIMITS.frame) return reject("input_too_large");

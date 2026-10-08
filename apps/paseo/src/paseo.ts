@@ -15,7 +15,6 @@ import {
   type Method,
 } from "@agenvo/connector/adapters/adapter";
 import { password, type PaseoConfig } from "./config.js";
-import { PaseoManagement } from "./paseo-management.js";
 
 export const agentTarget = z.strictObject({
   agentId: z.string().min(1).max(256),
@@ -67,7 +66,6 @@ export class PaseoAdapter implements Adapter {
   available = false;
   version = "unknown";
   onAvailabilityChange?: () => void;
-  readonly management: PaseoManagement;
   private client?: DaemonClient;
   private stopped = false;
   private reconnect?: NodeJS.Timeout;
@@ -82,7 +80,6 @@ export class PaseoAdapter implements Adapter {
   private approvals = new Set<string>();
 
   constructor(readonly config: PaseoConfig) {
-    this.management = new PaseoManagement(this);
     const define = (
       name: string,
       schema: z.ZodType,
@@ -90,6 +87,7 @@ export class PaseoAdapter implements Adapter {
       description: string,
       run: Operation["run"],
     ) => {
+      if (this.operations.has(name)) throw new Fault("duplicate_method", name);
       this.operations.set(name, {
         name,
         schema,
@@ -103,21 +101,21 @@ export class PaseoAdapter implements Adapter {
       "paseo.agents.list",
       listInput,
       true,
-      "Discover agents across the daemon, including other clients' agents. No subscription.",
+      "List work contexts (native agents) across the daemon, including other clients' agents. No subscription.",
       (p) => this.connected().fetchAgents(p),
     );
     define(
       "paseo.agents.get",
       agentTarget,
       true,
-      "Read an agent by its full native ID.",
+      "Read native agent status and pending requests for user input by full agent ID; native status does not establish task success.",
       (p) => this.get(p.agentId),
     );
     define(
       "paseo.agents.create",
       createInput,
       false,
-      "Create a full-access Codex or Claude agent without a prompt. Without workspaceId, Paseo creates a workspace.",
+      "Create a work context as a full-access Codex or Claude agent without a prompt. Without workspaceId, Paseo creates a workspace.",
       async (p) => {
         const key = randomUUID();
         const { workspaceId, ...config } = p;
@@ -139,10 +137,20 @@ export class PaseoAdapter implements Adapter {
       },
     );
     define(
+      "paseo.agents.subscribe",
+      agentTarget,
+      false,
+      "Subscribe to native agent output and status events on this connection. Reconnect requires subscribing again; read native history for earlier output.",
+      async (p) => {
+        await this.observe(p.agentId);
+        return { agentId: p.agentId, subscribed: true };
+      },
+    );
+    define(
       "paseo.agents.send",
       sendInput,
       false,
-      "Apply full access and send text. Default interrupt replaces active work; steer may also replace or start a turn. May unarchive/load the agent and clear pending permissions. No connector queue or replay.",
+      "Submit input text after applying full access. Default interrupt replaces active work; steer may also replace or start a turn. May unarchive/load the agent and clear pending permissions. No connector queue or replay.",
       async (p) => {
         const client = await this.prepare(p.agentId);
         const messageId = p.messageId ?? randomUUID();
@@ -170,7 +178,7 @@ export class PaseoAdapter implements Adapter {
       "paseo.agents.cancel",
       agentTarget,
       false,
-      "Cancel execution current when Paseo handles the request. No turn identity precondition; never retarget or retry.",
+      "Interrupt execution current when Paseo handles the request. No turn identity precondition; never retarget or retry.",
       async (p) => {
         await this.connected().cancelAgent(p.agentId);
         return { agentId: p.agentId, interruption: "requested" };
@@ -205,7 +213,7 @@ export class PaseoAdapter implements Adapter {
       "paseo.agents.history",
       historyInput,
       true,
-      "Read native timeline history. Epoch replacement invalidates prior history cursors.",
+      "Read output from native timeline history. Epoch replacement invalidates prior history cursors.",
       (p) => {
         const { agentId, ...options } = p;
         return this.connected().fetchAgentTimeline(agentId, options);
@@ -215,14 +223,14 @@ export class PaseoAdapter implements Adapter {
       "paseo.interactions.respond",
       permissionInput,
       false,
-      "Submit a response to a currently pending question/decision. Transport submission is not acknowledgement or proof of winning a multi-client race.",
+      "Respond to a pending native request for user input. Transport submission is not acknowledgement or proof of winning a multi-client race.",
       (p) => this.respond(p),
     );
     define(
       "paseo.providers.list",
       z.strictObject({}),
       true,
-      "Discover available providers; discovery is not a guarantee of full-access execution support.",
+      "List available providers; discovery is not a guarantee of full-access execution support.",
       () => this.connected().listAvailableProviders(),
     );
     define(
@@ -232,7 +240,7 @@ export class PaseoAdapter implements Adapter {
         cwd: z.string().optional(),
       }),
       true,
-      "Discover native provider models.",
+      "List native provider models.",
       (p) => this.connected().listProviderModels(p.provider, { cwd: p.cwd }),
     );
     define(
@@ -242,7 +250,7 @@ export class PaseoAdapter implements Adapter {
         cwd: z.string().optional(),
       }),
       true,
-      "Discover native provider permission modes.",
+      "List native provider permission modes.",
       (p) => this.connected().listProviderModes(p.provider, { cwd: p.cwd }),
     );
     define(
@@ -316,7 +324,6 @@ export class PaseoAdapter implements Adapter {
           const p = message.payload;
           const id = p.kind === "upsert" ? p.agent.id : p.agentId;
           this.emit("agent_update", id, p);
-          this.management.observations.append(id, "agent_update", p);
         },
         error: () =>
           this.emit("agenvo.resync_required", undefined, {
@@ -343,7 +350,6 @@ export class PaseoAdapter implements Adapter {
     this.timelines.clear();
     this.controlled.clear();
     this.approvals.clear();
-    this.management.reset();
     this.onAvailabilityChange?.();
     this.emit("agenvo.resync_required", undefined, {
       reason: "daemon_disconnected",
@@ -378,7 +384,6 @@ export class PaseoAdapter implements Adapter {
           message.type === "agent.timeline.replacement" ||
           message.type === "agent.timeline.subscription_restored"
         ) {
-          this.management.observations.reset();
           this.emit("agenvo.resync_required", undefined, {
             reason: message.type,
             agentId: id,
@@ -387,7 +392,6 @@ export class PaseoAdapter implements Adapter {
         if (message.type === "agent.timeline.error") {
           this.timelines.delete(id);
           this.controlled.delete(id);
-          this.management.observations.reset();
           this.emit("agenvo.resync_required", undefined, {
             reason: "timeline_subscription_failed",
             agentId: id,
@@ -395,10 +399,6 @@ export class PaseoAdapter implements Adapter {
         }
         if (message.type !== "agent_stream") return;
         const event = message.payload.event;
-        this.management.observations.append(id, event.type, event, {
-          agentId: id,
-          type: event.type,
-        });
         if (event.type !== "timeline") this.emit(event.type, id, event);
         if (
           event.type === "permission_requested" &&
@@ -464,21 +464,16 @@ export class PaseoAdapter implements Adapter {
     };
   }
   methods(): Method[] {
-    return [
-      ...this.management.methods(),
-      ...[...this.operations.values()].map(
-        ({ name, description, inputSchema, readOnly }) => ({
-          name,
-          description,
-          inputSchema,
-          readOnly,
-        }),
-      ),
-    ];
+    return [...this.operations.values()].map(
+      ({ name, description, inputSchema, readOnly }) => ({
+        name,
+        description,
+        inputSchema,
+        readOnly,
+      }),
+    );
   }
   async call(method: string, input: Record<string, unknown>): Promise<Outcome> {
-    if (method.startsWith("management."))
-      return this.management.call(method, input);
     const op = this.operations.get(method);
     if (!op) throw new Fault("unsupported_capability");
     const p = op.schema.safeParse(input);
@@ -547,7 +542,6 @@ export class PaseoAdapter implements Adapter {
     this.available = false;
     this.timelines.clear();
     this.controlled.clear();
-    this.management.reset();
     await client?.close();
   }
 }

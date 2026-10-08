@@ -6,6 +6,7 @@
   "compatibility_flags": [
     "nodejs_compat", "global_fetch_strictly_public"
   ],
+  "rules": [{"type":"CompiledWasm","globs":["**/*.wasm", "**/wasm"],"fallthrough":true}],
   "workers_dev": true,
   "preview_urls": false,
   "durable_objects": {

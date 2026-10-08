@@ -42,12 +42,8 @@ test(
       },
     ]);
     assert.notEqual(device, codexDevice);
-    const codexServices = await lab.call(
-      codexDevice,
-      "herdr",
-      "management.services.list",
-    );
-    assert.ok(codexServices.items.length);
+    const codexThreads = await lab.call(codexDevice, "herdr", "thread/list");
+    assert.ok(codexThreads.data.length);
 
     const subscription = lab.subscription(device, "herdr", {
       serviceId: "test",
@@ -56,13 +52,11 @@ test(
     await lab.rpc("events/subscribe", subscription);
     const call = (method: string, params = {}) =>
       lab.call(device, "herdr", method, params);
-    const services = await call("management.services.list");
-    const service = services.items.find(
-      (s: any) => s.native.session === "test",
-    );
+    const services = await call("session.list");
+    const service = services.items.find((s: any) => s.session === "test");
     const ref = {
       session: "test",
-      backendGeneration: service.native.backendGeneration,
+      backendGeneration: service.backendGeneration,
     };
     const created = await call("workspace.create", ref),
       paneId = created.result.root_pane.pane_id;
@@ -71,13 +65,10 @@ test(
       paneId,
       command: `${process.platform === "win32" ? "& " : ""}${quote(process.execPath)} ${quote(resolve("tests/fixtures/herdr-agent.mjs"))}`,
     });
-    const threads = await until(
-      () => call("management.threads.list", { serviceRef: service.serviceRef }),
-      (r) => r.items.some((a: any) => a.native.agent === "fixture"),
+    await until(
+      () => call("agent.list", ref),
+      (r) => r.result.agents.some((a: any) => a.agent === "fixture"),
     );
-    const threadRef = threads.items.find(
-      (a: any) => a.native.agent === "fixture",
-    ).threadRef;
     await until(
       () => lab.received,
       (events) =>
@@ -91,12 +82,12 @@ test(
       () => lab.received.slice(baseline),
       (events) => events.some((e) => e.data.native.agent_status === "blocked"),
     );
-    const output = await call("management.threads.read", { threadRef });
+    const output = await call("pane.read", { ...ref, paneId });
     assert.match(JSON.stringify(output), /Which label should I use/);
     await call("pane.send-text", { ...ref, paneId, text: "alpha" });
     await call("pane.send-keys", { ...ref, paneId, keys: ["enter"] });
     await until(
-      () => call("management.threads.read", { threadRef }),
+      () => call("pane.read", { ...ref, paneId }),
       (value) => JSON.stringify(value).includes("Fixture result: alpha"),
     );
     const before = lab.received.length;
@@ -107,17 +98,15 @@ test(
       (events) =>
         events.some((e) => e.data.nativeType === "agenvo.resync_required"),
     );
-    const current = await call("management.services.list");
+    const current = await call("session.list");
     assert.ok(
-      (await lab.call(codexDevice, "herdr", "management.services.list")).items
-        .length,
+      (await lab.call(codexDevice, "herdr", "thread/list")).data.length,
     );
     await lab.admin("/api/admin/revoke", { kind: "device", id: codexDevice });
-    assert.ok((await call("management.services.list")).items.length);
+    assert.ok((await call("session.list")).items.length);
 
     assert.notEqual(
-      current.items.find((s: any) => s.native.session === "test").native
-        .backendGeneration,
+      current.items.find((s: any) => s.session === "test").backendGeneration,
       ref.backendGeneration,
     );
   },

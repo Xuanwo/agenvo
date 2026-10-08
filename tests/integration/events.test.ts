@@ -39,35 +39,23 @@ test(
       (await lab.rpc("events/subscribe", subscription)).id,
       first.id,
     );
-    const services = await lab.call(
-      device,
-      "codex",
-      "management.services.list",
-    );
-    const created = await lab.call(
-      device,
-      "codex",
-      "management.threads.create",
-      { serviceRef: services.items[0].serviceRef },
-    );
-    const threadRef = created.thread.threadRef;
-    await lab.call(device, "codex", "management.threads.send", {
-      threadRef,
-      text: "Work on the fixture",
+    const created = await lab.call(device, "codex", "thread/start");
+    const threadId = created.thread.id;
+    const sent = await lab.call(device, "codex", "turn/start", {
+      threadId,
+      input: [{ type: "text", text: "Work on the fixture" }],
     });
-    await lab.call(device, "codex", "management.threads.interrupt", {
-      threadRef,
+    await lab.call(device, "codex", "turn/interrupt", {
+      threadId,
+      turnId: sent.turn.id,
     });
     await until(
       () => lab.received,
       (events) => events.some((e) => e.data.nativeType === "turn/completed"),
     );
-    const observed = await lab.call(
-      device,
-      "codex",
-      "management.threads.observe",
-      { threadRef },
-    );
+    const observed = await lab.call(device, "codex", "notifications.list", {
+      threadId,
+    });
     assert.ok(observed.items.some((e: any) => e.type === "turn/completed"));
     assert.equal(
       lab.received.some((e) => e.data.nativeType === "turn/started"),
@@ -88,12 +76,13 @@ test(
     const baseline = lab.received.filter(
       (e) => e.data.nativeType === "turn/completed",
     ).length;
-    await lab.call(device, "codex", "management.threads.send", {
-      threadRef,
-      text: "Continue after relay restart",
+    const next = await lab.call(device, "codex", "turn/start", {
+      threadId,
+      input: [{ type: "text", text: "Continue after relay restart" }],
     });
-    await lab.call(device, "codex", "management.threads.interrupt", {
-      threadRef,
+    await lab.call(device, "codex", "turn/interrupt", {
+      threadId,
+      turnId: next.turn.id,
     });
     await until(
       () =>
@@ -107,12 +96,13 @@ test(
       delivery: { mode: "webhook", url: subscription.delivery.url },
     });
     const count = lab.received.length;
-    await lab.call(device, "codex", "management.threads.send", {
-      threadRef,
-      text: "Unsubscribed work",
+    const last = await lab.call(device, "codex", "turn/start", {
+      threadId,
+      input: [{ type: "text", text: "Unsubscribed work" }],
     });
-    await lab.call(device, "codex", "management.threads.interrupt", {
-      threadRef,
+    await lab.call(device, "codex", "turn/interrupt", {
+      threadId,
+      turnId: last.turn.id,
     });
     await new Promise((r) => setTimeout(r, 150));
     assert.equal(lab.received.length, count);

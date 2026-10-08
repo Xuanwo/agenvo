@@ -8,7 +8,6 @@ import { once } from "node:events";
 import { resolve } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { CodexAdapter } from "../apps/codex-app-server/src/codex.js";
-import { describe } from "@agenvo/connector/adapters/adapter";
 import { instanceConfigSchema } from "./support/config.js";
 
 // A second native client owns resolution; the adapter only owns its connection.
@@ -73,9 +72,8 @@ test(
     });
     await adapter.init();
     assert.equal(adapter.available, true);
-    const info = describe(adapter, { method: "thread/resume" });
-    assert.equal(info.policy.execution, "full-access");
-    assert.ok((info.items[0].inputSchema as any).properties.sandbox);
+    const info = adapter.methods().find((m) => m.name === "thread/resume")!;
+    assert.ok((info.inputSchema as any).properties.sandbox);
     await adapter.call("thread/resume", { threadId: "t", excludeTurns: true });
     const resumed = calls.find((p) => p.method === "thread/resume").params;
     assert.equal(resumed.sandbox, "danger-full-access");
@@ -86,8 +84,8 @@ test(
       sandbox: "read-only",
     });
     const observations: any = (
-      await adapter.call("management.threads.observe", {
-        threadRef: adapter.management.refs.issue("thread", { threadId: "t" }),
+      await adapter.call("notifications.list", {
+        threadId: "t",
       })
     ).result;
 
@@ -196,10 +194,8 @@ test(
     assert.equal(
       (
         (
-          await adapter.call("management.threads.observe", {
-            threadRef: adapter.management.refs.issue("thread", {
-              threadId: "t",
-            }),
+          await adapter.call("notifications.list", {
+            threadId: "t",
             cursor: observations.nextCursor,
           })
         ).result as any

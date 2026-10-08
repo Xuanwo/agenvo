@@ -1,3 +1,4 @@
+import { callCode, nativeOutcome } from "../support/code.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -55,35 +56,24 @@ exit $LASTEXITCODE
     lab.cleanup(() => native.stop());
     const deviceId = await lab.connect([config]);
     const target = { deviceId, instanceId: "runtime" };
-    const invoke = async (name: string, args: Record<string, unknown>) => {
-      const response = await lab.rpc("tools/call", {
-        name,
-        arguments: { ...target, ...args },
-      });
-      const outcome = JSON.parse(response.content[0].text);
-      assert.match(outcome.requestId, /^[0-9a-f-]{36}$/);
-      assert.equal(response.isError, Boolean(outcome.error));
-      return outcome;
-    };
-    const call = (method: string, params = {}) =>
-      invoke("runtime_call", { method, params });
-    const tools = (await lab.rpc("tools/list")).tools;
-    for (const name of ["instances_list", "instance_describe"])
-      assert.equal(
-        tools.find((tool: any) => tool.name === name).annotations.readOnlyHint,
-        true,
+    const call = async (method: string, params = {}) =>
+      nativeOutcome(
+        await lab.rpc("tools/call", {
+          name: "execute",
+          arguments: callCode({ ...target, method, params }),
+        }),
       );
-    assert.notEqual(
-      tools.find((tool: any) => tool.name === "runtime_call").annotations
-        ?.readOnlyHint,
-      true,
-    );
-    const service = (await call("management.services.list")).result.items.find(
-      (s: any) => s.serviceId === "test",
+    const tools = (await lab.rpc("tools/list")).tools;
+    assert.deepEqual(tools.map((t: any) => t.name).sort(), [
+      "execute",
+      "search",
+    ]);
+    const service = (await call("session.list")).result.items.find(
+      (s: any) => s.session === "test",
     );
     const ref = {
       session: "test",
-      backendGeneration: service.native.backendGeneration,
+      backendGeneration: service.backendGeneration,
     };
     const paneId = (await call("workspace.create", ref)).result.result.root_pane
       .pane_id;
@@ -100,41 +90,38 @@ exit $LASTEXITCODE
         (r) => JSON.stringify(r).includes("AGENVO_PATH_READY"),
       );
     }
-    const created = await call("management.threads.create", {
-      serviceRef: service.serviceRef,
-      providerOptions: {
-        name: "delayed",
-        paneId,
-        kind: "codex",
-        timeoutMs: 4000,
-        args: [
-          "--no-daemon",
-          "--model",
-          "fixture",
+    const created = await call("agent.start", {
+      ...ref,
+      name: "delayed",
+      paneId,
+      kind: "codex",
+      timeoutMs: 4000,
+      args: [
+        "--no-daemon",
+        "--model",
+        "fixture",
+        "-c",
+        'model_provider="fixture"',
+        ...Object.entries(model.config).flatMap(([key, value]) => [
           "-c",
-          'model_provider="fixture"',
-          ...Object.entries(model.config).flatMap(([key, value]) => [
-            "-c",
-            `${key}=${JSON.stringify(value)}`,
-          ]),
-        ],
-      },
+          `${key}=${JSON.stringify(value)}`,
+        ]),
+      ],
     });
     assert.equal(created.execution, "starting");
-    const query = created.result.query;
+    const query = { method: "agent.get", params: { ...ref, name: "delayed" } };
     const settled = await until(
       () => call(query.method, query.params),
       (r) => r.result?.startup?.state === "settled",
     );
     assert.equal(settled.result.startup.outcome.error.native.code, "timeout");
-    assert.equal(settled.result.expectedPaneId, paneId);
-    assert.equal(settled.result.serviceRef, service.serviceRef);
+
     await writeFile(gate, "release");
     const listed = await until(
-      () => call("management.threads.list", { serviceRef: service.serviceRef }),
+      () => call("agent.list", ref),
       (r) =>
-        r.result.items.some(
-          (a: any) => a.threadId === paneId && a.activity === "idle",
+        r.result.result.agents.some(
+          (a: any) => a.pane_id === paneId && a.agent === "codex",
         ),
       20000,
     ).catch(async (error) => {
@@ -145,17 +132,24 @@ exit $LASTEXITCODE
         lines: 100,
       });
       throw new Error(
-        `Delayed native Codex did not become idle: ${JSON.stringify(visible)}; launches: ${await readFile(launches, "utf8").catch(() => "missing")}`,
+        `Delayed native Codex was not discovered: ${JSON.stringify(visible)}; launches: ${await readFile(launches, "utf8").catch(() => "missing")}`,
         { cause: error },
       );
     });
-    const thread = listed.result.items.find((a: any) => a.threadId === paneId);
-    assert.notEqual(thread.native.interactive_ready, true);
-    assert.equal(thread.operations.send.available, true);
+    // A timed-out launch may have no readiness metadata. Use the terminal UI.
+    await until(
+      () => call("pane.read", { ...ref, paneId, source: "visible" }),
+      (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
+    );
+    const agent = listed.result.result.agents.find(
+      (a: any) => a.pane_id === paneId,
+    );
+    assert.notEqual(agent.interactive_ready, true);
     assert.equal(
       (
-        await call("management.threads.send", {
-          threadRef: thread.threadRef,
+        await call("agent.prompt", {
+          ...ref,
+          name: paneId,
           text: "Return the isolated fixture result.",
         })
       ).execution,
@@ -165,31 +159,27 @@ exit $LASTEXITCODE
       () => model.requests.length,
       (n) => n > 0,
     );
-    await until(
-      () => call("management.threads.get", { threadRef: thread.threadRef }),
-      (r) => r.result.thread.activity === "working",
-    );
+    // The held model request establishes ongoing work without a status guess.
     const history = await call("agent.read", {
       ...ref,
       name: paneId,
       lines: 100,
     });
     assert.equal(history.error.native.code, "agent_not_idle");
-    const observed = await call("management.threads.observe", {
-      threadRef: thread.threadRef,
+    const observed = await call("agent.read", {
+      ...ref,
+      name: paneId,
+      source: "visible",
       lines: 100,
     });
     assert.equal(observed.execution, "accepted");
-    const terminal = observed.result.items.find(
-      (item: any) => item.type === "terminal.observed",
-    ).data;
-    assert.equal(terminal.coverage.source, "visible");
-    assert.equal(terminal.coverage.fallbackReason, "agent_not_idle");
-    for (const args of [{}, { cursor: "20" }])
-      assert.equal(
-        (await invoke("instance_describe", args)).execution,
-        "accepted",
-      );
+    const discovered = await lab.rpc("tools/call", {
+      name: "search",
+      arguments: {
+        query: "agent.prompt",
+      },
+    });
+    assert.match(JSON.stringify(discovered), /agent.prompt/);
     model.release();
     await until(
       () =>

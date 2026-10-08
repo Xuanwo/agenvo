@@ -1,7 +1,6 @@
 import type { RuntimeEvent } from "@agenvo/protocol/events";
 import { type InstanceConfig } from "../config.js";
-import { bytes, LIMITS, page, type Outcome } from "@agenvo/protocol";
-import type { AgentManagement } from "./management.js";
+import { bytes, Fault, LIMITS, page, type Outcome } from "@agenvo/protocol";
 export type Method = {
   name: string;
   description: string;
@@ -10,34 +9,25 @@ export type Method = {
 };
 export interface Adapter {
   config: InstanceConfig;
-  management: AgentManagement;
   version: string;
   available: boolean;
   onAvailabilityChange?: () => void;
-  executionPolicy?: { execution: string; approvalPolicy: string };
   watchEvents?(emit: (event: RuntimeEvent) => void): () => void;
   methods(): Method[];
   call(method: string, params: Record<string, unknown>): Promise<Outcome>;
   close(): Promise<void>;
 }
 export function describe(adapter: Adapter, params: Record<string, unknown>) {
-  const methods = adapter
-    .methods()
-    .filter((m) => !params.method || m.name === params.method);
-  return {
-    managementVersion: 1,
-    management: {
-      ...adapter.management.capabilities(),
-      methods: adapter.management.methods().map((m) => m.name),
-    },
-    policy: {
-      execution: "full-access",
-      approvalPolicy: "never",
-      ...adapter.executionPolicy,
-      authentication: "paired_devices_and_authorized_mcp_clients",
-    },
-    ...page(methods, params.cursor as string | undefined, 5),
-  };
+  const terms = String(params.query ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const methods = adapter.methods().filter((method) => {
+    const text =
+      `${adapter.config.kind} ${method.name} ${method.description}`.toLowerCase();
+    return terms.every((term) => text.includes(term));
+  });
+  return page(methods, params.cursor as string | undefined, 5);
 }
 export function bounded(outcome: Outcome): Outcome {
   if (bytes(outcome) < LIMITS.frame - 2048) return outcome;
@@ -64,3 +54,13 @@ export function nativeIds(value: unknown): Record<string, string> | undefined {
 }
 export const accepted = (result: unknown): Outcome =>
   bounded({ execution: "accepted", result, nativeIds: nativeIds(result) });
+
+export function registered(methods: Method[]): Method[] {
+  const names = new Set<string>();
+  for (const method of methods) {
+    if (names.has(method.name))
+      throw new Fault("duplicate_method", method.name);
+    names.add(method.name);
+  }
+  return methods;
+}

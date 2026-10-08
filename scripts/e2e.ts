@@ -1,3 +1,4 @@
+import { callCode } from "../tests/support/code.js";
 import { isolatedEnvironment } from "../tests/support/environment.js";
 // Local-only TLS fixture: production CLI/connector, real Worker/DO/OAuth/MCP and Herdr.
 import assert from "node:assert/strict";
@@ -317,7 +318,17 @@ if (!process.env.AGENVO_E2E_DIR) {
       const result: any = await client!.callTool({ name, arguments: args });
       return result.structuredContent ?? JSON.parse(result.content[0].text);
     };
-    const listed = await tool("instances_list", {});
+    const invoke = async (input: Parameters<typeof callCode>[0]) =>
+      (await tool("execute", callCode(input))).result.value;
+    const describeMethod = async (method: string) =>
+      (
+        await tool("search", {
+          query: method,
+          deviceId: target.deviceId,
+          instanceId: "work",
+        })
+      ).result.items.flatMap((i: any) => i.methods);
+    const listed = await tool("search", { query: "" });
     target = listed.result.items[0];
     assert.equal(target.online, true);
     const native = async (
@@ -325,7 +336,7 @@ if (!process.env.AGENVO_E2E_DIR) {
       params: Record<string, unknown> = {},
       instanceId = "work",
     ) => {
-      const result = await tool("runtime_call", {
+      const result = await invoke({
         deviceId: target.deviceId,
         instanceId,
         method,
@@ -342,19 +353,15 @@ if (!process.env.AGENVO_E2E_DIR) {
     assert.ok(existing?.backendGeneration);
     ref = { session: "e2e", backendGeneration: existing.backendGeneration };
     for (const method of ["session.start", "session.stop"]) {
-      const removed = await tool("runtime_call", {
+      const removed = await invoke({
         deviceId: target.deviceId,
         instanceId: "work",
         method,
         params: ref,
       });
       assert.equal(removed.error.code, "unsupported_method");
-      const description = await tool("instance_describe", {
-        deviceId: target.deviceId,
-        instanceId: "work",
-        method,
-      });
-      assert.equal(description.result.items.length, 0);
+      const description = await describeMethod(method);
+      assert.equal(description.length, 0);
     }
     evidence.nativeLifecycleNotExposed = true;
     await native("workspace.create", ref);
@@ -368,12 +375,8 @@ if (!process.env.AGENVO_E2E_DIR) {
     const read = await native("pane.read", { ...ref, paneId });
     assert.match(JSON.stringify(read), /AGENVO_E2E_OK/);
     evidence.nativeRoundTrip = true;
-    const method = await tool("instance_describe", {
-      deviceId: target.deviceId,
-      instanceId: "work",
-      method: "pane.send-keys",
-    });
-    assert.equal(method.result.items[0].readOnly, false);
+    const method = await describeMethod("pane.send-keys");
+    assert.equal(method[0].readOnly, false);
     await native("agent.list", ref);
     await native("pane.get", { ...ref, paneId });
     await native("pane.process-info", { ...ref, paneId });
@@ -422,7 +425,7 @@ if (!process.env.AGENVO_E2E_DIR) {
         down.resume();
         up.resume();
       }
-      const lost = await tool("runtime_call", {
+      const lost = await invoke({
         deviceId: target.deviceId,
         instanceId: "work",
         method: "pane.run",
@@ -476,7 +479,7 @@ if (!process.env.AGENVO_E2E_DIR) {
     await exit;
     assert.notEqual(replacement.exitCode, null);
     evidence.disconnectStopsConnector = true;
-    const denied = await tool("runtime_call", {
+    const denied = await invoke({
       deviceId: target.deviceId,
       instanceId: "work",
       method: "session.list",

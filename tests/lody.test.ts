@@ -30,23 +30,20 @@ test(
       assert.equal(result.error, undefined, JSON.stringify(result));
       return result.result as any;
     };
-    const service = (await call("management.services.list")).items[0];
-    const listed = await call("management.threads.list", {
-      serviceRef: service.serviceRef,
-    });
-    assert.equal(listed.items[0].threadId, "external1");
-    assert.equal(listed.items[0].activity, "unknown");
+    const listed = await call("lody.sessions.list");
+    assert.equal(listed.items[0].id, "external1");
+    assert.equal(listed.items[0].status.type, "idle");
     const catalog = await call("lody.catalog", { machineId: "machine1" });
     assert.equal(catalog.agentConfigs[0].id, "config1");
     assert.doesNotMatch(
       JSON.stringify(catalog),
       /SECRET_SENTINEL|never-disclose/,
     );
-    const created = await call("management.threads.create", {
-      serviceRef: service.serviceRef,
-      providerOptions: { machineId: "machine1", agentConfigId: "config1" },
+    const created = await call("lody.sessions.create", {
+      machineId: "machine1",
+      agentConfigId: "config1",
     });
-    const id = created.thread.threadId;
+    const id = created.session.id;
     await until(
       () => fixture.repo.getDocMeta(`session-${id}`),
       (x) => !!x?.meta.id,
@@ -58,11 +55,13 @@ test(
         .length,
       0,
     );
-    const threadRef = listed.items[0].threadRef;
-    const observed = await call("management.threads.observe", { threadRef });
-    assert.equal(observed.items.length, 0);
-    await call("management.threads.send", {
-      threadRef,
+    const sessionId = listed.items[0].id;
+    const events: string[] = [];
+    adapter.watchEvents((event) => events.push(event.nativeType));
+    await call("lody.sessions.subscribe", { sessionId });
+    assert.equal(events.length, 0);
+    await call("lody.sessions.send", {
+      sessionId,
       text: "Continue cloud work",
     });
     const { doc } = await fixture.document("external1");
@@ -85,13 +84,15 @@ test(
       () => adapter.interactions("external1"),
       (x) => x.length === 1,
     );
-    const interactions = await call("management.interactions.list", {
-      threadRef,
+    const interactions = await call("lody.interactions.list", {
+      sessionId,
     });
     const request = interactions.items[0];
-    await call("management.interactions.respond", {
-      interactionRef: request.interactionRef,
-      response: {
+    await call("lody.interactions.respond", {
+      sessionId,
+      turnId: request.turnId,
+      requestId: request.requestId,
+      outcome: {
         outcome: "selected",
         optionId: "answer",
         _meta: { answer: "cloud" },
@@ -102,38 +103,58 @@ test(
       (x) => !!x[1]?.items[1]?.permissionRequest?.outcome,
     );
     assert.equal(
-      (
-        await adapter.call("management.interactions.read", {
-          interactionRef: request.interactionRef,
-        })
-      ).error?.code,
-      "stale_interaction",
+      (await call("lody.interactions.list", { sessionId })).items.length,
+      0,
     );
-    await call("management.threads.interrupt", { threadRef });
+    const duplicate = await adapter.call("lody.interactions.respond", {
+      sessionId,
+      turnId: request.turnId,
+      requestId: request.requestId,
+      outcome: { outcome: "cancelled" },
+    });
+    assert.equal(duplicate.error?.code, "stale_interaction");
+    const active = (
+      await call("lody.sessions.history", { sessionId })
+    ).items.find((r: any) => r.role === "assistant" && !r.finished);
+    await call("lody.sessions.cancel", { sessionId, turnId: active.id });
     assert.equal(
       fixture.rpcRequests.find((r) => r.method === "session/cancel").params
         .turnId,
       "assistant1",
     );
-    const history = await call("management.threads.read", {
-      threadRef,
+    const history = await call("lody.sessions.history", {
+      sessionId,
       limit: 1,
     });
     assert.equal(history.items[0].id, turn.id);
     assert.ok(history.nextCursor);
-    const tail = await call("management.threads.read", {
-      threadRef,
+    assert.equal(
+      (
+        await adapter.call("lody.sessions.history", {
+          sessionId: id,
+          cursor: history.nextCursor,
+        })
+      ).error?.code,
+      "invalid_cursor",
+    );
+    assert.equal(
+      (
+        await adapter.call("lody.sessions.history", {
+          sessionId,
+          cursor: "invalid",
+        })
+      ).error?.code,
+      "invalid_cursor",
+    );
+    const tail = await call("lody.sessions.history", {
+      sessionId,
       cursor: history.nextCursor,
     });
     assert.match(JSON.stringify(tail.items), /CLOUD_FIXTURE_RESULT/);
-    const events = await call("management.threads.observe", {
-      threadRef,
-      cursor: observed.nextCursor,
-    });
-    assert.ok(events.items.some((r: any) => r.type === "history.updated"));
+    assert.ok(events.includes("history.updated"));
     fixture.denyMachine();
-    const denied = await adapter.call("management.threads.send", {
-      threadRef,
+    const denied = await adapter.call("lody.sessions.send", {
+      sessionId,
       text: "Must not execute",
     });
     assert.equal(denied.error?.code, "unauthorized");
@@ -180,15 +201,15 @@ test(
       2,
     );
     assert.equal(
-      (await adapter.call("management.threads.archive", { threadRef })).error
+      (await adapter.call("management.threads.archive", { sessionId })).error
         ?.code,
       "unsupported_capability",
     );
     await call("lody.sessions.archive", { sessionId: "external1" });
     assert.equal(
       (
-        await adapter.call("management.threads.send", {
-          threadRef,
+        await adapter.call("lody.sessions.send", {
+          sessionId,
           text: "Archived",
         })
       ).error?.code,
@@ -198,10 +219,6 @@ test(
     const second = new LodyAdapter(config);
     t.after(() => second.close());
     await second.init();
-    assert.equal(
-      (await second.call("management.threads.get", { threadRef })).error?.code,
-      "stale_reference",
-    );
     assert.equal(
       (await second.call("lody.sessions.get", { sessionId: id })).execution,
       "accepted",
@@ -252,7 +269,7 @@ test(
 );
 
 test(
-  "Lody cloud reconnect preserves sessions and reports observation gaps without replaying input",
+  "Lody cloud reconnect preserves sessions and reports resynchronization gaps without replaying input",
   { timeout: 30000 },
   async (t) => {
     const fixture = await lodyCloudFixture();
@@ -265,15 +282,12 @@ test(
       assert.equal(result.error, undefined, JSON.stringify(result));
       return result.result as any;
     };
-    const service = (await call("management.services.list")).items[0];
-    const thread = (
-      await call("management.threads.list", { serviceRef: service.serviceRef })
-    ).items[0];
-    const before = await call("management.threads.observe", {
-      threadRef: thread.threadRef,
-    });
-    await call("management.threads.send", {
-      threadRef: thread.threadRef,
+    const session = (await call("lody.sessions.list")).items[0];
+    const events: string[] = [];
+    adapter.watchEvents((event) => events.push(event.nativeType));
+    await call("lody.sessions.subscribe", { sessionId: session.id });
+    await call("lody.sessions.send", {
+      sessionId: session.id,
       text: "Exactly one native input",
     });
     const { doc } = await fixture.document("external1");
@@ -292,17 +306,15 @@ test(
       (value) => value,
       15000,
     );
-    const freshService = (await call("management.services.list")).items[0];
-    const fresh = (
-      await call("management.threads.list", {
-        serviceRef: freshService.serviceRef,
-      })
-    ).items[0];
-    const after = await call("management.threads.observe", {
-      threadRef: fresh.threadRef,
-      cursor: before.nextCursor,
-    });
-    assert.equal(after.gap, true);
+    assert.ok(events.includes("agenvo.resync_required"));
+    const fresh = (await call("lody.sessions.list")).items[0];
+    assert.equal(fresh.id, session.id);
+    await call("lody.sessions.subscribe", { sessionId: fresh.id });
+    assert.equal(
+      (await call("lody.sessions.history", { sessionId: fresh.id })).items
+        .length,
+      1,
+    );
     assert.equal(doc.getList("history").length, 1);
   },
 );
@@ -327,6 +339,10 @@ test(
     const identity = result.error?.native as any;
     assert.equal(identity.sessionId, "external1");
     assert.ok(identity.userTurnId);
+    assert.deepEqual(result.nativeIds, {
+      sessionId: "external1",
+      userTurnId: identity.userTurnId,
+    });
     assert.equal(
       fixture.rpcRequests.some((r) => r.method === "session/dispatch-turn"),
       false,

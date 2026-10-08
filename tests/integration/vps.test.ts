@@ -1,3 +1,4 @@
+import { callCode, nativeOutcome } from "../support/code.js";
 const ADMIN_SECRET = "test-admin-secret-not-for-production-1234567890";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -344,11 +345,11 @@ test(
     cleanups.push(() => adapter.close());
     ws.on("message", async (raw) => {
       const p = JSON.parse(raw.toString());
-      if (p.type !== "call") return;
+      if (p.type !== "call" && p.type !== "describe") return;
       let outcome;
       try {
         outcome =
-          p.method === "agenvo.describe"
+          p.type === "describe"
             ? accepted(describe(adapter, p.params))
             : await adapter.call(p.method, p.params);
       } catch (error) {
@@ -379,65 +380,66 @@ test(
     await mcp.connect(transport);
     const tools = await mcp.listTools();
     assert.deepEqual(tools.tools.map((v) => v.name).sort(), [
-      "instance_describe",
-      "instances_list",
-      "runtime_call",
+      "execute",
+      "search",
     ]);
     const listed = await mcp.callTool({
-      name: "instances_list",
-      arguments: {},
+      name: "search",
+      arguments: { query: "" },
     });
     assert.match(JSON.stringify(listed), /Test runtime/);
     const result = await mcp.callTool({
-      name: "runtime_call",
-      arguments: {
+      name: "execute",
+      arguments: callCode({
         deviceId: device.deviceId,
         instanceId: "test",
         method: "thread/list",
         params: {},
-      },
+      }),
     });
     assert.match(JSON.stringify(result), /canAcceptDirectInput/);
     const call = async (method: string, params = {}) => {
       const response = await mcp.callTool({
-        name: "runtime_call",
-        arguments: {
+        name: "execute",
+        arguments: callCode({
           deviceId: device.deviceId,
           instanceId: "test",
           method,
           params,
-        },
+        }),
       });
       assert.equal(response.isError, false, JSON.stringify(response));
-      return JSON.parse((response.content as any)[0].text).result;
+      return nativeOutcome(response).result;
     };
     const info = await mcp.callTool({
-      name: "instance_describe",
+      name: "search",
       arguments: {
-        deviceId: device.deviceId,
-        instanceId: "test",
-        method: "management.threads.send",
+        query: "turn/start",
       },
     });
-    assert.match(JSON.stringify(info), /managementVersion/);
-    const services = await call("management.services.list");
-    const created = await call("management.threads.create", {
-      serviceRef: services.items[0].serviceRef,
+    assert.match(JSON.stringify(info), /inputSchema/);
+    const created = await call("thread/start");
+    const threadId = created.thread.id;
+    const sent = await call("turn/start", {
+      threadId,
+      input: [{ type: "text", text: "Integration fixture" }],
     });
-    const sent = await call("management.threads.send", {
-      threadRef: created.thread.threadRef,
-      text: "Integration fixture",
-    });
-    assert.equal(sent.native.turn.id, "turn");
-    await call("management.threads.interrupt", {
-      threadRef: created.thread.threadRef,
-    });
-    const observed = await call("management.threads.observe", {
-      threadRef: created.thread.threadRef,
-      limit: 50,
-    });
+    assert.equal(sent.turn.id, "turn");
+    await call("turn/interrupt", { threadId, turnId: sent.turn.id });
+    const observed = await call("notifications.list", { threadId, limit: 50 });
     assert.equal(observed.gap, false);
     assert.ok(observed.items.some((i: any) => i.type === "turn/completed"));
+
+    const partial = await mcp.callTool({
+      name: "execute",
+      arguments: {
+        code: `await call(${JSON.stringify({ deviceId: device.deviceId, instanceId: "test" })}, "thread/start", {}); throw Error("after dispatch");`,
+      },
+    });
+    const failedScript = JSON.parse((partial.content as any)[0].text);
+    assert.equal(partial.isError, true);
+    assert.equal(failedScript.error.code, "script_error");
+    assert.equal(failedScript.result.calls[0].nativeIds.threadId, "t");
 
     // A temporarily absent instance must still have its retained approval revoked.
     let changed = once(ws, "message");
@@ -458,24 +460,24 @@ test(
     );
     await changed;
     const reappeared = await mcp.callTool({
-      name: "runtime_call",
-      arguments: {
+      name: "execute",
+      arguments: callCode({
         deviceId: device.deviceId,
         instanceId: "test",
         method: "thread/list",
-      },
+      }),
     });
-    assert.equal(reappeared.isError, true);
+    assert.equal(nativeOutcome(reappeared).error.code, "permission_denied");
     await admin("/api/admin/revoke", { kind: "device", id: device.deviceId });
     const denied = await mcp.callTool({
-      name: "runtime_call",
-      arguments: {
+      name: "execute",
+      arguments: callCode({
         deviceId: device.deviceId,
         instanceId: "test",
         method: "thread/list",
-      },
+      }),
     });
-    assert.equal(denied.isError, true);
+    assert.equal(nativeOutcome(denied).error.code, "permission_denied");
     await mcp.close();
     const refreshed = await exchange({
       grant_type: "refresh_token",

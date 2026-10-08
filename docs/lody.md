@@ -40,34 +40,32 @@ Local attachment does not call Lody cloud APIs. OSS requires no Lody cloud accou
 
 ## Discover, create and use a Session
 
-Use the standard `instances_list`, `instance_describe`, and `runtime_call` tools. `management.services.list` returns the workspace's `serviceRef`; `management.threads.list` includes existing Sessions. Directory metadata alone reports activity as `unknown`; `get` and `observe` sample the machine's live status through cloud RPC or local invocation RPC and presence.
+Use `search` to discover instances and native methods, then invoke them with `call(target, method, params)` inside `execute`. `lody.sessions.list` includes existing Sessions with their native `id`; `lody.sessions.get` reads synchronized metadata and `lody.sessions.live` samples current activity through cloud RPC or local invocation RPC and presence. Durable status does not establish current execution or task success.
 
-Call `lody.catalog` with no arguments to discover machines, then with `machineId` to discover that machine's agent configurations, capabilities and projects. Secret provider configuration is excluded. Create a Thread with:
+Call `lody.catalog` with no arguments to discover machines, then with `machineId` to discover that machine's agent configurations, capabilities and projects. Secret provider configuration is excluded. Create a Session in `execute` with:
 
-```json
-{
-  "serviceRef": "RETURNED_SERVICE_REFERENCE",
-  "providerOptions": {
-    "machineId": "MACHINE_ID",
-    "agentConfigId": "AGENT_CONFIG_ID",
-    "title": "Lody task"
-  }
-}
+```javascript
+const target = { deviceId: "DEVICE_ID", instanceId: "INSTANCE_ID" };
+return await call(target, "lody.sessions.create", {
+  machineId: "MACHINE_ID",
+  agentConfigId: "AGENT_CONFIG_ID",
+  title: "Lody task"
+});
 ```
 
-The result contains `thread.threadRef`. Creation writes Session metadata without a prompt. An optional native `project` selects a GitHub repository/branch or a project registered on the execution machine. Creating a context does not prove the provider can execute successfully; Lody retains its native empty-Session lifecycle.
+The call outcome contains `result.session.id`. Creation writes Session metadata without a prompt. An optional native `project` selects a GitHub repository/branch or a project registered on the execution machine. Creating a context does not prove the provider can execute successfully; Lody retains its native empty-Session lifecycle.
 
-`management.threads.send` accepts `threadRef`, `text`, and optional `providerOptions.modelId`. Execution supports builtin Codex and Claude configurations that advertise a recognized full-access mode, including modes exposed through native config options. Other configurations remain discoverable. Lody owns busy-input dispatch. Agenvo adds no queue and does not replay input automatically.
+`lody.sessions.send` accepts `sessionId`, `text`, and optional `modelId`. Execution supports builtin Codex and Claude configurations that advertise a recognized full-access mode, including modes exposed through native config options. Other configurations remain discoverable. Lody owns busy-input dispatch. Agenvo adds no queue and does not replay input automatically.
 
 `cloud_input_synced` means the history and activation marker reached the cloud. It does not mean the machine started execution or the task succeeded. A timeout after writing returns `unknown` with native identities under `error.native`; inspect the Session before sending again. `local_input_received` means the daemon returned a version vector covering the writes; it does not acknowledge disk persistence, cloud upload, or execution completion. The Connector retains protocol replicas in memory and rebuilds them from the connected service after restart; unconfirmed writes have no Connector-side recovery guarantee.
 
 ## Read, observe and control
 
-- `management.threads.read` pages native history. Large turns retain identity and result fields with `truncated: true`; read the full body using `lody.sessions.turn`, which returns JSON text fragments. Pass its `hash` as `expectedHash` with `nextOffset` to detect concurrent edits.
-- `management.threads.observe` returns document changes, sampled live state and pending interactions. Initial history synchronization is not a completion event. Gaps require rereading current state/history. At most 128 Session documents are open per connection.
-- `management.interactions.list/read/respond` preserves native requests and outcome schemas. Plain execution permissions for controlled Sessions are approved automatically. Questions and requests with unknown metadata remain explicit. Synchronization does not acknowledge provider consumption or winning a concurrent response race.
-- `management.threads.interrupt` samples an exact assistant turn from local active invocation or cloud history and requests cancellation of that exact identity once. `lody.sessions.cancel` accepts an explicit `turnId`.
+- `lody.sessions.history` pages native history. Large turns retain identity and result fields with `truncated: true`; read the full body using `lody.sessions.turn`, which returns JSON text fragments. Pass its `hash` as `expectedHash` with `nextOffset` to detect concurrent edits.
+- `lody.sessions.subscribe` subscribes to document changes on this connection, delivered through [MCP events](events.md). Initial history synchronization is not a completion event. On `agenvo.resync_required`, subscribe again and reread native state/history. At most 128 Session documents are open per connection; there is no separate observation journal.
+- `lody.interactions.list` returns pending native requests, `sessionId`, `turnId`, `requestId` and the response schema. `lody.interactions.respond` takes those native identifiers and an `outcome`. Plain execution permissions for controlled Sessions are approved automatically; questions and requests with unknown metadata remain explicit. Synchronization does not acknowledge provider consumption or winning a concurrent response race.
+- `lody.sessions.cancel` requires explicit `sessionId` and `turnId` and cancels that exact turn once. Get the active local turn ID from `lody.sessions.live`; for cloud, read the unfinished assistant turn from `lody.sessions.history`. A rejection or timeout never retargets another turn.
 - `lody.sessions.steer` requires `expectedTurnId`. An uncertain result does not replay or promote the input.
-- `lody.sessions.archive/restore` changes native archival metadata. Archival can stop execution and release resources, so unified visibility-only archive and resume are not advertised.
+- `lody.sessions.archive/restore` changes native archival metadata. Archival can stop execution and release resources; restore does not promise provider resume.
 
 The connector targets the public-source Lody client protocol. Cloud protocol tests use a real isolated Loro Streams server with fixture account and execution peers; authenticated production cloud acceptance remains outstanding. Local system tests use the native Lody 0.104.0 daemon/ACP, real Codex and an isolated model through Relay MCP, including reconnect behavior. The test assembly changes only the published bundle's platform selection constants to OSS; protocol and execution code remain unchanged.

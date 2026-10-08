@@ -20,8 +20,33 @@ import {
   automaticApproval,
   validateAnswers,
 } from "./codex-execution.js";
-import { CodexManagement } from "./codex-management.js";
+import { Observations } from "@agenvo/connector/adapters/observations";
 import { bytes, Fault, LIMITS, page, type Outcome } from "@agenvo/protocol";
+
+const descriptions: Record<keyof typeof schemas.methods, string> = {
+  "model/list": "List available models.",
+  "thread/loaded/list": "List thread IDs loaded in the native server.",
+  "thread/start":
+    "Create a work context as a conversation thread without submitting input. Uses full access with no execution approval.",
+  "thread/resume":
+    "Load and subscribe to a thread without sending input. Applies full access; past notifications are not replayed.",
+  "thread/read":
+    "Read thread metadata and optional conversation history, including input and output. History may be unavailable; notifications.list reads notifications received on this connection.",
+  "thread/list":
+    "List native threads, including threads created by other clients. modelProviders: [] includes all providers; sourceKinds defaults to interactive sources. Use explicit filters and pagination for wider coverage.",
+  "thread/archive":
+    "Archive a native thread. Inspect native state before retrying a lost confirmation.",
+  "thread/unarchive": "Restore an archived native thread.",
+  "thread/turns/list":
+    "Read paginated native turns. Some servers or ephemeral threads cannot supply history; use received notifications when available.",
+  "thread/items/list": "Read paginated native conversation items.",
+  "turn/start":
+    "Submit input to a loaded thread. Resume an unloaded thread first. Returns the native turn ID; accepted does not establish task success. Uses full access.",
+  "turn/steer":
+    "Submit additional input to the active turn identified by expectedTurnId. The native service rejects a mismatched turn ID.",
+  "turn/interrupt":
+    "Interrupt the turn identified by turnId. Read native notifications to observe completion.",
+};
 
 const ajv = new Ajv({ strict: false, allErrors: false });
 addFormats(ajv);
@@ -64,13 +89,21 @@ export class CodexAdapter implements Adapter {
   private readBuffer = Buffer.alloc(0);
   private closed = false;
   private terminating?: Promise<unknown>;
-  readonly management: CodexManagement;
-  constructor(public config: CodexConfig) {
-    this.management = new CodexManagement(
-      config,
-      (m, p) => this.call(m, p),
-      () => this.nativeMethods(),
-    );
+  private readonly notifications = new Observations();
+  constructor(public config: CodexConfig) {}
+  private record(
+    threadId: unknown,
+    type: string,
+    data: Record<string, unknown>,
+  ) {
+    if (typeof threadId === "string")
+      this.notifications.append(threadId, type, data, {
+        threadId,
+        turnId: (data.turn as any)?.id ?? data.turnId,
+        itemId: (data.item as any)?.id ?? data.itemId,
+        status: (data.turn as any)?.status ?? data.status,
+        error: (data.turn as any)?.error,
+      });
   }
   async init() {
     const { stdout } = await execa(this.config.binary, ["--version"], {
@@ -200,11 +233,9 @@ export class CodexAdapter implements Adapter {
             excludeTurns: true,
           }),
         );
-        this.management.subscribed(threadId);
       } catch (error) {
         if (error instanceof Fault && error.code === "native_error") {
           this.resumeTargets.delete(threadId);
-          this.management.unsubscribed(threadId);
         } else throw error;
       }
     }
@@ -350,7 +381,12 @@ export class CodexAdapter implements Adapter {
           this.interactions.delete(id);
       this.recount();
     }
-    this.management.notify(packet.method, packet.params);
+    if (typeof packet.method === "string" && packet.id === undefined)
+      this.record(
+        packet.params?.threadId ?? packet.params?.thread?.id,
+        packet.method,
+        packet.params ?? {},
+      );
     if (
       [
         "thread/started",
@@ -384,15 +420,11 @@ export class CodexAdapter implements Adapter {
         if (result) {
           this.validate(responseValidators.get(packet.method)!, result);
           this.write({ jsonrpc: "2.0", id: packet.id, result });
-          this.management.record(
-            packet.params?.threadId,
-            "permission.submitted",
-            {
-              method: packet.method,
-              threadId: packet.params?.threadId,
-              automatic: true,
-            },
-          );
+          this.record(packet.params?.threadId, "permission.submitted", {
+            method: packet.method,
+            threadId: packet.params?.threadId,
+            automatic: true,
+          });
           return;
         }
       } catch (error) {
@@ -404,7 +436,7 @@ export class CodexAdapter implements Adapter {
             message: "Native approval could not be answered automatically",
           },
         });
-        this.management.record(packet.params?.threadId, "permission.failed", {
+        this.record(packet.params?.threadId, "permission.failed", {
           method: packet.method,
           threadId: packet.params?.threadId,
         });
@@ -455,7 +487,7 @@ export class CodexAdapter implements Adapter {
         return;
       }
       this.interactions.set(interactionId, interaction);
-      this.management.record(packet.params?.threadId, "interaction.pending", {
+      this.record(packet.params?.threadId, "interaction.pending", {
         interactionId,
         method: packet.method,
         threadId: packet.params?.threadId,
@@ -464,7 +496,6 @@ export class CodexAdapter implements Adapter {
     } else if (["thread/closed", "thread/archived"].includes(packet.method)) {
       const threadId = packet.params?.threadId;
       this.resumeTargets.delete(threadId);
-      this.management.unsubscribed(threadId);
       for (const [id, r] of this.interactions)
         if (r.params.threadId === threadId) this.interactions.delete(id);
       this.recount();
@@ -517,7 +548,7 @@ export class CodexAdapter implements Adapter {
     this.pending.clear();
     this.interactions.clear();
     this.interactionBytes = 0;
-    this.management.reset();
+    this.notifications.reset();
     if (this.config.mode === "attach-unix") {
       const ws = this.socket;
       this.socket = undefined;
@@ -563,51 +594,47 @@ export class CodexAdapter implements Adapter {
     }
   }
   methods(): Method[] {
-    return [...this.management.methods(), ...this.nativeMethods()];
-  }
-  private nativeMethods(): Method[] {
     return [
       ...Object.entries(schemas.methods).map(([name, schema]) => ({
         name,
         readOnly: /(?:\/list|\/read)$/.test(name),
-        description:
-          "Codex native method. Agent work uses full access and never requests execution approval." +
-          (["thread/read", "thread/turns/list"].includes(name)
-            ? " Native history can be unavailable; use observations for received events."
-            : ""),
+        description: descriptions[name as keyof typeof schemas.methods],
         inputSchema: schema,
       })),
       {
         name: "requests.list",
         readOnly: true,
         description:
-          "Pending user questions and dynamic tool requests received on this connection. Permission approvals are answered automatically.",
+          "List pending requests for user input and dynamic tool calls received on this connection. Permission approvals are answered automatically.",
         inputSchema: z.toJSONSchema(
           z.strictObject({
             cursor: z.string().optional(),
             threadId: z.string().optional(),
-            summary: z.boolean().optional(),
           }),
-        ),
-      },
-      {
-        name: "requests.read",
-        readOnly: true,
-        description:
-          "Read one pending native interaction and its response schema.",
-        inputSchema: z.toJSONSchema(
-          z.strictObject({ interactionId: z.string() }),
         ),
       },
       {
         name: "requests.respond",
         readOnly: false,
         description:
-          "Answer one pending user question or tool call once. Native response schemas are included in requests.list.",
+          "Respond to a pending request for user input or a dynamic tool call. Native response schemas are included in requests.list.",
         inputSchema: z.toJSONSchema(
           z.strictObject({
             interactionId: z.string(),
             result: z.record(z.string(), z.unknown()),
+          }),
+        ),
+      },
+      {
+        name: "notifications.list",
+        readOnly: true,
+        description:
+          "Read notifications received on this connection for a thread, including output and native status. Not durable history or guaranteed instance-wide coverage. Inspect gap after disconnect or eviction. Resume a native thread to subscribe; received events are not replayed by resume.",
+        inputSchema: z.toJSONSchema(
+          z.strictObject({
+            threadId: z.string(),
+            cursor: z.string().optional(),
+            limit: z.number().int().min(1).max(50).optional(),
           }),
         ),
       },
@@ -618,46 +645,35 @@ export class CodexAdapter implements Adapter {
     original: Record<string, unknown>,
   ): Promise<Outcome> {
     if (!this.available) throw new Fault("runtime_unavailable");
-    if (method.startsWith("management."))
-      return this.management.call(method, original);
+    if (method === "notifications.list") {
+      const p = z
+        .strictObject({
+          threadId: z.string(),
+          cursor: z.string().optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        })
+        .parse(original);
+      return accepted(this.notifications.list(p.threadId, p.cursor, p.limit));
+    }
     if (method === "requests.list") {
       const p = z
         .strictObject({
           cursor: z.string().optional(),
           threadId: z.string().optional(),
-          summary: z.boolean().optional(),
         })
         .parse(original);
       return accepted(
         page(
           [...this.interactions.values()]
             .filter((i) => !p.threadId || i.params.threadId === p.threadId)
-            .map((i) =>
-              p.summary
-                ? { interactionId: i.interactionId, method: i.method }
-                : {
-                    ...i,
-                    responseSchema:
-                      schemas.responses[
-                        i.method as keyof typeof schemas.responses
-                      ],
-                  },
-            ),
+            .map((i) => ({
+              ...i,
+              responseSchema:
+                schemas.responses[i.method as keyof typeof schemas.responses],
+            })),
           p.cursor,
         ),
       );
-    }
-    if (method === "requests.read") {
-      const p = z.strictObject({ interactionId: z.string() }).parse(original);
-      const interaction = this.interactions.get(p.interactionId);
-      if (!interaction) throw new Fault("interaction_expired");
-      return accepted({
-        ...interaction,
-        responseSchema:
-          schemas.responses[
-            interaction.method as keyof typeof schemas.responses
-          ],
-      });
     }
     if (method === "requests.respond") {
       const p = z
@@ -704,11 +720,9 @@ export class CodexAdapter implements Adapter {
       typeof result?.thread?.id === "string"
     ) {
       this.resumeTargets.add(result.thread.id);
-      this.management.subscribed(result.thread.id);
     }
     if (method === "thread/archive") {
       this.resumeTargets.delete(String(params.threadId));
-      this.management.unsubscribed(String(params.threadId));
     }
     return accepted(result);
   }
