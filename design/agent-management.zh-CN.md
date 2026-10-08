@@ -45,10 +45,10 @@ Herdr 的名称和 pane 会复用。引用保留 terminal_id、Agent kind、可�
 | `management.threads.send` | 提交文本，保留原生确认和忙碌输入语义，不承诺新轮或排队 |
 | `management.threads.observe` | 查询该 Thread 当前状态、分页观察事件及待回应请求摘要 |
 | `management.threads.read` | 按需读取原生历史或终端快照，与观察游标独立 |
-| `management.threads.interrupt` | 请求中断当前原生执行，不重选目标或重试；Codex 保留轮次身份，Amp 使用无轮次前置条件的原生 cancel |
+| `management.threads.interrupt` | 请求中断当前原生执行，不重选目标或重试；Codex 与 Lody 保留轮次身份，Amp 使用无轮次前置条件的原生 cancel |
 | `management.threads.resume` | 加载并订阅已有上下文，不发送提示词；仅 Codex 支持 |
 | `management.threads.archive/unarchive` | 改变可见性，不等同取消或销毁；仅 Codex 支持 |
-| `management.interactions.list/read/respond` | 按 Thread 列出待回应请求，按交互引用读取或回答；仅 Codex 支持 |
+| `management.interactions.list/read/respond` | 按 Thread 列出待回应请求，按交互引用读取或回答；Codex、Paseo 与 Lody 支持 |
 
 没有公共执行引用、执行资源查询、实例级观察列表或统一 steer。精确轮次操作继续使用原生 `turn/steer`、`turn/interrupt` 和 `thread/items/list`。这样原生轮次身份留在需要它的边界，而普通管理方只维护 Thread 和观察游标。
 
@@ -93,3 +93,5 @@ Codex observe 返回该 Thread 的待回应请求摘要和 interactionRef；完�
 回归测试需要保护引用归属、游标缺口、自动订阅的副作用、中断竞争和原生错误传播。测试入口与隔离要求见[贡献指南](../CONTRIBUTING.zh-CN.md)。
 
 Amp 的共同接口映射、取消竞争和观察范围见 [Amp 原生接口依据](amp-interface-audit.zh-CN.md)。
+
+Lody 的 workspace 服务、Session 映射及两种连接的确认边界见 [Lody 接入设计](lody-connector.zh-CN.md)。

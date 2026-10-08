@@ -19,10 +19,10 @@ git clone https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
 npm run build
-npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/server
+npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
 ```
 
-完成后可以使用 `agenvo-herdr`、`agenvo-codex-app-server`、`agenvo-paseo`、`agenvo-amp` 和 `agenvo-server`。安装命令链接不会启动中继或连接器。命令指向仓库中的构建文件，因此需要保留该 checkout；已有 checkout 时，直接在那里构建。
+完成后可以使用 `agenvo-herdr`、`agenvo-codex-app-server`、`agenvo-paseo`、`agenvo-amp`、`agenvo-lody` 和 `agenvo-server`。安装命令链接不会启动中继或连接器。命令指向仓库中的构建文件，因此需要保留该 checkout；已有 checkout 时，直接在那里构建。
 
 ## 部署与连接
 
@@ -38,3 +38,5 @@ Herdr 独立运行，连接器只连接它。Codex 连接器默认启动独立�
 Paseo 同样独立运行；先配置 daemon 和 provider，再附着 `agenvo-paseo`。
 
 实验性的 Amp 集成通过本地插件接入独立运行的 Amp 宿主。配置、共享范围和验证边界见 [Amp 指南](amp.zh-CN.md)。
+
+Lody 在同一个 Connector 中支持云端访问与本机 daemon 附着。按 [Lody 指南](lody.zh-CN.md)选择连接方式并配置和验证。

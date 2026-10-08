@@ -11,3 +11,12 @@ https://github.com/openai/codex
 Agenvo restricts the available methods and properties and retains only reachable
 schema definitions. See scripts/import-codex-schema.py for the transformation.
 No Codex runtime binary is distributed with Agenvo.
+
+The Lody cloud protocol subset in apps/lody/src is based on public client
+interfaces from LodyAI/Lody, commit 3d4787114477cf305a965da471705c8b883fa0c1,
+licensed under Apache-2.0. The local Loro transport and wire helpers in
+apps/lody/src/native are adapted from the same project at commit
+a8aa4c221e9a0f6f80f6e69cb5e72718fcf66576, with daemon receipt confirmation added.
+Agenvo implements a limited cloud and local client adapter;
+no Lody daemon or provider runtime is distributed.
+https://github.com/LodyAI/Lody

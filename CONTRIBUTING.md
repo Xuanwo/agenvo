@@ -41,7 +41,7 @@ Source responsibilities:
 - `packages/protocol`: wire schemas, limits and execution outcomes.
 - `packages/relay`: shared Relay, MCP, event delivery and administration UI.
 - `packages/connector`: shared connection, configuration storage, observation and CLI mechanisms.
-- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`: independently installed Connectors owning their configuration schemas and adapters.
+- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`: independently installed Connectors owning their configuration schemas and adapters.
 - `apps/server`, `apps/cloudflare`: VPS and Cloudflare hosts.
 
 New deployment hosts must reuse the routing core and preserve authorization, epoch and uncertain-execution semantics. Native adapter additions require discoverable schemas and explicit capability and interaction semantics. Do not add retry mechanisms that can duplicate writes.
@@ -50,8 +50,12 @@ Before sending a change, review the diff for private paths and credentials, run 
 
 Compatibility commitments apply only to formally published Agenvo releases; internal development versions are not compatibility targets. See [AGENTS.md](AGENTS.md).
 
-The five release packages share a version; internal workspace packages remain private and are bundled at build time. `npm run test:packages` installs real npm tarballs into temporary directories and verifies their entry points and backend isolation. Tests never publish packages.
+The six release packages share a version; internal workspace packages remain private and are bundled at build time. `npm run test:packages` installs real npm tarballs into temporary directories and verifies their entry points and backend isolation. Tests never publish packages.
 
 Regression coverage includes startup confirmation expiring before the real agent is ready, rediscovery without duplicate launch, sending to an agent without managed startup metadata, busy alternate-screen history falling back to the visible viewport, and preserving request IDs for native errors, Relay timeouts and Connector disconnects. Fixtures generate all identities, state and credentials locally; never copy incident screenshots, prompts or production identifiers into tests. Client cancellation before an HTTP request is dispatched remains outside server-side test coverage.
 
 Amp integration tests use a deterministic Plugin API fixture through the real MCP and webhook paths. The native installer also pins Amp CLI `0.0.1791446565-g95411c`; `tests/adapters/amp-native.test.ts` verifies release-plugin loading and discovery with isolated credentials. It skips explicitly when Amp is absent. This is not a cloud model execution test; see [Amp](docs/amp.md).
+
+Lody cloud protocol tests run with `npm test` and `npm run test:integration`, starting an isolated Streams server with pinned Loro CLI 0.6.0 and fixture account/execution peers. They use no production account; authenticated Lody cloud and real provider execution remain separate acceptance checks.
+
+Lody local system tests use pinned `lody@0.104.0` native daemon/ACP, Codex 0.160.1 and an isolated model through Relay MCP, covering creation, sending, history, exact cancellation and no replay after disconnect. The npm bundle is a cloud build; the fixture changes only its four platform selection constants to OSS. This does not certify an unmodified OSS distribution. Protocol and execution code are unchanged; no personal configuration or production account is used.

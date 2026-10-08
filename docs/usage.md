@@ -53,6 +53,10 @@ The default configuration directory is `~/.config/agenvo/paseo`. Instance setup 
 
 Discovery includes agents created by other clients. Creating an agent sends no prompt. Sends request Codex `full-access` or Claude `bypassPermissions`; existing native provider options can take precedence over these modes. Default input interrupts active work; `steer` can also replace or start a turn. Question/decision responses are explicit. Native cancel, archive and resume are available through `paseo.agents.*`; archive stops execution, and resume can return a new Agent ID. Keep that ID: resumed agents without a workspace may not appear in the native directory. Closing the Connector leaves Paseo and its agents running.
 
+## Lody
+
+Use `agenvo-lody` for an authorized cloud workspace or an existing local daemon; see the [Lody guide](lody.md) for configuration, credentials and behavior.
+
 ## Pair and run
 
 The examples use Herdr. For Codex or Paseo, use `agenvo-codex-app-server` or `agenvo-paseo` and pair each separately. All can run on the same computer, with separate configuration, credentials, and services. Do not copy pairing credentials between them. The wire field `deviceId` identifies a Connector, not a physical computer.

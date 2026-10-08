@@ -91,3 +91,5 @@ Codex `threads.resume` 加载并订阅，不发送输入；`archive`、`unarchiv
 调用结果为 `unknown` 时，先检查原生状态，再判断是否重新发送。原生 turn ID、请求 ID 和游标都不是幂等键。断线后不自动重放写操作。业务成功需要检查输出和交付物。
 
 要在变化时主动唤醒消费者，参见[事件订阅](events.zh-CN.md)。收到通知后读取当前状态和输出；无需持续轮询。
+
+Lody 将原生 Session 映射为 Thread，支持原生历史、精确取消与原生交互，具体确认及生命周期边界见 [Lody 指南](lody.zh-CN.md)。

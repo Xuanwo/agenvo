@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { request } from "node:http";
 import { isolatedEnvironment, until } from "../support/environment.js";
+import { lodyCloudFixture } from "../fixtures/lody-cloud.js";
 import { paseoFixture } from "../fixtures/paseo-daemon.js";
 import { eventsLab } from "../support/events-lab.js";
 import { serviceDefinition } from "@agenvo/connector/cli/service";
@@ -52,7 +53,14 @@ test(
       }),
     );
     const installed = new Map<string, string>();
-    for (const app of ["herdr", "codex-app-server", "paseo", "amp", "server"]) {
+    for (const app of [
+      "herdr",
+      "codex-app-server",
+      "paseo",
+      "amp",
+      "lody",
+      "server",
+    ]) {
       await exec(
         "npm",
         ["pack", "--workspace", "@agenvo/" + app, "--pack-destination", root],
@@ -241,6 +249,43 @@ test(
       readFile(join(ampConfig.bridgeDir, "..", "conflict", "plugin.mjs")),
       { code: "ENOENT" },
     );
+
+    const lody = await lodyCloudFixture();
+    cleanups.push(() => lody.close());
+    await exec(
+      process.execPath,
+      [
+        installed.get("lody")!,
+        "instance",
+        "add",
+        "--id",
+        "lody",
+        "--workspace-id",
+        "workspace1",
+        "--token-file",
+        lody.tokenFile,
+        "--auth-url",
+        lody.config.authUrl,
+        "--auth-site-url",
+        lody.config.authSiteUrl,
+      ],
+      { cwd: root, env: isolatedEnvironment(root) },
+    );
+    const lodyConfig = JSON.parse(
+      await readFile(
+        join(root, ".config", "agenvo", "lody", "config.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(lodyConfig.instances[0].userId, "user1");
+    assert.equal(lodyConfig.instances[0].workspaceId, "workspace1");
+    assert.doesNotMatch(JSON.stringify(lodyConfig), /fixture-cli-token/);
+    const lodyDoctor = await exec(
+      process.execPath,
+      [installed.get("lody")!, "doctor"],
+      { cwd: root, env: isolatedEnvironment(root) },
+    );
+    assert.match(lodyDoctor.stdout, /Lody cloud workspace synchronized/);
 
     // Exercise CLI configuration and pairing against an isolated HTTPS Relay.
     const lab = await eventsLab(t);

@@ -3,7 +3,7 @@ import { mkdir, rm, readFile, copyFile, chmod } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
-const apps = ["herdr", "codex-app-server", "paseo", "amp", "server"];
+const apps = ["herdr", "codex-app-server", "paseo", "amp", "lody", "server"];
 const selected = process.argv[2] ? [process.argv[2]] : apps;
 for (const app of selected) {
   if (!apps.includes(app)) throw new Error("Unknown release app: " + app);

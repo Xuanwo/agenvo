@@ -41,7 +41,7 @@ npm run test:adapters
 - `packages/protocol`：通信 schema、限制与执行结果。
 - `packages/relay`：共享 Relay、MCP、事件投递与管理网页。
 - `packages/connector`：共享连接、配置存储、观察与 CLI 机制。
-- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`：独立 Connector，拥有各自的配置 schema 与适配器。
+- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`：独立 Connector，拥有各自的配置 schema 与适配器。
 - `apps/server`、`apps/cloudflare`：VPS 与 Cloudflare 宿主。
 
 新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器需要可发现的 schema 和明确的能力与交互语义，不添加可能重复写入的自动重试。
@@ -50,8 +50,12 @@ npm run test:adapters
 
 兼容性只针对已正式对外发布的 Agenvo 版本，内部开发版本不作为兼容目标。详见 [AGENTS.md](AGENTS.md)。
 
-五个发行包统一版本，内部 workspace 包保持 private 并在构建时打包。`npm run test:packages` 在临时目录安装真实 npm tarball，验证入口与后端隔离。测试不会发布 npm 包。
+六个发行包统一版本，内部 workspace 包保持 private 并在构建时打包。`npm run test:packages` 在临时目录安装真实 npm tarball，验证入口与后端隔离。测试不会发布 npm 包。
 
 回归测试覆盖启动确认先于真实 Agent 就绪而超时、重新发现但不重复启动、没有受管启动元数据的 Agent 仍可发送、工作中备用屏幕历史读取回退到可见终端，以及原生错误、Relay 超时和 Connector 断线保留 requestId。测试身份、状态和凭据全部在本地生成；不要把事件截图、真实提示词或生产标识复制到测试中。客户端尚未发出 HTTP 请求时的取消，不属于服务端测试可证明的范围。
 
 Amp 集成测试使用确定性的 Plugin API fixture，经过真实 MCP 和 webhook 路径。原生安装器同时固定 Amp CLI `0.0.1791446565-g95411c`；`tests/adapters/amp-native.test.ts` 隔离凭据验证发行插件加载和发现，未安装 Amp 时明确跳过。这不是云端模型执行测试，详见 [Amp](docs/amp.zh-CN.md)。
+
+Lody 云端协议测试随 `npm test` 和 `npm run test:integration` 执行，使用固定的 Loro CLI 0.6.0 启动隔离的 Streams 服务，账号服务与执行端使用 fixture。测试不使用生产账号；真实 Lody 云端与 provider 执行仍需单独验收。
+
+Lody 本地系统测试使用固定的 `lody@0.104.0` 原生 daemon/ACP、Codex 0.160.1 和隔离模型，通过 Relay MCP 验证创建、发送、读取、精确取消与断线后不重发。npm bundle 固定为云端构建，fixture 只将四处平台选择常量改为 OSS；这不等于验证未经改动的 OSS 发行物。协议和执行代码未修改，不读取个人配置或使用生产账号。

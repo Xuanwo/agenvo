@@ -19,10 +19,10 @@ git clone https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
 npm run build
-npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/server
+npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
 ```
 
-This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-amp`, and `agenvo-server` available. Linking commands does not start a relay or connector. Keep the checkout because the commands link to its built files. If a checkout already exists, build it there.
+This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-amp`, `agenvo-lody`, and `agenvo-server` available. Linking commands does not start a relay or connector. Keep the checkout because the commands link to its built files. If a checkout already exists, build it there.
 
 ## Deploy and connect
 
@@ -38,3 +38,5 @@ For subsequent task management, use the live method descriptions and the [manage
 Paseo also runs independently; configure its daemon and providers before attaching `agenvo-paseo`.
 
 Experimental Amp integration uses a local plugin and an independently running Amp host. Follow the [Amp guide](amp.md) for setup, scope, and verification limits.
+
+Lody supports cloud access and local daemon attachment in one Connector. See the [Lody guide](lody.md) to select and configure the connection.

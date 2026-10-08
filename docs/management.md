@@ -91,3 +91,5 @@ Codex `threads.resume` reloads and subscribes without sending input. `archive` a
 After `unknown`, inspect native state before deciding whether another write is needed. Native turn IDs, request IDs and cursors are not idempotency keys. Agenvo does not automatically replay writes after disconnect. Check outputs and deliverables to assess task success.
 
 Use [event subscriptions](events.md) to wake the consumer on changes. Read current state and output after each notification instead of continuously polling.
+
+Lody maps native Sessions to Threads, with native history, exact cancellation and native interactions. See the [Lody guide](lody.md) for confirmation and lifecycle boundaries.

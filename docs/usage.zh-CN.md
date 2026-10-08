@@ -53,6 +53,10 @@ agenvo-paseo run
 
 发现范围包括其他客户端创建的 Agent。创建不发送提示词。输入请求 Codex `full-access` 或 Claude `bypassPermissions`，已有原生 provider options 可能优先于 mode。默认输入会中断活跃执行；`steer` 也可能替换执行或启动新轮。问题和决定通过显式交互回答。原生 cancel、archive 和 resume 使用 `paseo.agents.*`：archive 会停止执行，resume 可能返回新 Agent ID。保留该 ID；没有 workspace 的恢复 Agent 可能不出现在原生目录中。关闭 Connector 后 Paseo 和 Agent 继续运行。
 
+## Lody
+
+使用 `agenvo-lody` 连接已授权的云端 workspace 或已有本机 daemon；配置、凭据和行为边界见 [Lody 指南](lody.zh-CN.md)。
+
 ## 配对与运行
 
 下例使用 Herdr；Codex 或 Paseo 将命令替换成 `agenvo-codex-app-server` 或 `agenvo-paseo`，分别完成相同步骤。各 Connector 可以在同一台电脑同时运行。管理页分别显示它们，协议中的 `deviceId` 标识 Connector，不代表物理电脑。

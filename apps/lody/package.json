@@ -1,0 +1,46 @@
+{
+  "name": "@agenvo/lody",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xuanwo/agenvo.git",
+    "directory": "apps/lody"
+  },
+  "engines": {
+    "node": ">=24.13.0"
+  },
+  "devDependencies": {
+    "@agenvo/connector": "0.1.0",
+    "@agenvo/protocol": "0.1.0",
+    "zod": "4.6.5"
+  },
+  "description": "Lody cloud and local daemon connector for Agenvo",
+  "bin": {
+    "agenvo-lody": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build.mjs lody",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "execa": "9.6.0",
+    "pino": "10.4.0",
+    "ws": "8.22.0",
+    "loro-repo": "0.21.1",
+    "loro-crdt": "1.16.3",
+    "@loro-dev/streams-client": "0.8.0",
+    "@loro-dev/streams-crdt": "0.15.0"
+  }
+}
