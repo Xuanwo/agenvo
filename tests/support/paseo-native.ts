@@ -73,6 +73,12 @@ export async function nativePaseo(
 }
 
 export async function stopNativePaseo(child: ChildProcess) {
+  // Keep the root alive for taskkill /T to find its providers. Graceful daemon
+  // exit can orphan descendants that still hold the test directory on Windows.
+  if (process.platform === "win32") {
+    await stopProcess(child);
+    return;
+  }
   if (child.connected) child.send("stop");
   try {
     await until(
