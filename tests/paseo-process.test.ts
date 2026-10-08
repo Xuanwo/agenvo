@@ -18,16 +18,16 @@ test(
   async (t) => {
     const root = await mkdtemp(join(tmpdir(), "agenvo-paseo-cleanup-"));
     // Model a daemon whose shutdown returns while a provider still owns its cwd.
-    // IPC readiness ensures the descendant exists before cleanup starts.
+    // Readiness from stdout ensures the descendant exists before cleanup starts.
     const child = spawn(
       process.execPath,
       [
         "-e",
         `const { spawn } = require("node:child_process");
-const provider = spawn(process.execPath, ["-e", "process.send(process.pid); setInterval(() => {}, 1000)"], {
-  stdio: ["ignore", "ignore", "ignore", "ipc"],
+const provider = spawn(process.execPath, ["-e", "console.log(process.pid); setInterval(() => {}, 1000)"], {
+  stdio: ["ignore", "pipe", "ignore"],
 });
-provider.on("message", (pid) => process.send(pid));
+provider.stdout.once("data", (data) => process.send(Number(data.toString().trim())));
 process.on("message", (message) => {
   if (message === "stop") process.exit(0);
 });`,
