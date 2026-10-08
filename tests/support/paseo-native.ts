@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { binary } from "@agenvo/connector/cli/binary";
@@ -52,18 +52,7 @@ export async function nativePaseo(
   child.stderr!.on("data", (c) => {
     logs += c;
   });
-  const close = async () => {
-    if (child.connected) child.send("stop");
-    try {
-      await until(
-        () => child.exitCode !== null || child.signalCode !== null,
-        Boolean,
-        5000,
-      );
-    } finally {
-      await stopProcess(child);
-    }
-  };
+  const close = () => stopNativePaseo(child);
   try {
     const port = await until(
       () => {
@@ -80,5 +69,18 @@ export async function nativePaseo(
   } catch (error) {
     await close();
     throw error;
+  }
+}
+
+export async function stopNativePaseo(child: ChildProcess) {
+  if (child.connected) child.send("stop");
+  try {
+    await until(
+      () => child.exitCode !== null || child.signalCode !== null,
+      Boolean,
+      5000,
+    );
+  } finally {
+    await stopProcess(child);
   }
 }
