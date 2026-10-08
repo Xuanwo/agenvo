@@ -4,6 +4,8 @@
 
 Amp support is experimental. Agenvo connects to independently running Amp CLI hosts, including `amp --no-tui` runners, through a local plugin. Amp owns execution and history. The Connector never starts or stops the Amp host.
 
+After setup, [add instance context](usage.md#add-instance-context) from the known environment and user requirements so callers can discover working conventions and other useful information.
+
 ## Configure
 
 Install Amp from its [official guide](https://ampcode.com/docs/cli), authenticate it, and build Agenvo following the installation guide. Run:

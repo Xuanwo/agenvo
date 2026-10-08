@@ -4,6 +4,8 @@
 
 `agenvo-lody` supports cloud workspaces and local daemon attachment. Both instance types can coexist in one Connector; each instance keeps its connection path without automatic failover or input replay. Lody owns execution. The Connector attaches to existing services and does not install, start, or stop a daemon.
 
+After setup, [add instance context](usage.md#add-instance-context) from the known environment and user requirements so callers can discover working conventions and other useful information.
+
 ## Cloud configuration and pairing
 
 Obtain a CLI token from Lody's Account settings and save it to a private file. Store only the token; use mode 0600 on Unix or a user-only ACL on Windows. Use the workspace ID from Lody, not its display name or URL slug.

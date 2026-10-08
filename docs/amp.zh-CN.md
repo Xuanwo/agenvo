@@ -4,6 +4,8 @@
 
 Amp 支持目前为实验性。Agenvo 通过本地插件接入独立运行的 Amp CLI 宿主，包括 `amp --no-tui` Runner。执行与历史由 Amp 持有，Connector 不启停 Amp 宿主。
 
+配置完成后，根据已知环境和用户要求[补充实例上下文](usage.zh-CN.md#补充实例上下文)，让调用方在发现时了解该实例的工作约定与其他有用信息。
+
 ## 配置
 
 按照 Amp [官方指南](https://ampcode.com/docs/cli)安装并登录，按照 Agenvo 安装指南构建，然后执行：

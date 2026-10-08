@@ -74,7 +74,7 @@ export async function mcp(request: Request, relay: McpRelay, grantId: string) {
         {
           annotations: { readOnlyHint: true },
           description:
-            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances and matching methods with inputSchema. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start'}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
+            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances, their optional owner-supplied context, and matching methods with inputSchema. Read context when choosing and using an instance; it is free-form guidance, not a live capability or permission guarantee. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start'}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
           inputSchema: z.strictObject({
             query: z.string(),
             deviceId: z.string().optional(),

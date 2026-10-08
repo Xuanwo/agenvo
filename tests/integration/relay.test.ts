@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
-import { isolatedEnvironment } from "../support/environment.js";
+import { isolatedEnvironment, until } from "../support/environment.js";
 import { once } from "node:events";
 import { digest } from "@agenvo/protocol";
 
@@ -319,6 +319,7 @@ test(
       instanceId: "work",
       kind: "herdr",
       label: "Work",
+      context: "# Work\nInitial owner context.",
       fingerprint,
       scope: {},
       backendVersion: "0.9.3",
@@ -523,7 +524,24 @@ test(
       "undefined",
       "undefined",
     ]);
+    instance.context =
+      "# Work\nUpdated before Connector hello. 代码在目标机器上。";
     const ws = await connect();
+    const discovered = await mcpCall("search", { query: "" });
+    assert.equal(discovered.result.items[0].context, instance.context);
+    instance.context =
+      "# Work\nUpdated through instances_changed without reapproval.";
+    ws.send(
+      JSON.stringify({
+        v: 1,
+        type: "instances_changed",
+        instances: [instance],
+      }),
+    );
+    await until(
+      () => mcpCall("search", { query: "" }),
+      (r) => r.result.items[0]?.context === instance.context,
+    );
     const nextCall = () =>
       new Promise<any>((resolve) => {
         const listener = (event: any) => {
@@ -624,7 +642,9 @@ test(
         }),
       );
     }
-    assert.equal((await described).result.items[0].methods.length, 2);
+    const matched = (await described).result.items[0];
+    assert.equal(matched.methods.length, 2);
+    assert.equal(matched.context, instance.context);
     const partialPacket = nextCall();
     const partial = mcpCall("execute", {
       code: `await call(${JSON.stringify({ deviceId, instanceId: "work" })}, "pane.run", {}); throw Error("after dispatch");`,

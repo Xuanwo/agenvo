@@ -57,6 +57,26 @@ agenvo-paseo run
 
 使用 `agenvo-lody` 连接已授权的云端 workspace 或已有本机 daemon；配置、凭据和行为边界见 [Lody 指南](lody.zh-CN.md)。
 
+## 补充实例上下文
+
+配置 Connector 的 Agent 应根据已知环境和用户要求，自行补充每个实例的 `context`，让远程调用方知道在这里工作所需的信息。内容和组织方式不限：可以写目录线索、工作约定、工具说明、项目背景或其他有用的上下文。只填写有依据的信息，不把示例中的路径或偏好当作用户要求；信息不足时可以省略。
+
+在该 Connector 配置目录的 `config.json` 中，找到 `instances` 数组里的目标实例，为它加入可选的 `context` 字符串，保留其余字段。`instance add` 输出配置文件路径；默认目录是 `~/.config/agenvo/<connector>/`，其中 Codex 使用 `codex-app-server`，也可由 `AGENVO_CONFIG_DIR` 指定。以下是要加入目标实例的字段，不是完整配置文件：
+
+```json
+{
+  "context": "# Working here\nRepositories are usually under /Users/alice/Code on the daemon machine.\nPrefer a separate worktree for new coding tasks; reuse the task's existing worktree when continuing work.\nConsult the repository runbook before deployment."
+}
+```
+
+这是自由文本，可使用 Markdown；Agenvo 不要求固定章节或结构化字段。`\n` 在 JSON 中表示换行。路径和约定应适用于实际执行环境：Paseo 的目录属于 daemon，Lody cloud 的目录可能分属不同机器，Amp 的执行位置由宿主决定。描述中应把这些适用范围说清楚。
+
+上下文会提供给获准访问实例的 MCP 客户端，不要填入凭据。它不会修改执行权限、创建 worktree 或自动成为原生 Agent 的提示词；实际权限和能力仍以 scope、方法描述和原生查询为准。实时 provider、项目和已有 Agent 清单应通过原生方法发现，避免在文本中维护易过期的副本。
+
+在首次启动前补充最方便。修改运行中 Connector 的配置后，选择合适时机重启该 Connector，使新的正文发布到 Relay；仅重新连接网络不会重读配置。重启托管 Codex 可能中断工作，不要为了立即刷新文本自动重启正在执行任务的进程。只修改、清空或删除 `context` 不需要重新批准实例。
+
+通过 `search({"query":""})` 检查返回的 `context`；直接搜索匹配方法时也会随实例返回。离线时展示的是最近通告，不能当作实时探测。保持内容精炼，正文与其他实例信息共用现有 64 KiB 通信帧限额，超限不会被静默截断。
+
 ## 配对与运行
 
 下例使用 Herdr；Codex 或 Paseo 将命令替换成 `agenvo-codex-app-server` 或 `agenvo-paseo`，分别完成相同步骤。各 Connector 可以在同一台电脑同时运行。管理页分别显示它们，协议中的 `deviceId` 标识 Connector，不代表物理电脑。
@@ -69,7 +89,7 @@ agenvo-herdr connect https://relay.example.com --name laptop
 
 无浏览器设备使用 `--no-browser`，在另一台电脑打开输出的批准链接；设备无需持有管理员密钥。`--no-wait` 可先返回，批准后再次运行 connect。Linux 用户服务需要开启 linger 才能在注销后继续运行。
 
-添加或修改实例后重启 Connector，在 `/admin` 批准新的实例范围。管理页也提供设备、实例和客户端授权撤销。
+添加实例或改变运行时范围后重启 Connector，在 `/admin` 批准新的实例范围。仅修改 `context` 无需重新批准。管理页也提供设备、实例和客户端授权撤销。
 
 ## 授权 MCP 客户端
 

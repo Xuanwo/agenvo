@@ -28,6 +28,8 @@ A deviceId identifies a Connector, not a physical machine. Offline or unavailabl
 
 Both Connectors use common operation terms: list, create, read, submit input, interrupt and respond. A work context is a conversation thread in Codex and an agent running in a terminal pane in Herdr. A Herdr session is a native service process; a workspace is a terminal container. Native method and field names remain unchanged, preserving these differences.
 
+Discovery results also carry the optional owner-supplied `context` text unchanged. Read it when choosing and using an instance. Empty queries, matching method queries, and offline instances can all include the last announcement. Context does not participate in method keyword matching, guarantee live capabilities or permissions, or automatically enter native calls. See [instance context configuration](usage.md#add-instance-context).
+
 ## Execute
 
 Pass this body to `execute`, replacing the target with discovered IDs:

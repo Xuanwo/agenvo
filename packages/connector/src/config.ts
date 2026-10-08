@@ -17,6 +17,7 @@ import {
   canonical,
   digest,
   identifier,
+  instanceSchema,
   Fault,
   type Instance,
 } from "@agenvo/protocol";
@@ -27,6 +28,7 @@ export const absolutePath = z
 export const commonInstanceFields = {
   id: identifier,
   label: z.string().min(1).max(128),
+  context: instanceSchema.shape.context,
 };
 export type InstanceConfig = z.infer<
   z.ZodObject<typeof commonInstanceFields>
@@ -110,11 +112,12 @@ export async function descriptor(
   capabilityRevision: string,
   execution = "full-access",
 ): Promise<Instance> {
-  const { label, ...settings } = config;
+  const { label, context, ...settings } = config;
   const scope = { ...settings, execution };
   return {
     instanceId: config.id,
     label,
+    ...(context === undefined ? {} : { context }),
     kind: config.kind,
     scope,
     fingerprint: await digest(canonical(scope)),

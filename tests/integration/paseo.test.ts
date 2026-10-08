@@ -13,15 +13,38 @@ test(
     const daemon = await paseoFixture();
     lab.cleanup(() => daemon.close());
     const external = daemon.add();
+    const context =
+      "# Development daemon\nRepositories are on the daemon machine.\nPrefer worktrees for new tasks; consult project runbooks for deployment.";
     const device = await lab.connect([
       {
         id: "paseo",
         kind: "paseo",
         label: "Isolated Paseo",
+        context,
         endpoint: daemon.endpoint,
         serverId: daemon.serverId,
       },
     ]);
+    const search = async (query: string) => {
+      const response = await lab.rpc("tools/call", {
+        name: "search",
+        arguments: { query, deviceId: device, instanceId: "paseo" },
+      });
+      assert.equal(response.isError, false);
+      return JSON.parse(response.content[0].text).result.items;
+    };
+    for (const query of ["", "create work context"]) {
+      const [entry] = await search(query);
+      assert.equal(entry.context, context);
+      assert.equal(Object.hasOwn(entry.scope, "context"), false);
+      assert.equal(entry.online, true);
+      assert.equal(entry.methods.length > 0, query !== "");
+    }
+    assert.deepEqual(await search("deployment"), []);
+    assert.equal(
+      daemon.requests.some((p) => p.type === "create_agent_request"),
+      false,
+    );
     const call = (method: string, params = {}) =>
       lab.call(device, "paseo", method, params);
     const outcome = async (method: string, params = {}) =>
@@ -55,6 +78,13 @@ test(
       title: "Created through MCP",
     });
     assert.ok(created.agent.id);
+    assert.equal(
+      Object.hasOwn(
+        daemon.requests.find((p) => p.type === "create_agent_request").config,
+        "context",
+      ),
+      false,
+    );
     const create = daemon.requests.find(
       (p) => p.type === "create_agent_request",
     );
@@ -185,5 +215,14 @@ test(
     await call("paseo.agents.archive", { agentId: external.id });
     assert.equal(external.status, "closed");
     assert.ok(external.archivedAt);
+    await lab.disconnect(device);
+    const [offline] = await until(
+      () => search(""),
+      (items) => items[0]?.online === false,
+    );
+    assert.equal(offline.context, context);
+    const [unavailable] = await search("create work context");
+    assert.equal(unavailable.context, context);
+    assert.equal(unavailable.error.code, "device_offline");
   },
 );

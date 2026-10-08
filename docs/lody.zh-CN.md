@@ -4,6 +4,8 @@
 
 `agenvo-lody` 支持云端 workspace 和本机 daemon 两种连接。同一个 Connector 可以配置两种实例；每个实例固定连接路径，不自动切换或重发输入。Agent 仍由 Lody 执行；Connector 只附着已有服务，不安装、启动或停止 Lody daemon。
 
+配置完成后，根据已知环境和用户要求[补充实例上下文](usage.zh-CN.md#补充实例上下文)，让调用方在发现时了解该实例的工作约定与其他有用信息。
+
 ## 云端配置与配对
 
 从 Lody 的 Account 设置获取 CLI token，保存到私有文件。文件只包含 token；Unix 使用 0600 权限，Windows 使用仅当前用户可访问的 ACL。使用 Lody 的 workspace ID，不使用显示名称或 URL slug。
