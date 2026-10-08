@@ -25,6 +25,7 @@ test(
         "-e",
         `const { spawn } = require("node:child_process");
 const provider = spawn(process.execPath, ["-e", "console.log(process.pid); setInterval(() => {}, 1000)"], {
+  detached: true,
   stdio: ["ignore", "pipe", "ignore"],
 });
 provider.stdout.once("data", (data) => process.send(Number(data.toString().trim())));
