@@ -2,7 +2,7 @@
 
 Agenvo 将远程 MCP 请求送到用户批准的原生 Agent 管理服务。Relay 持有连接与访问授权，Connector 持有原生运行时连接，任务生命周期归 Herdr、Codex、Paseo 或 Lody。首版支持单所有者、多个设备、Cloudflare 和单 VPS 两种部署。
 
-原生能力调用契约见[Agent 管理设计](agent-management.zh-CN.md)，原生版本约束见[接口依据](agent-management-interface-audit.zh-CN.md)。
+公共调用契约与扩展原则见 [MCP 与 Connector 设计原则](agent-management.zh-CN.md)，各运行时的原生语义和验证基线见 [Connector 接口依据](agent-management-interface-audit.zh-CN.md)。
 
 ## 职责与实现
 

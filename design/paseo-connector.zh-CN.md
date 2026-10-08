@@ -2,6 +2,8 @@
 
 状态：已实现，使用 Paseo 0.11.1 与 Codex 0.160.1 进行隔离验证。Claude 的 mode 映射依据原生 schema 和实现，尚无真实 Claude 执行覆盖。
 
+共同调用契约与扩展要求见 [MCP 与 Connector 设计原则](agent-management.zh-CN.md)。本文记录 Paseo 自身的原生语义、适配选择和验证边界。
+
 ## 接入目标
 
 新增独立的 `@agenvo/paseo` Connector，附着已有 Paseo daemon，直接暴露 Paseo 原生 Agent 能力。接入整个获准 daemon，包括桌面、移动端及其他客户端创建的 Agent。Paseo 持有 workspace、provider session、执行和历史；Connector 负责连接、能力发现、订阅及调用结果。关闭 Connector 仅关闭客户端连接。

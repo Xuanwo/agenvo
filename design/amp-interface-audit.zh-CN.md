@@ -2,6 +2,8 @@
 
 Agenvo 通过公开 Plugin API 管理独立运行的 Amp 宿主，以 `amp threads list --json` 补充原生 Thread 发现。`@agenvo/amp` 是独立 Connector；不经过 Herdr，不代管 Amp 进程，也不保存另一份任务历史。当前接入为实验性，云端推理与跨设备执行尚未通过隔离账号验收。
 
+共同调用契约与扩展要求见 [MCP 与 Connector 设计原则](agent-management.zh-CN.md)。本文记录 Amp 自身的原生语义、适配选择和验证边界。
+
 ## 接入依据
 
 核对日期：2026-10-08。类型基线为 `@ampcode/plugin@0.0.0-20261008001818-g5d841b4`；原生测试基线为 `@ampcode/cli@0.0.1791446565-g95411c`。这些版本用于复现，不是运行时白名单。

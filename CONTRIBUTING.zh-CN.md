@@ -44,7 +44,7 @@ npm run test:adapters
 - `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`：独立 Connector，拥有各自的配置 schema 与适配器。
 - `apps/server`、`apps/cloudflare`：VPS 与 Cloudflare 宿主。
 
-新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器需要可发现的 schema 和明确的能力与交互语义，不添加可能重复写入的自动重试。
+新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器遵循 [Connector 契约](design/agent-management.zh-CN.md#新增或扩展-connector)：通过现有 `search` 和 `execute` 工具暴露可发现的原生方法，使用共同操作术语，并说明交互语义。不添加可能重复写入的自动重试。
 
 交付前检查私有路径与凭据，运行相关测试并说明验证缺口。每个 commit 表达一项连贯行为。生成的 schema 或依赖升级需说明来源和必要性。
 
