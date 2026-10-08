@@ -159,12 +159,12 @@ exit $LASTEXITCODE
       () => model.requests.length,
       (n) => n > 0,
     );
-    // The held model request establishes ongoing work without a status guess.
-    const history = await call("agent.read", {
-      ...ref,
-      name: paneId,
-      lines: 100,
-    });
+    // The held request keeps Codex busy, but Herdr observes that state
+    // asynchronously. Wait for the native rejection before checking visible output.
+    const history = await until(
+      () => call("agent.read", { ...ref, name: paneId, lines: 100 }),
+      (r) => r.error?.native?.code === "agent_not_idle",
+    );
     assert.equal(history.error.native.code, "agent_not_idle");
     const observed = await call("agent.read", {
       ...ref,
