@@ -2,7 +2,7 @@
 
 Agenvo 将远程 MCP 请求送到用户批准的本地运行时。Relay 持有连接与访问授权，Connector 持有原生运行时连接，任务生命周期归 Herdr、Codex 或 Paseo。首版支持单所有者、多个设备、Cloudflare 和单 VPS 两种部署。
 
-共同管理契约见[Agent 管理设计](agent-management.zh-CN.md)，原生版本约束见[接口依据](agent-management-interface-audit.zh-CN.md)。
+原生能力调用契约见[Agent 管理设计](agent-management.zh-CN.md)，原生版本约束见[接口依据](agent-management-interface-audit.zh-CN.md)。
 
 ## 职责与实现
 
@@ -44,7 +44,7 @@ MCP 客户端通过动态注册和 S256 PKCE 授权码流程取得令牌。访�
 
 ## 执行语义与故障
 
-MCP 工具暴露 `instances_list`、`instance_describe`、`runtime_call`，由实例声明共同的 management.* 方法与具体原生方法。共同管理单位是 Thread，`management.threads.observe` 返回该会话的状态、事件和待回应请求；不提供独立 Run 对象。没有通用任务状态库，也不把终端 idle 映射为业务任务成功。
+MCP 工具只暴露 `search({query, deviceId?, instanceId?})` 和 `execute({code})`。search 用关键词查询获准实例的原生方法目录，execute 通过 call(target, method, params) 组合调用。Connector 保留原生对象、状态和身份；Codex 补充连接通知读取与待响应请求应答。没有统一管理方法层或任务状态库，终端 idle 不代表业务成功。
 
 | execution | 语义 | 调用方动作 |
 | --- | --- | --- |

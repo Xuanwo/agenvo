@@ -15,6 +15,7 @@ import {
 } from "./config.js";
 import {
   describe,
+  registered,
   bounded,
   accepted,
   type Adapter,
@@ -53,6 +54,7 @@ export async function run<T extends InstanceConfig>(
   const instances = new Map<string, Instance>();
   for (const c of config.instances) {
     const adapter = await backend.create(c);
+    registered(adapter.methods());
     adapters.set(c.id, adapter);
     instances.set(
       c.id,
@@ -247,7 +249,7 @@ export async function run<T extends InstanceConfig>(
             });
         return;
       }
-      if (p.type !== "call") return;
+      if (p.type !== "call" && p.type !== "describe") return;
       if (typeof p.requestId !== "string" || p.requestId.length > 128) {
         current.close(1007, "invalid_request");
         return;
@@ -277,10 +279,9 @@ export async function run<T extends InstanceConfig>(
           throw new Fault("permission_denied");
         if (!adapter.available) throw new Fault("runtime_unavailable");
         inFlight.add(p.requestId);
-        outcome =
-          p.method === "agenvo.describe"
-            ? accepted(describe(adapter, p.params))
-            : await adapter.call(p.method, p.params);
+        if (p.type === "describe")
+          outcome = accepted(describe(adapter, p.params));
+        else outcome = await adapter.call(p.method, p.params);
       } catch (error) {
         outcome = asOutcome(
           error instanceof z.ZodError ? new Fault("invalid_params") : error,

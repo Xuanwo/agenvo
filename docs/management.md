@@ -1,93 +1,70 @@
-# Manage Agent threads
+# Use native Agent capabilities
 
 [简体中文](management.zh-CN.md) · [Usage](usage.md)
 
-Agenvo manages Agent services through Threads: addressable working contexts that accept continued interaction. A Thread maps to a Codex thread or a live Herdr agent. Herdr does not gain persistent conversation history through this mapping. Agenvo has no separate public Run object; native turn identities and outcomes remain in results and events. Accepted input, an idle Thread and a completed native turn are different facts.
+Agenvo exposes two MCP tools: `search` accepts keywords and `execute` accepts a JavaScript function body. Discover the target and exact method schema, then compose native calls. Thread is the work context; Agenvo does not define a second Thread or Turn model.
 
-## Discover and call
+## Discover
 
-1. Call `instances_list` and select `deviceId` and `instanceId`.
-2. Call `instance_describe`. `managementVersion: 1` identifies the common interface. Read `management` for capabilities; paginate `items` or select a `method` to obtain its schema.
-3. Call `runtime_call` with an advertised `management.*` method. Native methods remain available for backend-specific operations.
+Pass an empty query to search to list approved instances and online status without loading method catalogs:
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.services.list",
-  "params": {}
-}
+{"query": ""}
 ```
 
-Pass a returned `serviceRef` to `management.threads.list`. Codex discovery includes other clients' threads, across providers and source kinds by default; use `providerOptions` for filters, including archived threads. A Herdr instance can contain several independent sessions: choose an explicit returned service. An endpoint found on disk is `unprobed`, not assumed reachable.
-
-References are opaque and bound to a Connector adapter incarnation. Copy them verbatim. Rediscover objects after restart or Codex connection reset; native identities remain in results. A Thread reference cannot substitute for an interaction reference.
-
-## Create and send input
-
-`management.threads.create` takes `serviceRef` and backend-specific `providerOptions` described in its schema. Codex options include model and history mode. Herdr requires an existing pane, name and Agent kind; create a workspace through native methods first if needed. Full-access launches support Codex, Claude and Devin; other existing Agent kinds remain discoverable. The Connector does not start Herdr servers.
-
-Creation does not send a prompt. Codex returns `thread.threadRef`. Herdr returns `execution: starting` with `result.query`; poll that query and use the live `thread.threadRef` when available. Check workspace ownership and contents before cleanup after a failed start.
-
-A Herdr startup timeout does not prove the process stopped. If its launch name is gone, use the returned `serviceRef` to list threads and inspect `expectedPaneId` before sending with a newly discovered reference. Do not repeat creation. A retained startup error describes the earlier attempt; the current live thread describes the agent now.
+Search by operation, or select a target and an exact method name:
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.threads.send",
-  "params": { "threadRef": "RETURNED_THREAD_REFERENCE", "text": "Inspect the failing tests." }
-}
+{"query": "submit input"}
 ```
-
-Common input is text. `send` retains native busy-input behavior; it does not promise a new turn or a next-turn queue. Its result confirms input submission, not task completion. Codex includes the native turn response under `native`; callers do not need a separate execution reference to observe progress.
-
-## Observe one Thread
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.threads.observe",
-  "params": { "threadRef": "RETURNED_THREAD_REFERENCE", "limit": 20 }
-}
+{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding"}
 ```
 
-The response contains:
+The response's result.items contains instances and matching methods, each with name, description, readOnly and inputSchema. Queries are case-insensitive whitespace-separated keywords; all words must occur in the connector kind, method name or description. Search does not execute code, evaluate regular expressions or perform semantic search. Search for codex or herdr to list all methods of that kind; deviceId and instanceId narrow the target.
 
-| Field | Meaning |
-| --- | --- |
-| `thread` | Current activity, native state and observation time; idle is not business success |
-| `items` | Events observed for this Thread, including output and native completion/failure |
-| `interactions` | Codex pending-request summaries with `interactionRef`; Herdr reports `supported: false` |
-| `nextCursor`, `caughtUp` | Incremental event position and whether the current buffer was exhausted |
-| `gap` | Earlier events may be missing; consult current state and available native history |
-| `coverage` | Source and completeness of the observations |
+A deviceId identifies a Connector, not a physical machine. Offline or unavailable instances retain their status or error; a failed method lookup may leave partial results. Online instances without matching methods are omitted from nonempty searches. Names are unique within an instance; no Agenvo namespace is required.
 
-Poll with the returned `nextCursor`, including after `caughtUp: true`. Cursors are bound to a Thread; using one for another Thread fails with `invalid_cursor`. State, pending requests and events are sampled separately, not as one atomic snapshot. A pending interaction can expire before you answer it.
+Both Connectors use common operation terms: list, create, read, submit input, interrupt and respond. A work context is a conversation thread in Codex and an agent running in a terminal pane in Herdr. A Herdr session is a native service process; a workspace is a terminal container. Native method and field names remain unchanged, preserving these differences.
 
-For Codex, the first observation resumes and subscribes to the Thread if this connection is not already subscribed. This sends no prompt, but reloads the context with full-access settings; the method is advertised as **not read-only**. Subscription failure is returned explicitly. Subsequent polls read metadata, pending requests and received native notifications. Subscription does not replay earlier events. Archived threads require explicit unarchive before observation if native resume rejects them.
+## Execute
 
-For Herdr, each observation actively queries current Agent state and reads a bounded terminal snapshot, without needing earlier `get` or `read` calls. `lines` defaults to 80, up to 500. When native history reading returns `agent_not_idle` during work, Agenvo reads the visible viewport instead and reports `coverage.source: visible` and `fallbackReason: agent_not_idle`; it does not promise the requested number of history lines. The events describe sampled state and output, not a terminal delta stream; transitions between polls can be missed. A pending startup can be observed, but output is unavailable until it becomes live. When the response supplies a live reference, use it for subsequent operations and start a new observation cursor.
+Pass this body to `execute`, replacing the target with discovered IDs:
 
-Observations use a bounded in-memory buffer. Oversized events are marked `truncated`; eviction or connection reset can return `gap: true`, even if other Threads caused the eviction. Use current state and native history to recover context: a cursor cannot reconstruct lost events.
+```js
+const target = {deviceId: "DEVICE_ID", instanceId: "coding"};
+const created = await call(target, "thread/start", {});
+if (created.error) return created;
+const threadId = created.result.thread.id;
+const sent = await call(target, "turn/start", {
+  threadId, input: [{type: "text", text: "Inspect the failing tests."}]
+});
+return {threadId, sent};
+```
 
-Use `management.threads.get` for metadata only. Use `management.threads.read` for native turn history (Codex) or a terminal snapshot (Herdr). Codex detailed item pagination remains available through native `thread/items/list`, using native IDs. Empty, ephemeral or unsupported history can fail explicitly; a new Codex thread may not materialize until its first message.
+`call` returns `{execution, requestId, result, nativeIds?, error?}`. Inspect errors in code; a native rejection is returned as data. Calls are independent, not transactional. Use loops for pagination and return only relevant fields. No host filesystem, network, environment variables or imports are available. Scripts have a 30-second deadline and a computation interrupt to stop stalled loops, with no additional call-count or script-result size quota. Already dispatched calls are collected before the response, so confirmation can extend beyond the script deadline by a native call timeout.
 
-## Interrupt and answer requests
+The tool response contains `result.value` (your returned JSON) and, for execute, `result.calls` (compact receipts for every dispatched call). Script errors preserve receipts. `accepted` confirms submission, not business success. `starting` means initialization is still pending. After `unknown`, inspect native state before repeating a write. There is no automatic retry or rollback.
 
-`management.threads.interrupt` takes `threadRef` and requests interruption of the current Codex turn. No active turn returns `no_active_execution`; an unavailable history query returns its error. If the turn changes before interruption, Agenvo returns the native mismatch without retargeting or retrying. `interruption: requested` is a request confirmation: observe the native completion event for the actual outcome.
+Each native call uses the existing access authorization. If a later call is denied, earlier results remain available to assess progress; previous work is not undone.
 
-Precise same-turn input is available through native `turn/steer` with `threadId` and `expectedTurnId`. Exact turn interruption remains available through native `turn/interrupt`. Herdr does not advertise Thread interruption; terminal key operations retain their native semantics.
+## Codex
 
-`observe.interactions` contains pending user-question and dynamic-tool summaries. Read a request with `management.interactions.read` and its `interactionRef`; answer with `management.interactions.respond` using the returned response schema. For full pending-request pages, call `management.interactions.list` with `threadRef` and optional `cursor`. Its pagination cursor is separate from the observation cursor. Permission approvals are automatic and do not become pending user questions.
+Use `thread/list`, `thread/start`, `thread/read`, `thread/resume`, `thread/archive` and `thread/unarchive` according to their schemas. Native listing filters determine provider/source coverage; inspect these when discovering other clients' threads. Use `turn/start` for input, `turn/steer` with expectedTurnId, and `turn/interrupt` with a known turnId. An unloaded thread may require resume before input. Full-access execution and automatic permission responses apply to Agenvo work entry points.
 
-## Lifecycle and execution
+`notifications.list({threadId, cursor?, limit?})` reads bounded events received on this connection. It is not durable history or guaranteed coverage of every thread. Resume a thread to subscribe; resume does not replay past output. Retain nextCursor and inspect gap after eviction or reconnection. Native history may be unavailable for empty or ephemeral threads or in some runtime versions. Use native history when available and notifications for received output.
 
-Codex creation, resume and input always apply `danger-full-access` and `approvalPolicy: never`, including attach mode. Herdr existing agents retain their program settings; supported new launches use native bypass flags. Native host or organization restrictions still return native errors.
+`requests.list({threadId?, cursor?})` returns pending user questions and tool calls, including their parameters and responseSchema. Select the desired entry inside execute, then answer with `requests.respond({interactionId, result})`. IDs are connection-scoped; expired or duplicate responses fail. In attach mode, submission does not prove your answer won a race with another client. Permission approvals are automatic and do not enter this pending list.
 
-Codex `threads.resume` reloads and subscribes without sending input. `archive` and `unarchive` change visibility, not cancellation or destruction. Attach mode disconnects without stopping the independent app-server. Managed-stdio owns its explicitly configured child process. Herdr owns its own service lifecycle.
+## Herdr
 
-After `unknown`, inspect native state before deciding whether another write is needed. Native turn IDs, request IDs and cursors are not idempotency keys. Agenvo does not automatically replay writes after disconnect. Check outputs and deliverables to assess task success.
+Use `session.list` to obtain session and backendGeneration, then native workspace, pane and agent methods. The service runs independently; Agenvo does not start or stop it. `agent.list` includes externally launched Agents. Native idle, done or unknown state does not prove business success or prevent the caller from inspecting the terminal.
 
-Use [event subscriptions](events.md) to wake the consumer on changes. Read current state and output after each notification instead of continuously polling.
+`agent.start` requires an existing pane and returns starting with native query keys. Poll `agent.get`. A startup timeout does not stop the child; rediscover by pane ID before considering another launch. Full-access startup supports Codex, Claude and Devin.
+
+`agent.prompt` and `agent.send-keys` address the native `name`; pane input addresses `paneId`. Callers can inspect the current agent or terminal when deciding what input to send.
+
+Read `agent.read` or `pane.read`. If history is unavailable while the Agent is busy, select source `visible` explicitly. Output is a bounded terminal snapshot. Questions can be answered with native text and keys after inspecting the current UI. Do not infer structured request IDs or durable history from terminal output.
+
+For change-triggered observation, use the existing [events protocol](events.md), then read current state and output through execute.

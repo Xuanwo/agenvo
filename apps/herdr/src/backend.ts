@@ -13,7 +13,7 @@ export const backend: Backend<HerdrConfig> = {
   schema: instanceConfigSchema,
   options: ["config-root"],
   help: "--config-root PATH [--binary PATH] [--cwd PATH]",
-  revision: () => "herdr-0.9.3-management-v1",
+  revision: () => "herdr-0.9.3-native-v1",
   async configure(options) {
     if (!options["config-root"])
       throw new Fault(

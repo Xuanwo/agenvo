@@ -32,7 +32,7 @@ curl --fail https://relay.example.com/health
 
 DO 保存配对、网页会话和路由授权；KV 保存 OAuth Provider 状态。备份部署配置并保护 secret。删除存储需要重新配对和授权。
 
-检查 `/health`、登录并配对设备，再从 MCP 客户端调用 `instances_list`，确认客户端能访问设备。
+检查 `/health`、登录并配对设备，再从 MCP 客户端调用 `search`，确认客户端能访问设备。
 
 ## 日志
 

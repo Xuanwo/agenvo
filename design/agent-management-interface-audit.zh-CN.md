@@ -1,6 +1,6 @@
 # 原生接口依据
 
-接口基线为 Herdr 0.9.3 与 Codex CLI 0.160.1，用于记录 schema 来源和复现测试，不作为运行时版本白名单。本文记录适配器映射所依赖的原生语义；实际方法与能力以 `instance_describe` 为准，调用流程见[管理指南](../docs/management.zh-CN.md)。
+接口基线为 Herdr 0.9.3 与 Codex CLI 0.160.1，用于记录 schema 来源和复现测试，不作为运行时版本白名单。本文记录适配器映射所依赖的原生语义；实际方法与能力以 `search` 为准，调用流程见[管理指南](../docs/management.zh-CN.md)。
 
 ## Herdr 0.9.3
 

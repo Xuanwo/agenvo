@@ -161,6 +161,17 @@ export class AgenvoRelay extends DurableObject<Env> {
   instances(grant: string, options: Parameters<Relay["instances"]>[1]) {
     return this.relay.instances(grant, options);
   }
+  describe(
+    grant: string,
+    target: {
+      deviceId: string;
+      instanceId: string;
+      query: string;
+      cursor?: string;
+    },
+  ) {
+    return this.relay.describe(grant, target);
+  }
   call(grant: string, input: Call) {
     return this.relay.call(grant, input);
   }

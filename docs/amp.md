@@ -24,15 +24,15 @@ The plugin returns `allow` for native `tool.call` events in the attached host. T
 
 ## Manage tasks
 
-Use `instances_list`, `instance_describe`, and `runtime_call` as described in the [management guide](management.md). An instance remains unavailable until an Amp plugin connects. Discover a service, then list existing threads or create a private empty thread with `management.threads.create`. Optional `providerOptions.mode` selects `low`, `medium`, `high`, or `ultra`.
+Use `search` and `execute` as described in the [management guide](management.md). An instance remains unavailable until an Amp plugin connects. Discover `hosts.list`, then use the selected `serviceId` with `amp.threads.list` or `amp.threads.create`. Creation returns a private empty thread; optional `mode` selects `low`, `medium`, `high`, or `ultra`.
 
-Send text with `management.threads.send`. Set `providerOptions.steer: true` to prefer the message when Amp next dequeues work. Input acceptance does not prove completion. `management.threads.observe` subscribes to native state and reads bounded events; `management.threads.read` reads full history, including compacted messages, in pages of at most 20.
+Submit input with `amp.threads.send` and the native `threadId`. Set `steer: true` to prefer the message when Amp next dequeues work. Input acceptance does not prove completion. `amp.threads.subscribe` subscribes to native state events; `amp.threads.get` reads current native status. `amp.threads.read` reads full history, including compacted messages, using `offset` and `limit` in pages of at most 20.
 
-`management.threads.interrupt` invokes native `cancel()` exactly once. Amp does not accept an expected turn ID: a concurrently advancing thread can cause cancellation to affect the next turn. The response confirms only the request. Inspect native state and lifecycle events to determine the result. Idle alone does not prove business success.
+`amp.threads.cancel` invokes native `cancel()` exactly once. Amp does not accept an expected turn ID: a concurrently advancing thread can cause cancellation to affect the next turn. The response confirms only the request. Inspect native state and lifecycle events to determine the result. Idle alone does not prove task success.
 
-State subscriptions can observe an accessible thread by ID. `agent.start` and `agent.end` events cover the attached host's lifecycle; a thread executed elsewhere may only have state observations. Neither path provides durable replay. After a plugin or Connector reconnects, rediscover references, pass the old observation cursor to detect gaps, and use native history to recover context. Writes are never replayed. Offset history/list pagination is not an atomic snapshot.
+State subscriptions can observe an accessible thread by ID. `agent.start` and `agent.end` events cover the attached host's lifecycle; a thread executed elsewhere may only have state observations. Neither path provides durable replay. After a plugin or Connector reconnects, rediscover the host serviceId, subscribe again, and use native history to recover context. Writes are never replayed. Offset history/list pagination is not an atomic snapshot.
 
-Archive, unarchive, prompt-free resume, and structured answers to native dialogs are not exposed. Native `amp.threads.*` method schemas are discoverable alongside the management methods. This connector does not spawn an Orb or provision a runner.
+Archive, unarchive, prompt-free resume, and structured answers to native dialogs are not exposed. Native `amp.threads.*` method schemas and `hosts.list` are discoverable through `search`. This connector does not spawn an Orb or provision a runner.
 
 ## Diagnose and remove
 

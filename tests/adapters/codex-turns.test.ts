@@ -1,4 +1,4 @@
-import { socketTempDir } from "../support/environment.js";
+import { socketTempDir, until } from "../support/environment.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
 import { join } from "node:path";
 import test from "node:test";
@@ -14,7 +14,7 @@ import { instanceConfigSchema } from "../support/config.js";
 // No account, external model, tool execution or everyday thread is involved.
 for (const mode of ["managed-stdio", "attach-unix"] as const)
   test(
-    `native Codex ${mode} accepts steering and reports interruption through management`,
+    `native Codex ${mode} accepts steering and reports interruption through native notifications`,
     {
       timeout: 30000,
       skip:
@@ -59,7 +59,7 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       if (config.kind !== "codex") throw Error();
       let child: ChildProcess | undefined;
       let peer: CodexAdapter | undefined;
-      let peerThreadRef: string | undefined;
+      let peerThreadId: string | undefined;
       const adapter = new CodexAdapter(config);
       t.after(async () => {
         server.closeAllConnections();
@@ -103,27 +103,23 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       await adapter.init();
       assert.equal(adapter.available, true);
       const call = async (name: string, params = {}) =>
-        (await adapter.call("management." + name, params)).result as any;
-      const serviceRef = (await call("services.list")).items[0].serviceRef;
-      const created = await call("threads.create", {
-        serviceRef,
-        providerOptions: {
-          model: "fixture",
-          modelProvider: "fixture",
-          historyMode: "paginated",
-          config: {
-            "model_providers.fixture.name": "Local fixture",
-            "model_providers.fixture.base_url": `http://127.0.0.1:${address.port}/v1`,
-            "model_providers.fixture.wire_api": "responses",
-            "model_providers.fixture.requires_openai_auth": false,
-            "model_providers.fixture.supports_websockets": false,
-          },
+        (await adapter.call(name, params)).result as any;
+      const created = await call("thread/start", {
+        model: "fixture",
+        modelProvider: "fixture",
+        historyMode: "paginated",
+        config: {
+          "model_providers.fixture.name": "Local fixture",
+          "model_providers.fixture.base_url": `http://127.0.0.1:${address.port}/v1`,
+          "model_providers.fixture.wire_api": "responses",
+          "model_providers.fixture.requires_openai_auth": false,
+          "model_providers.fixture.supports_websockets": false,
         },
       });
-      const threadRef = created.thread.threadRef;
-      const sent = await call("threads.send", {
-        threadRef,
-        text: "Wait for further instructions.",
+      const threadId = created.thread.id;
+      const sent = await call("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Wait for further instructions." }],
       });
       let timeout: NodeJS.Timeout | undefined;
       try {
@@ -147,74 +143,77 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       if (mode === "attach-unix") {
         peer = new CodexAdapter({ ...config, id: "peer" });
         await peer.init();
-        const services: any = (await peer.call("management.services.list", {}))
-          .result;
         const agents: any = (
-          await peer.call("management.threads.list", {
-            serviceRef: services.items[0].serviceRef,
-          })
+          await peer.call("thread/list", { modelProviders: ["fixture"] })
         ).result;
-        const external = agents.items.find(
-          (a: any) => a.native.id === created.thread.native.id,
-        );
-        assert.ok(
-          external,
-          "A second client discovers the first client's materialized thread",
-        );
-        peerThreadRef = external.threadRef;
-        await peer.call("management.threads.observe", {
-          threadRef: external.threadRef,
-        });
+        const external = agents.data.find((a: any) => a.id === threadId);
+        assert.ok(external, "A second client discovers a materialized thread");
+        peerThreadId = external.id;
+        await peer.call("thread/resume", { threadId: external.id });
       }
       await adapter.call("turn/steer", {
-        threadId: created.thread.native.id,
-        expectedTurnId: sent.native.turn.id,
+        threadId: threadId,
+        expectedTurnId: sent.turn.id,
         input: [{ type: "text", text: "Continue waiting." }],
       });
       await assert.rejects(
         adapter.call("turn/interrupt", {
-          threadId: created.thread.native.id,
+          threadId: threadId,
           turnId: "not-the-active-turn",
         }),
         { code: "native_error" },
         "Native interruption must reject another turn identity",
       );
-      await call("threads.interrupt", { threadRef });
+      await call("turn/interrupt", { threadId, turnId: sent.turn.id });
       let completed: any;
       for (let i = 0; i < 100; i++) {
-        const events = await call("threads.observe", { threadRef, limit: 50 });
+        const events = await call("notifications.list", {
+          threadId,
+          limit: 50,
+        });
         completed = events.items.find(
           (event: any) =>
             event.type === "turn/completed" &&
-            event.data.native.turn.id === sent.native.turn.id,
+            event.data.turn.id === sent.turn.id,
         );
         if (completed) break;
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
-      assert.equal(completed?.data.native.turn.status, "interrupted");
+      assert.equal(completed?.data.turn.status, "interrupted");
       if (peer) {
-        const events: any = (
-          await peer.call("management.threads.observe", {
-            threadRef: peerThreadRef,
-            limit: 50,
-          })
-        ).result;
+        const events: any = await until(
+          async () =>
+            (
+              await peer!.call("notifications.list", {
+                threadId: peerThreadId,
+                limit: 50,
+              })
+            ).result as any,
+          (events) =>
+            events.items.some(
+              (event: any) =>
+                event.type === "turn/completed" &&
+                event.data.turn.id === sent.turn.id,
+            ),
+        );
         assert.ok(
           events.items.some(
             (event: any) =>
               event.type === "turn/completed" &&
-              event.data.native.turn.id === sent.native.turn.id,
+              event.data.turn.id === sent.turn.id,
           ),
           "A subscribed second client receives the native completion",
         );
       }
-      const history = await call("threads.read", { threadRef });
-      assert.equal(history.kind, "conversation_items");
+      const history = await call("thread/read", {
+        threadId,
+        includeTurns: true,
+      });
       assert.ok(
-        history.items.some((turn: any) => turn.id === sent.native.turn.id),
+        history.thread.turns.some((turn: any) => turn.id === sent.turn.id),
       );
-      await call("threads.resume", { threadRef });
-      await call("threads.archive", { threadRef });
-      await call("threads.unarchive", { threadRef });
+      await call("thread/resume", { threadId });
+      await call("thread/archive", { threadId });
+      await call("thread/unarchive", { threadId });
     },
   );

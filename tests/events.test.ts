@@ -304,52 +304,30 @@ test("MCP 2 discovery and events use the authenticated production handler", asyn
   const discover = await call("server/discover");
   assert.deepEqual(discover.capabilities.events, {});
   const tools = (await call("tools/list")).tools;
-  for (const name of ["instances_list", "instance_describe"]) {
+  for (const name of ["search"]) {
     assert.equal(
       tools.find((tool: any) => tool.name === name).annotations?.readOnlyHint,
       true,
     );
   }
   assert.notEqual(
-    tools.find((tool: any) => tool.name === "runtime_call").annotations
+    tools.find((tool: any) => tool.name === "execute").annotations
       ?.readOnlyHint,
     true,
   );
   const offline = await call("tools/call", {
-    name: "instance_describe",
-    arguments: { deviceId: device.deviceId, instanceId: "runtime" },
+    name: "search",
+    arguments: { query: "" },
   });
-  assert.equal(offline.isError, true);
+  assert.equal(offline.isError, false);
   const outcome = JSON.parse(offline.content[0].text);
-  assert.equal(outcome.error.code, "device_offline");
-  assert.match(outcome.requestId, /^[0-9a-f-]{36}$/);
-  const log = logs
-    .map((line) => JSON.parse(line))
-    .find((entry) => entry.requestId === outcome.requestId);
-  assert.equal(log.errorCode, "device_offline");
-  assert.deepEqual(Object.keys(log).sort(), [
-    "component",
-    "deviceId",
-    "durationMs",
-    "errorCode",
-    "event",
-    "execution",
-    "instanceId",
-    "level",
-    "message",
-    "method",
-    "requestId",
-    "service",
-    "time",
-    "tool",
-  ]);
-  const invalid = await call("tools/call", {
-    name: "instances_list",
-    arguments: { cursor: "invalid" },
+  assert.equal(outcome.result.items[0].online, false);
+  assert.deepEqual(outcome.result.items[0].methods, []);
+  const literal = await call("tools/call", {
+    name: "search",
+    arguments: { query: "throw Error('not code')" },
   });
-  const invalidOutcome = JSON.parse(invalid.content[0].text);
-  assert.equal(invalidOutcome.error.code, "invalid_cursor");
-  assert.match(invalidOutcome.requestId, /^[0-9a-f-]{36}$/);
+  assert.equal(literal.isError, false);
   const catalog = await call("events/list");
   assert.equal(catalog.events[0].name, "runtime.changed");
   const input = {

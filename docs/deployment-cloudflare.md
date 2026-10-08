@@ -32,7 +32,7 @@ Keep ORIGIN stable; changing the public address requires reconnecting clients an
 
 The DO stores pairing, browser sessions and relay authorization; KV holds OAuth provider state. Back up the manifest and protect secrets. Deleting storage requires fresh pairing and consent.
 
-Verify `/health`, sign in, pair a device, and call `instances_list` from your MCP client to check that it can reach the device.
+Verify `/health`, sign in, pair a device, and call `search` from your MCP client to check that it can reach the device.
 
 ## Logs
 

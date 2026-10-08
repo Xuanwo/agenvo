@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/main.ts",
     "./adapters/adapter": "./src/adapters/adapter.ts",
-    "./adapters/management": "./src/adapters/management.ts",
     "./adapters/observations": "./src/adapters/observations.ts",
     "./backend": "./src/backend.ts",
     "./cli/admin-client": "./src/cli/admin-client.ts",

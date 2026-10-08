@@ -9,7 +9,7 @@
 3. 创建插件，选择 **Continue to Agenvo**。
 4. 在 Agenvo 登录页输入管理员密钥；已经登录时跳过。不要将密钥交给 ChatGPT。
 5. 核对客户端与回调地址，点击 **Allow / 允许访问**。授权覆盖全部已批准实例，包括之后批准的实例。浏览器自动返回 ChatGPT。
-6. 让助手调用 `instances_list`，再调用 `instance_describe` 和 `management.services.list`，确认设备与服务符合预期。
+6. 让助手通过 `search` 发现目标与 schema，再通过 `execute` 查询原生服务，确认设备与服务符合预期。
 
 若 ChatGPT 在打开 Agenvo 前报告工作区权限或安全设置错误，检查账户的自定义 App 权限。若已到达 Agenvo，则根据登录或授权页的实际错误排查。
 

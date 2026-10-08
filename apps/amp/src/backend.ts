@@ -21,7 +21,7 @@ export const backend: Backend<AmpConfig> = {
   executionPolicy,
   options: ["plugin-dir"],
   help: "[--plugin-dir PATH] [--binary PATH] [--cwd PATH] (installs a local Amp bridge plugin; reload it in Amp)",
-  revision: () => "amp-plugin-management-v1",
+  revision: () => "amp-plugin-native-v1",
   async configure(options, dir) {
     const id = identifier.parse(options.id);
     const filename = encodeURIComponent(id);

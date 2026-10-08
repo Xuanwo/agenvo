@@ -1,93 +1,70 @@
-# 管理 Agent 会话
+# 使用 Agent 原生能力
 
 [English](management.md) · [使用说明](usage.zh-CN.md)
 
-Agenvo 以 Thread 管理 Agent 服务。Thread 是可寻址、可持续交互的工作上下文，对应 Codex thread 或 Herdr 中的活跃 Agent；这一映射不让 Herdr 自动获得持久会话历史。统一接口没有独立的 Run 对象，原生轮次身份和结果保留在返回值与事件中。输入已接受、Thread 空闲、原生轮次完成是不同事实。
+Agenvo 只提供 `search` 和 `execute` 两个 MCP 工具。search 接受关键词，execute 接受 JavaScript 函数体。先发现目标及准确的方法 schema，再组合原生调用。Thread 是工作上下文，Agenvo 不另建 Thread 或 Turn 模型。
 
-## 发现与调用
+## 发现
 
-1. 调用 `instances_list`，选择 `deviceId` 和 `instanceId`。
-2. 调用 `instance_describe`。`managementVersion: 1` 表示共同管理接口；`management` 声明能力，通过分页 `items` 或指定 `method` 查看方法 schema。
-3. 使用 `runtime_call` 调用已声明的 `management.*` 方法。服务特有操作仍可调用原生方法。
+先向 search 传入空查询，列出获准实例及在线状态，不加载方法目录：
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.services.list",
-  "params": {}
-}
+{"query": ""}
 ```
 
-将返回的 `serviceRef` 传给 `management.threads.list`。Codex 默认发现其他客户端创建的会话，覆盖全部 provider 和来源；通过 `providerOptions` 显式过滤，包括归档会话。Herdr 实例可能包含多个独立 session，必须选择返回的具体服务。磁盘上存在端点只标记为 `unprobed`，不代表已经连通。
-
-引用是不透明的，并绑定 Connector 适配器代次。原样传回即可。Connector 重启或 Codex 连接重建后需要重新发现；结果中保留原生身份。Thread 引用不能作为 interaction 引用使用。
-
-## 创建与发送输入
-
-`management.threads.create` 接受 `serviceRef` 和 schema 中的 `providerOptions`。Codex 可指定模型及历史模式。Herdr 需要已有 pane、名称和 Agent 类型；必要时先通过原生接口创建工作区。全权限启动支持 Codex、Claude 和 Devin，其他已经运行的 Agent 类型仍可发现。Connector 不启动 Herdr 服务。
-
-创建不包含初始提示词。Codex 返回 `thread.threadRef`。Herdr 返回 `execution: starting` 和 `result.query`；轮询这个查询，成功后使用活跃对象的 `thread.threadRef`。启动失败后清理工作区前，先检查其归属与内容。
-
-Herdr 启动确认超时不证明进程已退出。若启动名称失效，使用返回的 `serviceRef` 重新列出 Thread，检查 `expectedPaneId`，再用新发现的引用发送输入，不要重复创建。保留的启动错误描述过去的启动尝试，当前活跃 Thread 描述 Agent 现在的状态。
+按操作搜索，或者限制目标并搜索准确的方法名：
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.threads.send",
-  "params": { "threadRef": "RETURNED_THREAD_REFERENCE", "text": "检查失败的测试。" }
-}
+{"query": "submit input"}
 ```
-
-共同输入类型是文本。`send` 保留原生忙碌输入语义，不承诺一定开启新轮或排到下一轮。返回值确认输入提交，不代表任务完成。Codex 在 `native` 中返回原生轮次信息；调用方无需执行引用就能继续观察。
-
-## 观察一个 Thread
 
 ```json
-{
-  "deviceId": "DEVICE_ID",
-  "instanceId": "coding",
-  "method": "management.threads.observe",
-  "params": { "threadRef": "RETURNED_THREAD_REFERENCE", "limit": 20 }
-}
+{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding"}
 ```
 
-结果包含：
+响应的 result.items 包含实例及匹配的 methods，每个方法包含 name、description、readOnly 和 inputSchema。query 不区分大小写，按空白拆分关键词，所有词都需要出现在 Connector 类型、方法名或描述中。不执行代码，不使用正则或语义搜索。搜索 codex 或 herdr 可以列出该类型的全部方法；deviceId 和 instanceId 用于限定目标。
 
-| 字段 | 含义 |
-| --- | --- |
-| `thread` | 当前活动、原生状态和观察时间；空闲不是业务成功 |
-| `items` | 该 Thread 的观察事件，包括输出和原生完成、失败事件 |
-| `interactions` | Codex 待回应请求摘要及 `interactionRef`；Herdr 返回 `supported: false` |
-| `nextCursor`、`caughtUp` | 增量读取位置，以及是否读完当前缓冲 |
-| `gap` | 可能缺失较早事件，应结合当前状态和可用的原生历史判断 |
-| `coverage` | 观察来源及完整性 |
+deviceId 标识一个 Connector，不是一台物理机器。离线或无法查询的实例仍返回状态或错误；方法查询失败可能留下部分结果。没有匹配方法的在线实例不出现在非空查询结果中。名称在实例内唯一，不添加 Agenvo 命名空间。
 
-使用返回的 `nextCursor` 继续轮询，`caughtUp: true` 后也保留游标。游标绑定 Thread，跨 Thread 使用会返回 `invalid_cursor`。状态、待回应请求和事件分开采样，不是原子快照；请求可能在回应前失效。
+两种 Connector 使用共同的操作词：list、create、read、submit input、interrupt、respond。work context 在 Codex 中是 conversation thread，在 Herdr 中是 terminal pane 内运行的 agent；Herdr session 指原生服务进程，workspace 指终端容器。原生方法名和字段名保留，不把不同对象强行等同。
 
-Codex 首次观察未订阅的会话时，通过原生 resume 加载并订阅。它不发送提示词，但会以全权限设置加载上下文，因此方法标记为**非只读**。订阅失败显式返回错误；之后每次轮询读取元数据、待回应请求和已收到的原生通知。订阅不补发过去事件。若原生 resume 拒绝归档会话，需要先显式 unarchive。
+## 执行
 
-Herdr 每次观察都会主动查询 Agent 状态并读取有界终端快照，无需先调用 `get` 或 `read`。`lines` 默认 80，最多 500。工作中原生历史读取返回 `agent_not_idle` 时，自动改读可见终端，并在 `coverage.source: visible` 与 `fallbackReason: agent_not_idle` 中明确标注范围缩小；这不保证返回所请求的历史行数。事件是状态和输出的采样，不是终端增量流；两次轮询之间的变化可能遗漏。启动中的引用可以观察，但活跃后才有输出。结果提供活跃引用后，后续操作使用新引用，并重新开始观察游标。
+把下面的函数体传给 `execute`，将目标替换为发现的 ID：
 
-观察记录使用有界内存缓冲。过大事件标记 `truncated`；淘汰或连接重建可能返回 `gap: true`，即使淘汰由其他 Thread 引起。此时结合当前状态和原生历史恢复上下文，游标不能重建丢失事件。
+```js
+const target = {deviceId: "DEVICE_ID", instanceId: "coding"};
+const created = await call(target, "thread/start", {});
+if (created.error) return created;
+const threadId = created.result.thread.id;
+const sent = await call(target, "turn/start", {
+  threadId, input: [{type: "text", text: "检查失败的测试。"}]
+});
+return {threadId, sent};
+```
 
-只看元数据可以用 `management.threads.get`。按需读取历史或快照使用 `management.threads.read`：Codex 返回原生轮次分页，Herdr 返回终端快照。Codex 详细 item 分页继续用原生 `thread/items/list` 和原生 ID。空会话、临时会话或不支持的历史读取会明确失败；新 Codex thread 可能要到首条消息后才持久化。
+call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中检查错误；原生拒绝作为数据返回。调用相互独立，不构成事务。用循环处理分页，只返回相关字段。执行器不提供宿主文件、网络、环境变量或模块导入。脚本总时限 30 秒，并通过计算中断结束死循环；不另设调用次数或脚本结果大小配额。响应前会收集已派发调用的确认，因此收尾最多可能再等待一个原生调用超时。
 
-## 中断与回答请求
+工具响应的 result.value 是代码返回的 JSON；execute 的 result.calls 是每次已派发调用的精简确认。脚本错误仍保留这些确认。accepted 只表示提交，不代表业务成功；starting 表示仍在启动。unknown 后先检查原生状态再决定是否重试写入。没有自动重试或回滚。
 
-`management.threads.interrupt` 接受 `threadRef`，请求中断当前 Codex 轮次。无活跃轮次时返回 `no_active_execution`；原生历史查询不可用时返回其错误。如果中断前轮次已经变化，返回原生拒绝，不重新选择下一轮或重试。`interruption: requested` 只说明请求已确认，实际结果需要观察原生完成事件。
+每次原生调用沿用现有访问授权。后续调用被拒绝时，先前调用已返回的结果仍可用于判断进展；已发生的工作不会撤销。
 
-精确向指定活跃轮次追加输入，使用原生 `turn/steer` 的 `threadId` 和 `expectedTurnId`；精确轮次中断可用原生 `turn/interrupt`。Herdr 不声明 Thread 中断能力，终端按键仍保持原生语义。
+## Codex
 
-`observe.interactions` 返回用户问题和动态工具请求的摘要。用 `management.interactions.read` 和 `interactionRef` 查看内容，再按返回的 response schema 调用 `management.interactions.respond`。需要完整待回应请求分页时，调用 `management.interactions.list`，传入 `threadRef` 和可选的 `cursor`；该分页游标与观察游标独立。权限审批自动回答，不进入用户待办。
+按 schema 使用 thread/list、thread/start、thread/read、thread/resume、thread/archive 和 thread/unarchive。原生列表的 provider/source 过滤决定发现范围，查找其他客户端的会话时应检查这些参数。通过 turn/start 输入，turn/steer 携带 expectedTurnId，turn/interrupt 携带已知 turnId。未加载会话可能需要先 resume。Agenvo 工作入口使用全权限并自动回答权限审批。
 
-## 生命周期与执行设置
+`notifications.list({threadId, cursor?, limit?})` 读取当前连接收到的有界通知，不是持久历史或所有会话的完整覆盖。resume 会话以订阅；resume 不重放历史输出。保存 nextCursor，在淘汰或重连后检查 gap。空会话、临时会话及某些原生版本可能不支持历史读取；历史可用时直接读取，通知用于获取已收到的输出。
 
-Codex 创建、恢复和提交输入始终使用 `danger-full-access`、`approvalPolicy: never`，包括 attach 模式。Herdr 已有 Agent 保留程序自身设置，支持的新启动使用原生 bypass 参数。主机或组织的限制仍以原生错误返回。
+`requests.list({threadId?, cursor?})` 返回待回答问题和工具调用，包含原生参数与 responseSchema。可以在 execute 中筛选，再通过 `requests.respond({interactionId, result})` 回答。标识绑定当前连接，重复或过期回应失败。附着模式下提交成功不证明你的回答赢得其他客户端的并发竞争。权限审批自动回答，不进入待回答列表。
 
-Codex `threads.resume` 加载并订阅，不发送输入；`archive`、`unarchive` 改变可见性，不表示取消或销毁。attach 模式断开时不停止独立 app-server，managed-stdio 管理显式配置的子进程。Herdr 自己管理服务生命周期。
+## Herdr
 
-调用结果为 `unknown` 时，先检查原生状态，再判断是否重新发送。原生 turn ID、请求 ID 和游标都不是幂等键。断线后不自动重放写操作。业务成功需要检查输出和交付物。
+通过 session.list 获取 session 和 backendGeneration，再调用原生 workspace、pane、agent 方法。服务独立运行，Agenvo 不启动或停止它。agent.list 包含外部启动的 Agent。原生 idle、done、unknown 都不代表业务成功，也不妨碍调用者继续检查终端。
 
-要在变化时主动唤醒消费者，参见[事件订阅](events.zh-CN.md)。收到通知后读取当前状态和输出；无需持续轮询。
+agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agent.get。启动确认超时不停止子进程；考虑再次启动前，先按 pane ID 重新发现。全权限启动支持 Codex、Claude、Devin。
+
+agent.prompt 和 agent.send-keys 使用原生 name 寻址，pane 输入使用 paneId。调用者可以按需查看当前 Agent 或终端，再决定发送什么输入。
+
+使用 agent.read 或 pane.read 读取。Agent 忙碌导致历史不可读时，显式选择 source: visible。输出是有界终端快照；检查当前界面后，可用原生文本和按键回答问题。不要把终端输出当成结构化请求标识或持久历史。
+
+按变化触发观察时使用已有的[事件协议](events.zh-CN.md)，再通过 execute 读取当前状态和输出。

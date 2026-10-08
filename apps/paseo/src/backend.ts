@@ -10,7 +10,7 @@ export const backend: Backend<PaseoConfig> = {
   schema: instanceConfigSchema,
   options: ["endpoint", "password-file"],
   help: "--endpoint ws://127.0.0.1:6767/ws [--password-file PATH]",
-  revision: () => "paseo-0.11.1-management-v1",
+  revision: () => "paseo-0.11.1-native-v1",
   async configure(options) {
     if (options.binary || options.cwd)
       throw new Fault(

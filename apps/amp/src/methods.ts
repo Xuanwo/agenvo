@@ -33,16 +33,17 @@ export const readOnly = (method: NativeMethod) =>
   ["amp.threads.list", "amp.threads.get", "amp.threads.read"].includes(method);
 export const descriptions: Record<NativeMethod, string> = {
   "amp.threads.list":
-    "List the authenticated Amp user's threads, including those created by other clients. Offset pagination is not a snapshot.",
+    "List work contexts (native threads) for the authenticated Amp user, including those created by other clients. Offset pagination is not a snapshot.",
   "amp.threads.create":
-    "Create a private native thread in this Amp host, without a prompt.",
-  "amp.threads.get": "Read native thread title and activity state.",
+    "Create a work context as a private native thread in this Amp host, without a prompt.",
+  "amp.threads.get":
+    "Read native thread title and status; native status does not establish task success.",
   "amp.threads.subscribe":
     "Subscribe to native thread activity on this connection. No replay; at most 128 subscriptions per host.",
   "amp.threads.read":
-    "Read full native history from the beginning, including compacted messages, using offset pagination.",
+    "Read output from full native history from the beginning, including compacted messages, using offset pagination.",
   "amp.threads.send":
-    "Append text. Steer prefers this input at the next native dequeue point; it does not target a particular turn.",
+    "Submit input text. Steer prefers this input at the next native dequeue point; it does not target a particular turn.",
   "amp.threads.cancel":
-    "Request cancellation of the current turn once. Amp exposes no turn identity precondition; a concurrent next turn may be targeted.",
+    "Interrupt the current turn by requesting cancellation once. Amp exposes no turn identity precondition; a concurrent next turn may be targeted.",
 };

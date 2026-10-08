@@ -13,7 +13,7 @@ const quote = (s: string) =>
   "'" + s.replaceAll("'", process.platform === "win32" ? "''" : "'\\''") + "'";
 
 test(
-  "an unmanaged Codex in Herdr advertises sending and reaches an isolated model",
+  "an unmanaged Codex in Herdr accepts input and reaches an isolated model",
   { timeout: 40000 },
   async (t) => {
     const root = await realpath(
@@ -45,12 +45,12 @@ test(
     await adapter.init();
     const call = async (method: string, params = {}) =>
       (await adapter.call(method, params)).result as any;
-    const service = (await call("management.services.list")).items.find(
-      (s: any) => s.serviceId === "test",
+    const service = (await call("session.list")).items.find(
+      (s: any) => s.session === "test",
     );
     const ref = {
       session: "test",
-      backendGeneration: service.native.backendGeneration,
+      backendGeneration: service.backendGeneration,
     };
     const paneId = (await call("workspace.create", ref)).result.root_pane
       .pane_id;
@@ -76,10 +76,10 @@ test(
         (process.platform === "win32" ? "& " : "") + args.map(quote).join(" "),
     });
     const list = await until(
-      () => call("management.threads.list", { serviceRef: service.serviceRef }),
+      () => call("agent.list", ref),
       (r) =>
-        r.items.some(
-          (a: any) => a.threadId === paneId && a.activity === "idle",
+        r.result.agents.some(
+          (a: any) => a.pane_id === paneId && a.agent === "codex",
         ),
       20000,
     ).catch(async (error) => {
@@ -93,11 +93,16 @@ test(
         { cause: error },
       );
     });
-    const thread = list.items.find((a: any) => a.threadId === paneId);
-    assert.notEqual(thread.native.interactive_ready, true);
-    assert.equal(thread.operations.send.available, true);
-    const sent = await adapter.call("management.threads.send", {
-      threadRef: thread.threadRef,
+    // External launches do not have managed readiness metadata. Inspect the UI.
+    await until(
+      () => call("pane.read", { ...ref, paneId, source: "visible" }),
+      (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
+    );
+    const agent = list.result.agents.find((a: any) => a.pane_id === paneId);
+    assert.notEqual(agent.interactive_ready, true);
+    const sent = await adapter.call("agent.prompt", {
+      ...ref,
+      name: paneId,
       text: "Reply with the fixture result.",
     });
     assert.equal(sent.execution, "accepted");

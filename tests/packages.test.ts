@@ -77,6 +77,7 @@ test("workspace boundaries keep shared libraries independent of applications", a
             .split("/")
             .slice(0, spec.startsWith("@") ? 2 : 1)
             .join("/");
+          if (pkg === manifest.name) continue;
           assert.ok(
             pkg in dependencies,
             `${file}: undeclared dependency ${pkg}`,

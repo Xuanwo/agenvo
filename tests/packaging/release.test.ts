@@ -298,18 +298,8 @@ test(
         ),
       (s) => s.state === "online",
     );
-    const services = await lab.call(
-      config.deviceId,
-      "test",
-      "management.services.list",
-    );
-    const thread = await lab.call(
-      config.deviceId,
-      "test",
-      "management.threads.create",
-      { serviceRef: services.items[0].serviceRef },
-    );
-    assert.ok(thread.thread.threadRef);
+    const thread = await lab.call(config.deviceId, "test", "thread/start");
+    assert.ok(thread.thread.id);
     await exec(process.execPath, [cli, "disconnect"], { cwd: root, env });
     await exited;
     assert.equal(

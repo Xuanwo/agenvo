@@ -63,10 +63,7 @@ test("native transport automatically approves permissions and retains user quest
     false,
   );
   for (const i of list.items) {
-    const detail: any = (
-      await a.call("requests.read", { interactionId: i.interactionId })
-    ).result;
-    assert.equal(detail.method, i.method);
+    assert.ok(i.responseSchema);
     const result =
       i.method === "item/tool/call"
         ? { success: true, contentItems: [] }

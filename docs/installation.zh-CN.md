@@ -29,7 +29,7 @@ npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --worksp
 1. **部署一个中继：**选择 [Cloudflare](deployment-cloudflare.zh-CN.md) 或[单 VPS](deployment-vps.zh-CN.md) 指南，配置公网 HTTPS 地址、管理员密钥和持久状态。
 2. **分别配对连接器：**按照[设备接入指南](usage.zh-CN.md)操作。Herdr、Codex 和 Paseo 使用独立的命令、配置目录和凭据，可以同时运行在一台电脑上。
 3. **授权 MCP 客户端：**按照 [MCP 授权说明](usage.zh-CN.md#授权-mcp-客户端)或 [ChatGPT 连接指南](chatgpt.zh-CN.md)操作。端点为 `https://YOUR_RELAY/mcp`。客户端需要支持 OAuth 和 Streamable HTTP；ChatGPT 需要允许自定义 MCP 服务。
-4. **检查连接：**调用 `instances_list`，用 `instance_describe` 查询选定实例，再通过 `runtime_call` 调用 `management.services.list`。确认连接器可用，并检查原生服务的可达性，再报告环境已就绪。
+4. **检查连接：**通过 `search` 发现目标与方法 schema，再用 `execute` 调用原生 `session.list`（Herdr）或 `thread/list`（Codex）。确认连接器可用，并检查原生服务的可达性，再报告环境已就绪。
 
 Herdr 独立运行，连接器只连接它。Codex 连接器默认启动独立的 app-server；实验性的 attach 模式要求已有兼容控制端点，不会自动共享 Codex 桌面 App 的会话。
 

@@ -24,15 +24,15 @@ agenvo-amp run
 
 ## 管理任务
 
-按照[管理指南](management.zh-CN.md)使用 `instances_list`、`instance_describe` 和 `runtime_call`。Amp 插件连接前，实例保持不可用。先发现服务，再列出已有 Thread，或通过 `management.threads.create` 创建私有空 Thread。可选 `providerOptions.mode` 支持 `low`、`medium`、`high`、`ultra`。
+按照[管理指南](management.zh-CN.md)使用 `search` 和 `execute`。Amp 插件连接前，实例保持不可用。先发现 `hosts.list`，再将选定的 `serviceId` 传给 `amp.threads.list` 或 `amp.threads.create`。创建返回私有空 Thread，可选 `mode` 支持 `low`、`medium`、`high`、`ultra`。
 
-使用 `management.threads.send` 发送文本。`providerOptions.steer: true` 让 Amp 在下次取出输入时优先处理这条消息。输入已接受不代表执行完成。`management.threads.observe` 订阅原生状态并读取有界事件；`management.threads.read` 读取包含压缩前消息的完整历史，每页最多 20 条。
+使用 `amp.threads.send` 和原生 `threadId` 提交输入。`steer: true` 让 Amp 在下次取出输入时优先处理这条消息。输入已接受不代表执行完成。`amp.threads.subscribe` 订阅原生状态事件，`amp.threads.get` 读取当前原生状态。`amp.threads.read` 使用 `offset` 和 `limit` 读取包含压缩前消息的完整历史，每页最多 20 条。
 
-`management.threads.interrupt` 只调用一次原生 `cancel()`。Amp 不接受预期轮次 ID；Thread 并发推进时，取消可能作用于下一轮。响应仅确认请求，应继续观察原生状态和生命周期事件判断结果。空闲本身不能证明业务目标完成。
+`amp.threads.cancel` 只调用一次原生 `cancel()`。Amp 不接受预期轮次 ID；Thread 并发推进时，取消可能作用于下一轮。响应仅确认请求，应继续观察原生状态和生命周期事件判断结果。空闲本身不能证明业务目标完成。
 
-状态订阅可以按 ID 观察有权访问的 Thread。`agent.start`、`agent.end` 覆盖附着宿主的生命周期；在其他宿主执行的 Thread 可能只有状态观察。两种路径都不提供持久事件重放。插件或 Connector 重连后，重新发现引用，用旧观察游标检测缺口，通过原生历史恢复上下文。写操作从不自动重放。列表和历史使用 offset 分页，不是原子快照。
+状态订阅可以按 ID 观察有权访问的 Thread。`agent.start`、`agent.end` 覆盖附着宿主的生命周期；在其他宿主执行的 Thread 可能只有状态观察。两种路径都不提供持久事件重放。插件或 Connector 重连后，重新发现宿主 serviceId、重新订阅，并通过原生历史恢复上下文。写操作从不自动重放。列表和历史使用 offset 分页，不是原子快照。
 
-暂不暴露归档、取消归档、不发提示词的恢复，以及原生对话框的结构化回答。原生 `amp.threads.*` 方法 schema 与共同管理方法一起提供发现。本连接器不创建 Orb，也不部署 Runner。
+暂不暴露归档、取消归档、不发提示词的恢复，以及原生对话框的结构化回答。通过 `search` 发现原生 `amp.threads.*` 方法 schema 和 `hosts.list`。本连接器不创建 Orb，也不部署 Runner。
 
 ## 诊断与移除
 

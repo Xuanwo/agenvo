@@ -34,84 +34,51 @@ test(
     });
     await until(() => adapter.available, Boolean);
     assert.deepEqual(host.approve(), { action: "allow" });
-    const call = async (method: string, params = {}) => {
-      const result = await adapter.call("management." + method, params);
+    const events: any[] = [];
+    adapter.watchEvents((event) => events.push(event));
+    const native = async (method: string, params = {}) => {
+      const result = await adapter.call(method, params);
       assert.equal(result.execution, "accepted", JSON.stringify(result));
       assert.equal(result.error, undefined);
       return result.result as any;
     };
-    const service = (await call("services.list")).items[0];
-    const external = (
-      await call("threads.list", { serviceRef: service.serviceRef })
-    ).items[0];
-    assert.equal(external.threadId, "T-external");
-    assert.equal(external.activity, "unknown");
-    const first = await call("threads.observe", {
-      threadRef: external.threadRef,
-    });
-    assert.equal(first.thread.activity, "idle");
+    let serviceId = (await native("hosts.list")).items[0].serviceId;
+    const call = (method: string, params = {}) =>
+      native("amp.threads." + method, { serviceId, ...params });
+    const external = (await call("list"))[0];
+    assert.equal(external.id, "T-external");
+    const target = { threadId: external.id };
+    assert.equal((await call("get", target)).state, "idle");
+    await call("subscribe", target);
+    await call("subscribe", target);
     assert.equal(host.threads.get("T-external").listeners, 1);
-    await call("threads.observe", { threadRef: external.threadRef });
-    assert.equal(host.threads.get("T-external").listeners, 1);
-    await call("threads.send", {
-      threadRef: external.threadRef,
-      text: "work",
-      providerOptions: { steer: true },
-    });
+    await call("send", { ...target, text: "work", steer: true });
     host.threads.get("T-external").finish("error");
-    const observed = await until(
-      () =>
-        call("threads.observe", {
-          threadRef: external.threadRef,
-          cursor: first.nextCursor,
-        }),
-      (r) => r.items.some((e: any) => e.data.native.status === "error"),
+    await until(
+      () => events,
+      (items) => items.some((e) => e.native.status === "error"),
     );
-    assert.equal(observed.thread.activity, "unknown");
-    assert.equal(observed.thread.native.state, "error");
-    const history = await call("threads.read", {
-      threadRef: external.threadRef,
-      limit: 1,
-    });
+    assert.equal((await call("get", target)).state, "error");
+    const history = await call("read", { ...target, limit: 1 });
     assert.match(JSON.stringify(history), /EXTERNAL_THREAD_HISTORY/);
-    const next = await call("threads.read", {
-      threadRef: external.threadRef,
-      cursor: history.nextCursor,
-    });
-    assert.equal(next.items[0].steer, true);
-    const created = (
-      await call("threads.create", { serviceRef: service.serviceRef })
-    ).thread;
+    assert.equal(
+      (await call("read", { ...target, offset: 1 })).items[0].steer,
+      true,
+    );
+    const created = await call("create");
     assert.equal(host.sends, 1, "creation must not send a prompt");
-    await assert.rejects(
-      call("threads.read", {
-        threadRef: created.threadRef,
-        cursor: history.nextCursor,
-      }),
-      /invalid_cursor/,
-    );
-    await assert.rejects(
-      call("threads.observe", {
-        threadRef: created.threadRef,
-        cursor: first.nextCursor,
-      }),
-      /invalid_cursor/,
-    );
-    await call("threads.send", {
-      threadRef: created.threadRef,
-      text: "continue",
-    });
-    await call("threads.interrupt", { threadRef: created.threadRef });
+    await call("send", { threadId: created.threadId, text: "continue" });
+    await call("cancel", { threadId: created.threadId });
     assert.equal(host.cancelCount, 1);
     assert.equal(
-      (await call("threads.get", { threadRef: created.threadRef })).thread
-        .activity,
+      (await call("get", { threadId: created.threadId })).state,
       "idle",
     );
 
     host.holdSend();
-    const sending = adapter.call("management.threads.send", {
-      threadRef: external.threadRef,
+    const sending = adapter.call("amp.threads.send", {
+      serviceId,
+      ...target,
       text: "accepted before disconnection",
     });
     await until(
@@ -129,20 +96,9 @@ test(
     const stop = host.reconnect();
     t.after(stop);
     await until(() => adapter.available, Boolean);
-    await assert.rejects(
-      call("threads.get", { threadRef: external.threadRef }),
-      /Rediscover/,
-    );
-    const current = (await call("services.list")).items[0];
-    const rediscovered = (
-      await call("threads.list", { serviceRef: current.serviceRef })
-    ).items[0];
-    const gap = await call("threads.observe", {
-      threadRef: rediscovered.threadRef,
-      cursor: observed.nextCursor,
-    });
-    assert.equal(gap.gap, true);
-    assert.equal(gap.thread.activity, "working");
+    await assert.rejects(call("get", target), /Rediscover/);
+    serviceId = (await native("hosts.list")).items[0].serviceId;
+    assert.equal((await call("get", target)).state, "running");
     assert.equal(host.sends, 3, "reconnection must not replay writes");
   },
 );

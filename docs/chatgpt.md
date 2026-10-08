@@ -9,7 +9,7 @@ Deploy the Relay, set its administrator key and [pair a device](usage.md). Your 
 3. Create the plugin and choose **Continue to Agenvo**.
 4. On Agenvo's login page, enter your administrator key. An existing login session skips this step. Never give the key to ChatGPT.
 5. Check the client and callback, then choose **Allow**. This grants access to all approved instances, including future approvals. The browser returns to ChatGPT.
-6. Ask your assistant to call `instances_list`, then `instance_describe` and `management.services.list`. Verify the expected devices and services.
+6. Ask your assistant to use `search` to discover targets and schemas, then `execute` to query native services. Verify the expected devices and services.
 
 If ChatGPT reports workspace permissions or security settings before opening Agenvo, check the account's custom-app permissions. If the browser reaches Agenvo, use the error on its login or consent page to diagnose the failure.
 

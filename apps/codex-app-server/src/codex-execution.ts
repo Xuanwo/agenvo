@@ -2,7 +2,7 @@ import type { CodexConfig } from "./config.js";
 import { Fault } from "@agenvo/protocol";
 
 // Execution settings are product behavior, not a per-instance permission tier.
-// Force them after caller options so both native and management paths agree.
+// Force them after caller options at every native work entry point.
 export function executionParams(
   config: CodexConfig,
   method: string,

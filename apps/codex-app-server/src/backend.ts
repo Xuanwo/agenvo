@@ -16,8 +16,8 @@ export const backend: Backend<CodexConfig> = {
   help: "[--home PATH] [--mode managed-stdio|attach-unix] [--socket PATH] [--binary PATH] [--cwd PATH]",
   revision: (config) =>
     config.mode === "attach-unix"
-      ? "codex-0.160.1-attach-management-v1"
-      : "codex-0.160.1-management-v1",
+      ? "codex-0.160.1-attach-native-v1"
+      : "codex-0.160.1-native-v1",
   async configure(options, dir) {
     if (options.socket && options.mode !== "attach-unix")
       throw new Fault(

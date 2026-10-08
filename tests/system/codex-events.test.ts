@@ -71,20 +71,16 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
         "events/subscribe",
         lab.subscription(device, "codex", { nativeTypes: ["turn/completed"] }),
       );
-      const services = await call("management.services.list");
-      const created = await call("management.threads.create", {
-        serviceRef: services.items[0].serviceRef,
-        providerOptions: {
-          model: "fixture",
-          modelProvider: "fixture",
-          historyMode: "paginated",
-          config: model.config,
-        },
+      const created = await call("thread/start", {
+        model: "fixture",
+        modelProvider: "fixture",
+        historyMode: "paginated",
+        config: model.config,
       });
-      const threadRef = created.thread.threadRef;
-      await call("management.threads.send", {
-        threadRef,
-        text: "Reply with the fixture result.",
+      const threadId = created.thread.id;
+      await call("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Reply with the fixture result." }],
       });
       await until(
         () => lab.received,
@@ -98,22 +94,22 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
         (e) => e.data.nativeType === "turn/completed",
       );
       assert.equal(completion.data.native.turn.status, "completed");
-      const observed = await call("management.threads.observe", {
-        threadRef,
+      const observed = await call("notifications.list", {
+        threadId,
         limit: 50,
       });
       assert.match(JSON.stringify(observed), /ISOLATED_MODEL_RESULT/);
       model.hold();
       const count = model.requests.length;
-      await call("management.threads.send", {
-        threadRef,
-        text: "Wait for follow-up.",
+      const second = await call("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Wait for follow-up." }],
       });
       await until(
         () => model.requests.length,
         (n) => n > count,
       );
-      await call("management.threads.interrupt", { threadRef });
+      await call("turn/interrupt", { threadId, turnId: second.turn.id });
       await until(
         () => lab.received,
         (events) =>
