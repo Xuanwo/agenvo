@@ -223,3 +223,46 @@ test("invalid login renders only the browser's selected language", async (t) => 
     assert.ok(!body.includes(absent));
   }
 });
+
+test("OAuth callbacks navigate after the form response without broadening form-action", async () => {
+  const { consentPage, consentRedirect } =
+    await import("@agenvo/relay/admin/page");
+  const target =
+    "https://client.example/callback?code=test&state=%22%3Ctest%3E";
+  const browser = request("/authorize", {
+    method: "POST",
+    headers: { "Accept-Language": "zh-CN" },
+  });
+  const consent = consentPage(
+    browser,
+    {
+      clientName: "Test client",
+      redirectHost: "client.example",
+    },
+    "test-handle",
+  );
+  assert.match(
+    consent.headers.get("content-security-policy")!,
+    /form-action 'self';/,
+  );
+  const headers = new Headers({ Location: target });
+  headers.append("Set-Cookie", "consent=; Max-Age=0; Secure; HttpOnly");
+  const response = consentRedirect(browser, target, headers);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("refresh"), "0;url=" + target);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "same-origin");
+  assert.match(
+    response.headers.get("content-security-policy")!,
+    /form-action 'self';/,
+  );
+  assert.match(response.headers.get("set-cookie")!, /Max-Age=0/);
+  const body = await response.text();
+  assert.match(body, /正在返回客户端/);
+  assert.match(
+    body,
+    /href="https:\/\/client.example\/callback\?code=test&#38;state=%22%3Ctest%3E" rel="noreferrer"/,
+  );
+  assert.doesNotMatch(body, /<script|<form/);
+});

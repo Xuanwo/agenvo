@@ -217,10 +217,10 @@ export async function eventsLab(t: TestContext) {
     },
     body: new URLSearchParams({ handle, decision: "approve" }).toString(),
   });
-  assert.equal(approved.status, 302);
-  const code = new URL(approved.headers.get("location")!).searchParams.get(
-    "code",
-  )!;
+  assert.equal(approved.status, 200);
+  const code = new URL(
+    approved.headers.get("refresh")!.replace(/^0;url=/, ""),
+  ).searchParams.get("code")!;
   const exchanged = await request("/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

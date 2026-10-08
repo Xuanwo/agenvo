@@ -220,9 +220,11 @@ test(
       403,
     );
     const approved = await consentPost();
-    assert.equal(approved.status, 302);
+    assert.equal(approved.status, 200);
     assert.equal((await consentPost()).status, 403);
-    const redirect = new URL(approved.headers.get("location")!);
+    const redirect = new URL(
+      approved.headers.get("refresh")!.replace(/^0;url=/, ""),
+    );
     assert.equal(redirect.searchParams.get("state"), "bound-state");
     const denyPage = await request(url.pathname + url.search, {
       headers: { Cookie: ownerCookie },
@@ -235,8 +237,10 @@ test(
       headers: { Cookie: ownerCookie, Origin: origin },
       body: new URLSearchParams({ handle: denyHandle, decision: "deny" }),
     });
-    assert.equal(deniedConsent.status, 302);
-    const deniedConsentUrl = new URL(deniedConsent.headers.get("location")!);
+    assert.equal(deniedConsent.status, 200);
+    const deniedConsentUrl = new URL(
+      deniedConsent.headers.get("refresh")!.replace(/^0;url=/, ""),
+    );
     assert.equal(deniedConsentUrl.searchParams.get("error"), "access_denied");
     assert.equal(deniedConsentUrl.searchParams.get("state"), "bound-state");
     assert.equal(deniedConsentUrl.searchParams.get("iss"), metadata.issuer);

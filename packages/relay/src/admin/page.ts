@@ -6,7 +6,6 @@ export function html(
   title: string,
   body: string,
   headers = new Headers(),
-  redirectOrigin?: string,
 ) {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
@@ -14,7 +13,7 @@ export function html(
   headers.append("Vary", "Accept-Language");
   headers.set(
     "Content-Security-Policy",
-    `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'${redirectOrigin ? " " + redirectOrigin : ""}; frame-ancestors 'none'; base-uri 'none'`,
+    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   );
   // Native form POSTs need an Origin for CSRF validation. "no-referrer"
   // can make browsers send Origin: null; same-origin still hides OAuth URLs
@@ -44,7 +43,7 @@ export function scopeWarning(locale: Language) {
 }
 export function consentPage(
   request: Request,
-  details: { clientName: string; redirectHost: string; redirectUri: string },
+  details: { clientName: string; redirectHost: string },
   handle: string,
   headers = new Headers(),
 ) {
@@ -55,6 +54,25 @@ export function consentPage(
     text.authorizeTitle,
     `<article><p>${text.client}: <strong>${escapeHtml(details.clientName)}</strong></p><p>${text.callback}: ${escapeHtml(details.redirectHost)}</p>${scopeWarning(locale)}<p>${text.grantLifetime}</p>${form("/authorize", { handle, decision: "approve" }, text.allow)}${form("/authorize", { handle, decision: "deny" }, text.deny)}</article>`,
     headers,
-    new URL(details.redirectUri).origin,
+  );
+}
+
+/** Navigate only to a callback already validated by the OAuth provider. */
+export function consentRedirect(
+  request: Request,
+  redirectTo: string,
+  headers = new Headers(),
+) {
+  const locale = language(request);
+  const text = messages(locale);
+  // Finish the form submission before navigating. Chromium applies form-action
+  // to every HTTP redirect, including redirects owned by the OAuth client.
+  headers.delete("Location");
+  headers.set("Refresh", "0;url=" + redirectTo);
+  return html(
+    locale,
+    text.returnToClient,
+    `<p><a href="${escapeHtml(redirectTo)}" rel="noreferrer">${escapeHtml(text.continueToClient)}</a></p>`,
+    headers,
   );
 }

@@ -12,7 +12,7 @@ import { sameOrigin, loginRedirect } from "@agenvo/relay/admin/auth";
 import { managementPage } from "@agenvo/relay/admin/management";
 import { admin } from "@agenvo/relay/admin";
 import { mcp } from "@agenvo/relay/mcp";
-import { consentPage } from "@agenvo/relay/admin/page";
+import { consentPage, consentRedirect } from "@agenvo/relay/admin/page";
 import {
   readBody,
   Fault,
@@ -176,7 +176,7 @@ function createProvider(origin: string) {
           const handle = String(data.get("handle"));
           if (data.get("decision") !== "approve") {
             const denied = await oauth.denyConsent(request, handle);
-            return new Response(null, { status: 302, headers: denied.headers });
+            return consentRedirect(request, denied.redirectTo, denied.headers);
           }
           const approved = await oauth.approveConsent(request, handle, {
             scope: ["runtime:approved"],
@@ -188,8 +188,7 @@ function createProvider(origin: string) {
             scope: ["runtime:approved"],
             props: { userId: "owner" },
           });
-          approved.headers.set("Location", redirectTo);
-          return new Response(null, { status: 302, headers: approved.headers });
+          return consentRedirect(request, redirectTo, approved.headers);
         }
         return managementPage(request, relay, env.ORIGIN, (id) =>
           oauth.revokeGrant(id, "owner"),

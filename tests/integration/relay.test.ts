@@ -207,7 +207,7 @@ test(
       },
       body: new URLSearchParams({ handle, decision: "approve" }),
     });
-    assert.equal(approved.status, 302, await approved.clone().text());
+    assert.equal(approved.status, 200, await approved.clone().text());
     const replay = await fetch(base + "/authorize", {
       method: "POST",
       redirect: "manual",
@@ -218,9 +218,36 @@ test(
       body: new URLSearchParams({ handle, decision: "approve" }),
     });
     assert.equal(replay.status, 400);
-    const code = new URL(approved.headers.get("location")!).searchParams.get(
-      "code",
-    )!;
+    const code = new URL(
+      approved.headers.get("refresh")!.replace(/^0;url=/, ""),
+    ).searchParams.get("code")!;
+    const denyPage = await fetch(authorization, {
+      headers: { Cookie: ownerCookie },
+    });
+    const denyHandle = /name="handle" value="([^"]+)"/.exec(
+      await denyPage.text(),
+    )![1];
+    const denyCookie = denyPage.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    const denied = await fetch(base + "/authorize", {
+      method: "POST",
+      headers: {
+        Origin: "https://agenvo.test",
+        Cookie: ownerCookie + "; " + denyCookie,
+      },
+      body: new URLSearchParams({ handle: denyHandle, decision: "deny" }),
+    });
+    assert.equal(denied.status, 200);
+    assert.equal(denied.headers.get("location"), null);
+    assert.match(denied.headers.get("set-cookie")!, /Max-Age=0/);
+    const deniedUrl = new URL(
+      denied.headers.get("refresh")!.replace(/^0;url=/, ""),
+    );
+    assert.equal(deniedUrl.searchParams.get("error"), "access_denied");
+    assert.equal(deniedUrl.searchParams.get("state"), "test-state");
+    assert.equal(deniedUrl.origin, "http://127.0.0.1:8899");
     const exchange = () =>
       fetch(base + "/oauth/token", {
         method: "POST",

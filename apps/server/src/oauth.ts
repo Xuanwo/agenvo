@@ -19,7 +19,7 @@ import {
 import { redirectUriMatches } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
 import { type AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { type Relay, type RecordStore } from "@agenvo/relay/core";
-import { consentPage } from "@agenvo/relay/admin/page";
+import { consentPage, consentRedirect } from "@agenvo/relay/admin/page";
 import { ownerSessionToken } from "@agenvo/relay/admin/auth";
 import { Fault } from "@agenvo/protocol";
 
@@ -165,10 +165,7 @@ export class VpsOAuth implements OAuthServerProvider {
         target.searchParams.set("state", details.params.state);
       redirectTo = target.href;
     }
-    return new Response(null, {
-      status: 302,
-      headers: { Location: redirectTo, "Cache-Control": "no-store" },
-    });
+    return consentRedirect(request, redirectTo);
   }
 
   inspect(authorizationUrl: string) {
