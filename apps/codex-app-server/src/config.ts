@@ -1,21 +1,30 @@
 import { z } from "zod";
+import { isAbsolute } from "node:path";
 import { absolutePath, commonInstanceFields } from "@agenvo/connector/config";
-export const instanceConfigSchema = z
-  .strictObject({
-    ...commonInstanceFields,
-    binary: absolutePath,
-    cwd: absolutePath,
-    kind: z.literal("codex"),
-    mode: z.enum(["managed-stdio", "attach-unix"]),
-    socketPath: absolutePath.optional(),
-    home: absolutePath,
-  })
-  .superRefine((config, ctx) => {
-    if ((config.mode === "attach-unix") !== Boolean(config.socketPath))
-      ctx.addIssue({
-        code: "custom",
-        message:
-          "attach-unix requires socketPath; managed-stdio does not accept it",
-      });
-  });
+
+export const endpointSchema = z.string().refine((value) => {
+  if (value.startsWith("unix://")) return isAbsolute(value.slice(7));
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "ws:" &&
+      ["127.0.0.1", "[::1]"].includes(url.hostname) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname === "/"
+    );
+  } catch {
+    return false;
+  }
+}, "Use unix://ABSOLUTE_PATH or a loopback ws://IP:PORT endpoint");
+
+export const instanceConfigSchema = z.strictObject({
+  ...commonInstanceFields,
+  kind: z.literal("codex"),
+  cwd: absolutePath,
+  home: absolutePath,
+  endpoint: endpointSchema,
+});
 export type CodexConfig = z.infer<typeof instanceConfigSchema>;

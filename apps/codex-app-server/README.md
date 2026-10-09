@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Attach to an existing Codex app-server or manage an isolated process.
+Connect to an independently running Codex app-server over a Unix socket or loopback WebSocket. Connector shutdown and updates leave the native service and its turns running.
 
 ```sh
 npm install --global @agenvo/codex-app-server@0.1.0

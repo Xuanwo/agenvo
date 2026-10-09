@@ -1,3 +1,4 @@
+import { codexServer } from "../support/codex-server.js";
 import { socketTempDir } from "../support/environment.js";
 import { until } from "../support/environment.js";
 import { binary } from "@agenvo/connector/cli/binary";
@@ -301,19 +302,20 @@ test("Codex native API creates full-access threads without a model turn", async 
   const home = await realpath(
     await mkdtemp(join(socketTempDir(), "agenvo-codex-")),
   );
+  const native = await codexServer(home, await executable("codex"));
   const cfg = instanceConfigSchema.parse({
     kind: "codex",
     id: "coding",
     label: "Test",
-    binary: await executable("codex"),
+    endpoint: native.endpoint,
     cwd: home,
     home,
-    mode: "managed-stdio",
   });
   if (cfg.kind !== "codex") throw new Error();
   const adapter = new CodexAdapter(cfg);
   t.after(async () => {
     await adapter.close();
+    await native.close();
     await rm(home, {
       recursive: true,
       force: true,

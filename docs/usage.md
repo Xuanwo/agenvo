@@ -16,28 +16,32 @@ agenvo-herdr instance add --id work --config-root "$HOME/.config/herdr" --cwd "$
 
 The path must point to the native directory named `herdr`. The Connector discovers its running sessions; stopping it leaves Herdr running.
 
-For an isolated, Connector-managed Codex app-server:
+Run Codex app-server independently with a local listening endpoint, using its existing home and provider configuration. For example, in a separate terminal or your own service supervisor:
 
 ```sh
-mkdir -p "$HOME/.config/agenvo/codex-app-server/codex/coding"
-CODEX_HOME="$HOME/.config/agenvo/codex-app-server/codex/coding" codex login
-agenvo-codex-app-server instance add --id coding --home "$HOME/.config/agenvo/codex-app-server/codex/coding" --cwd "$HOME/code"
+CODEX_HOME="$HOME/.codex" codex app-server --listen ws://127.0.0.1:4500
 ```
 
-Codex work always uses `danger-full-access` and `approvalPolicy: never`, including thread creation, resume and new input through attach mode. Execution permission requests are answered automatically. User questions and dynamic tool calls remain explicit interactions.
+Then configure the Connector in another terminal:
 
-On macOS/Linux, experimental `--mode attach-unix --socket /absolute/control.sock` requires an independently provisioned, compatible Codex control endpoint. A desktop App's stdio process does not provide one automatically. Attach mode never starts or stops that server; managed mode above is the default.
+```sh
+agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"
+```
 
-On Windows, use PowerShell and the installed native Herdr/Codex commands (including npm command shims). Herdr normally stores its configuration in `$env:APPDATA/herdr`; pass the actual directory to `--config-root`. For an isolated Codex home:
+The Connector only connects. It does not install, start, stop, or restart Codex, including during Connector updates and shutdown. `--home` must already exist and match the server's reported `codexHome`; configuration does not create a Codex home. `doctor` checks the live connection and reports the server's version. If the endpoint is unavailable, start or repair the native service independently; the Connector reconnects without replaying input.
+
+On macOS/Linux, `--endpoint unix:///absolute/control.sock` connects to a compatible Unix control endpoint. With no endpoint, it defaults to `--home`'s `app-server-control/app-server-control.sock`. The socket and its parent must belong to the current user, and the parent must not be writable by other users. Only sessions accessible through that endpoint are shared; a desktop App's stdio process does not automatically provide a listening endpoint.
+
+Codex work always uses `danger-full-access` and `approvalPolicy: never`, including thread creation, resume and new input. Execution permission requests are answered automatically. User questions and dynamic tool calls remain explicit interactions.
+
+On Windows, use PowerShell and a loopback WebSocket endpoint. Start the native server independently:
 
 ```powershell
-$env:CODEX_HOME = "$HOME/.config/agenvo/codex-app-server/codex/coding"
-New-Item -ItemType Directory -Force $env:CODEX_HOME | Out-Null
-codex login
-agenvo-codex-app-server instance add --id coding --home $env:CODEX_HOME --cwd "$HOME/code"
+$env:CODEX_HOME = "$HOME/.codex"
+codex app-server --listen ws://127.0.0.1:4500
 ```
 
-Windows uses `managed-stdio`; `attach-unix` requires a Unix socket. Keep configuration in your user profile, protected by Windows directory ACLs. POSIX permission-bit checks do not apply on Windows.
+In another terminal, run `agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"`. Keep configuration in your user profile, protected by Windows directory ACLs. Unix socket attachment is unavailable on Windows. Herdr normally stores its configuration in `$env:APPDATA/herdr`; pass the actual directory to `--config-root`.
 
 ## Attach Paseo
 
@@ -73,7 +77,7 @@ This is free-form text and may contain Markdown; Agenvo requires no fixed sectio
 
 Context is visible to MCP clients authorized to access the instance; do not include credentials. It does not change execution permissions, create worktrees, or automatically become a native Agent prompt. Scope, method descriptions, and native queries still determine actual permissions and capabilities. Discover live providers, projects, and existing Agents through native methods instead of maintaining stale copies in text.
 
-Prefer filling it in before the first start. After editing a running Connector's configuration, restart that Connector at an appropriate time to publish the new text; a network reconnect does not reload configuration. Restarting managed Codex can interrupt work, so do not automatically restart an active process just to refresh text. Changing, clearing, or removing only `context` requires no instance reapproval.
+Prefer filling it in before the first start. After editing a running Connector's configuration, restart that Connector at an appropriate time to publish the new text; a network reconnect does not reload configuration. Restarting the Codex Connector leaves the independent app-server and its active turns running. Changing, clearing, or removing only `context` requires no instance reapproval.
 
 Check the returned `context` with `search({"query":""})`; matching method searches also include it with the instance. Offline results contain the last announcement, not live observations. Keep the text concise: it shares the existing 64 KiB communication frame limit with other instance data and is never silently truncated.
 

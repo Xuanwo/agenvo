@@ -1,5 +1,4 @@
 import type { RuntimeEvent } from "@agenvo/protocol/events";
-import { execa, type Subprocess } from "execa";
 import WebSocket from "ws";
 import { connect as connectUnix } from "node:net";
 import { realpath, stat } from "node:fs/promises";
@@ -75,7 +74,6 @@ export class CodexAdapter implements Adapter {
   version = "unknown";
   available = false;
   onAvailabilityChange?: () => void;
-  private child?: Subprocess<{ stdio: "pipe"; buffer: false; reject: false }>;
   private socket?: WebSocket;
   private reconnect?: NodeJS.Timeout;
   private reconnectAttempt = 0;
@@ -86,9 +84,7 @@ export class CodexAdapter implements Adapter {
   private pending = new Map<number, Rpc>();
   private interactions = new Map<string, Interaction>();
   private interactionBytes = 0;
-  private readBuffer = Buffer.alloc(0);
   private closed = false;
-  private terminating?: Promise<unknown>;
   private readonly notifications = new Observations();
   constructor(public config: CodexConfig) {}
   private record(
@@ -106,97 +102,55 @@ export class CodexAdapter implements Adapter {
       });
   }
   async init() {
-    const { stdout } = await execa(this.config.binary, ["--version"], {
-      timeout: 8000,
-    });
-    this.version = stdout.trim();
-    if (this.config.mode === "attach-unix") {
-      if (process.platform === "win32")
-        throw new Fault(
-          "unsupported_platform",
-          "Use managed-stdio on Windows; attach-unix requires a Unix socket.",
-        );
-      try {
-        await this.attach();
-      } catch (error) {
-        if (
-          error instanceof Fault &&
-          ["backend_home_mismatch", "insecure_socket"].includes(error.code)
-        )
-          throw error;
-        this.fail();
+    if (
+      process.platform === "win32" &&
+      this.config.endpoint.startsWith("unix://")
+    )
+      throw new Fault(
+        "unsupported_platform",
+        "Use a loopback WebSocket endpoint on Windows.",
+      );
+    try {
+      await this.attach();
+    } catch (error) {
+      if (
+        error instanceof Fault &&
+        ["backend_home_mismatch", "insecure_socket"].includes(error.code)
+      ) {
+        await this.close();
+        throw error;
       }
-      return;
+      this.fail();
     }
-    this.child = execa(
-      this.config.binary,
-      [
-        "-c",
-        'sandbox_mode="danger-full-access"',
-        "-c",
-        'approval_policy="never"',
-        "app-server",
-        "--stdio",
-      ],
-      {
-        cwd: this.config.cwd,
-        env: { ...process.env, CODEX_HOME: this.config.home },
-        stdio: "pipe",
-        buffer: false,
-        reject: false,
-      },
-    );
-    this.child.stderr.resume(); // Native logs may contain private prompts; never relay them.
-    this.child.stdout.on("data", (data: Buffer) => {
-      this.readBuffer = Buffer.concat([this.readBuffer, data]);
-      let end: number;
-      while ((end = this.readBuffer.indexOf(10)) >= 0) {
-        const line = this.readBuffer.subarray(0, end);
-        this.readBuffer = this.readBuffer.subarray(end + 1);
-        if (line.length > LIMITS.parse) {
-          this.fail();
-          return;
-        }
-        try {
-          this.receive(JSON.parse(line.toString("utf8")));
-        } catch {
-          this.fail();
-          return;
-        }
-      }
-      if (this.readBuffer.length > LIMITS.parse) this.fail();
-    });
-    this.child.on("error", () => this.fail());
-    this.child.on("exit", () => this.fail());
-    this.child.stdin.on("error", () => this.fail());
-    await this.rpc("initialize", {
-      clientInfo: { name: "agenvo", version: "0.1.0" },
-      capabilities: { experimentalApi: true },
-    });
-    this.write({ jsonrpc: "2.0", method: "initialized" });
-    this.available = true;
   }
   private async attach() {
     if (this.closed) throw new Fault("runtime_unavailable");
-    const path = this.config.socketPath!;
-    const info = await stat(path);
-    const parent = await stat(dirname(await realpath(path)));
-    if (
-      !info.isSocket() ||
-      info.uid !== process.getuid?.() ||
-      parent.uid !== info.uid ||
-      (parent.mode & 0o022) !== 0
-    )
-      throw new Fault(
-        "insecure_socket",
-        "Use a Unix socket in a private directory owned by this user",
-      );
+    const path = this.config.endpoint.startsWith("unix://")
+      ? this.config.endpoint.slice(7)
+      : undefined;
+    if (path) {
+      const info = await stat(path);
+      const parent = await stat(dirname(await realpath(path)));
+      if (
+        !info.isSocket() ||
+        info.uid !== process.getuid?.() ||
+        parent.uid !== info.uid ||
+        (parent.mode & 0o022) !== 0
+      )
+        throw new Fault(
+          "insecure_socket",
+          "Use a Unix socket in a private directory owned by this user",
+        );
+    }
     if (this.closed) throw new Fault("runtime_unavailable");
-    const ws = (this.socket = new WebSocket("ws://localhost/rpc", {
-      createConnection: () => connectUnix(path),
-      maxPayload: LIMITS.parse,
-      handshakeTimeout: 8000,
-    }));
+    const ws = (this.socket = new WebSocket(
+      path ? "ws://localhost/rpc" : this.config.endpoint,
+      {
+        ...(path ? { createConnection: () => connectUnix(path) } : {}),
+        maxPayload: LIMITS.parse,
+        handshakeTimeout: 8000,
+      },
+    ));
     ws.on("message", (raw) => {
       if (this.socket !== ws) return;
       try {
@@ -220,8 +174,10 @@ export class CodexAdapter implements Adapter {
       clientInfo: { name: "agenvo", version: "0.1.0" },
       capabilities: { experimentalApi: true },
     });
-    if ((await realpath(init.codexHome)) !== this.config.home)
+    if ((await realpath(init.codexHome)) !== (await realpath(this.config.home)))
       throw new Fault("backend_home_mismatch");
+    this.version =
+      typeof init.userAgent === "string" ? init.userAgent : "unknown";
     this.write({ jsonrpc: "2.0", method: "initialized" });
     // Restore subscriptions in full access without replaying any user input.
     for (const threadId of this.resumeTargets) {
@@ -247,29 +203,16 @@ export class CodexAdapter implements Adapter {
     this.onAvailabilityChange?.();
   }
   private write(value: unknown) {
-    if (this.config.mode === "attach-unix") {
-      if (
-        this.socket?.readyState !== WebSocket.OPEN ||
-        this.socket.bufferedAmount > LIMITS.parse
-      )
-        throw new Fault(
-          "runtime_unavailable",
-          "Native transport unavailable",
-          "unknown",
-        );
-      this.socket.send(JSON.stringify(value));
-      return;
-    }
     if (
-      !this.child?.stdin.writable ||
-      this.child.stdin.writableLength > LIMITS.parse
+      this.socket?.readyState !== WebSocket.OPEN ||
+      this.socket.bufferedAmount > LIMITS.parse
     )
       throw new Fault(
         "runtime_unavailable",
         "Native transport unavailable",
         "unknown",
       );
-    this.child.stdin.write(JSON.stringify(value) + "\n");
+    this.socket.send(JSON.stringify(value));
   }
   private rpc(method: string, params: unknown): Promise<unknown> {
     if (this.pending.size >= 16) throw new Fault("resource_exhausted");
@@ -365,10 +308,7 @@ export class CodexAdapter implements Adapter {
   private receive(packet: any) {
     if (!packet || typeof packet !== "object")
       throw new Error("invalid_packet");
-    if (
-      this.config.mode === "attach-unix" &&
-      packet.method === "item/completed"
-    ) {
+    if (packet.method === "item/completed") {
       // Some native request types have no serverRequest/resolved broadcast.
       // Item completion is also authoritative, including another client's answer.
       for (const [id, r] of this.interactions)
@@ -442,19 +382,8 @@ export class CodexAdapter implements Adapter {
         });
         return;
       }
-      if (!responseValidators.has(packet.method)) {
-        if (this.config.mode === "attach-unix") return; // The owning app can answer unsupported requests.
-        this.write({
-          jsonrpc: "2.0",
-          id: packet.id,
-          error: {
-            code: -32601,
-            message:
-              "Server request is not supported by this connector; handle it locally.",
-          },
-        });
-        return;
-      }
+      // Another native client can handle requests this connector does not expose.
+      if (!responseValidators.has(packet.method)) return;
       for (const [id, r] of this.interactions)
         if (r.nativeId === packet.id) this.interactions.delete(id);
       this.recount();
@@ -475,15 +404,6 @@ export class CodexAdapter implements Adapter {
           LIMITS.frame - 4096 ||
         this.interactionBytes + size > LIMITS.parse
       ) {
-        if (this.config.mode === "attach-unix") return;
-        this.write({
-          jsonrpc: "2.0",
-          id: packet.id,
-          error: {
-            code: -32000,
-            message: "Agenvo input capacity exceeded; use the local runtime.",
-          },
-        });
         return;
       }
       this.interactions.set(interactionId, interaction);
@@ -549,50 +469,29 @@ export class CodexAdapter implements Adapter {
     this.interactions.clear();
     this.interactionBytes = 0;
     this.notifications.reset();
-    if (this.config.mode === "attach-unix") {
-      const ws = this.socket;
-      this.socket = undefined;
-      ws?.terminate();
-      this.generation = randomUUID();
-      if (!this.closed && !this.reconnect) {
-        this.reconnect = setTimeout(
-          () => {
-            this.reconnect = undefined;
-            void this.attach().catch((error) => {
-              if (
-                error instanceof Fault &&
-                ["backend_home_mismatch", "insecure_socket"].includes(
-                  error.code,
-                )
-              )
-                this.closed = true;
-              this.fail();
-            });
-          },
-          Math.min(30000, 1000 * 2 ** this.reconnectAttempt++),
-        );
-        this.reconnect.unref();
-      }
-    }
-    if (this.child && !this.closed) {
-      this.closed = true;
-      const child = this.child;
-      // npm's Windows entry point is a cmd/Node wrapper. Killing only that
-      // wrapper leaves the managed app-server running with the inherited pipes.
-      if (process.platform === "win32" && child.pid) {
-        this.terminating = execa(
-          "taskkill",
-          ["/PID", String(child.pid), "/T", "/F"],
-          {
-            timeout: 3000,
-            reject: false,
-          },
-        ).then(() => {
-          child.kill("SIGKILL");
-        });
-      } else child.kill("SIGTERM");
+    const ws = this.socket;
+    this.socket = undefined;
+    ws?.terminate();
+    this.generation = randomUUID();
+    if (!this.closed && !this.reconnect) {
+      this.reconnect = setTimeout(
+        () => {
+          this.reconnect = undefined;
+          void this.attach().catch((error) => {
+            if (
+              error instanceof Fault &&
+              ["backend_home_mismatch", "insecure_socket"].includes(error.code)
+            )
+              this.closed = true;
+            this.fail();
+          });
+        },
+        Math.min(30000, 1000 * 2 ** this.reconnectAttempt++),
+      );
+      this.reconnect.unref();
     }
   }
+
   methods(): Method[] {
     return [
       ...Object.entries(schemas.methods).map(([name, schema]) => ({
@@ -696,12 +595,8 @@ export class CodexAdapter implements Adapter {
       return accepted({
         interactionId: p.interactionId,
         submitted: true,
-        ...(this.config.mode === "attach-unix"
-          ? {
-              resolution: "unconfirmed",
-              note: "The native server arbitrates concurrent answers. Inspect native turn/item state; submission is not proof this answer won.",
-            }
-          : {}),
+        resolution: "unconfirmed",
+        note: "The native server arbitrates concurrent answers. Inspect native turn/item state; submission is not proof this answer won.",
       });
     }
     const validator = methodValidators.get(method);
@@ -734,26 +629,11 @@ export class CodexAdapter implements Adapter {
       );
   }
   async close() {
+    this.closed = true;
     this.stopEvents?.();
-    const child = this.child;
-    if (this.config.mode === "attach-unix") {
-      this.closed = true;
-      clearTimeout(this.reconnect);
-      this.reconnect = undefined;
-      this.resumeTargets.clear();
-    }
+    clearTimeout(this.reconnect);
+    this.reconnect = undefined;
+    this.resumeTargets.clear();
     this.fail();
-    await this.terminating;
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        child.kill("SIGKILL");
-        resolve();
-      }, 3000);
-      child.once("exit", () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
   }
 }

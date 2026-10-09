@@ -343,8 +343,7 @@ export async function run<T extends InstanceConfig>(
     });
   };
   connect();
-  // Config edits require an explicit restart: restarting managed Codex implicitly
-  // could interrupt a turn. The status tells the user when a restart is needed.
+  // Config edits require an explicit restart to publish the new scope and context.
   const watcher = watch(dir, (_event, file) => {
     if (file === "credentials.json") {
       void access(join(dir, "credentials.json")).catch(() =>

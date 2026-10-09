@@ -16,28 +16,32 @@ agenvo-herdr instance add --id work --config-root "$HOME/.config/herdr" --cwd "$
 
 路径必须指向原生的 `herdr` 目录。Connector 发现其中运行的 session；停止 Connector 不会停止 Herdr。
 
-使用独立的、由 Connector 管理的 Codex app-server：
+使用 Codex 已有的 home 和 provider 配置，独立运行监听本机端点的 app-server。例如，在另一个终端或自行配置的服务管理器中启动：
 
 ```sh
-mkdir -p "$HOME/.config/agenvo/codex-app-server/codex/coding"
-CODEX_HOME="$HOME/.config/agenvo/codex-app-server/codex/coding" codex login
-agenvo-codex-app-server instance add --id coding --home "$HOME/.config/agenvo/codex-app-server/codex/coding" --cwd "$HOME/code"
+CODEX_HOME="$HOME/.codex" codex app-server --listen ws://127.0.0.1:4500
 ```
 
-Codex 工作固定使用 `danger-full-access` 和 `approvalPolicy: never`，包括 attach 模式中的 thread 创建、恢复和新输入。执行权限请求自动回答。需要内容的用户问题和动态工具调用继续作为显式交互。
+然后在另一终端配置 Connector：
 
-macOS/Linux 上实验性的 `--mode attach-unix --socket /absolute/control.sock` 要求你已独立配置兼容的 Codex 控制端点。桌面 App 的 stdio 进程不会自动提供这个端点。attach 模式不启停该服务；默认使用上面的托管模式。
+```sh
+agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"
+```
 
-Windows 使用 PowerShell 和原生 Herdr/Codex 命令，也支持 npm 生成的命令包装器。Herdr 默认配置目录通常是 `$env:APPDATA/herdr`，将实际目录传给 `--config-root`。独立 Codex home 的配置示例：
+Connector 只负责连接，不安装、启动、停止或重启 Codex；更新和退出 Connector 也不改变原生服务生命周期。`--home` 必须已存在，并与服务报告的 `codexHome` 一致；配置操作不会创建 Codex home。`doctor` 检查实际连接并报告服务版本。端点不可用时，独立启动或修复原生服务；Connector 会重新连接，不重放输入。
+
+macOS/Linux 可用 `--endpoint unix:///absolute/control.sock` 连接兼容的 Unix 控制端点。省略端点时，默认使用 `--home` 下的 `app-server-control/app-server-control.sock`。socket 及其父目录必须属于当前用户，父目录不能允许其他用户写入。只共享该端点能访问的会话；桌面 App 的 stdio 进程不会自动提供监听端点。
+
+Codex 工作固定使用 `danger-full-access` 和 `approvalPolicy: never`，包括 thread 创建、恢复和新输入。执行权限请求自动回答。需要内容的用户问题和动态工具调用继续作为显式交互。
+
+Windows 使用 PowerShell 和 loopback WebSocket 端点，先独立启动原生服务：
 
 ```powershell
-$env:CODEX_HOME = "$HOME/.config/agenvo/codex-app-server/codex/coding"
-New-Item -ItemType Directory -Force $env:CODEX_HOME | Out-Null
-codex login
-agenvo-codex-app-server instance add --id coding --home $env:CODEX_HOME --cwd "$HOME/code"
+$env:CODEX_HOME = "$HOME/.codex"
+codex app-server --listen ws://127.0.0.1:4500
 ```
 
-Windows 使用 `managed-stdio`；`attach-unix` 需要 Unix socket。配置目录应保留在用户目录中，由 Windows 目录 ACL 保护。POSIX 权限位检查不适用于 Windows。
+在另一终端执行 `agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"`。配置目录应保留在用户目录中，由 Windows 目录 ACL 保护。Windows 不支持 Unix socket 附着。Herdr 默认配置目录通常是 `$env:APPDATA/herdr`，将实际目录传给 `--config-root`。
 
 ## 附着 Paseo
 
@@ -73,7 +77,7 @@ agenvo-paseo run
 
 上下文会提供给获准访问实例的 MCP 客户端，不要填入凭据。它不会修改执行权限、创建 worktree 或自动成为原生 Agent 的提示词；实际权限和能力仍以 scope、方法描述和原生查询为准。实时 provider、项目和已有 Agent 清单应通过原生方法发现，避免在文本中维护易过期的副本。
 
-在首次启动前补充最方便。修改运行中 Connector 的配置后，选择合适时机重启该 Connector，使新的正文发布到 Relay；仅重新连接网络不会重读配置。重启托管 Codex 可能中断工作，不要为了立即刷新文本自动重启正在执行任务的进程。只修改、清空或删除 `context` 不需要重新批准实例。
+在首次启动前补充最方便。修改运行中 Connector 的配置后，选择合适时机重启该 Connector，使新的正文发布到 Relay；仅重新连接网络不会重读配置。重启 Codex Connector 不会停止独立 app-server 或其中正在执行的轮次。只修改、清空或删除 `context` 不需要重新批准实例。
 
 通过 `search({"query":""})` 检查返回的 `context`；直接搜索匹配方法时也会随实例返回。离线时展示的是最近通告，不能当作实时探测。保持内容精炼，正文与其他实例信息共用现有 64 KiB 通信帧限额，超限不会被静默截断。
 

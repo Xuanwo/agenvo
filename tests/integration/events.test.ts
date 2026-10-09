@@ -1,6 +1,6 @@
+import { codexFixture } from "../support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
 import { eventsLab } from "../support/events-lab.js";
 import { until } from "../support/environment.js";
 
@@ -19,8 +19,7 @@ test(
         id: "codex",
         label: "Isolated Codex protocol fixture",
         kind: "codex",
-        binary: resolve("tests/fixtures/codex-backend.mjs"),
-        mode: "managed-stdio",
+        endpoint: await codexFixture(t, lab.root),
         cwd: lab.root,
         home: lab.root,
       },

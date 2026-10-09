@@ -4,13 +4,13 @@ Codex Connector 暴露原生 thread/turn 能力，以及连接通知和服务端
 
 ## 连接与执行
 
-托管模式管理独立 app-server 进程；附着模式连接已有服务，两者的进程生命周期分开。创建、恢复和输入路径应用 full access / never，自动回答执行权限请求；用户问题和动态工具调用仍需调用者提供内容。
+Connector 仅通过 Unix socket 或 loopback WebSocket 连接独立运行的 app-server，不启动或终止原生进程。Connector 的关闭、更新和重启不停止服务或轮次。配置只记录已有 home、默认工作目录与端点，不创建 Codex home；初始化核对原生 `codexHome`，版本取自 `initialize.userAgent`。Windows 使用 loopback WebSocket。创建、恢复和输入路径应用 full access / never，自动回答执行权限请求；用户问题和动态工具调用仍需调用者提供内容。
 
 方法保留原生名称及 threadId、turnId。`thread/start` 创建工作上下文，`turn/start` 提交输入；未加载会话可能需要先 resume。列表过滤决定 provider/source 覆盖范围，不将当前加载集合解释为全部持久会话。
 
 ## 请求与通知桥接
 
-服务端主动发来的请求不是普通 RPC 调用。`requests.list` 返回完整待响应请求、参数和 responseSchema，`requests.respond` 提交回答，不需要单独的 read 方法。请求标识绑定当前连接，重复或过期回应明确失败；附着模式提交成功不保证赢得与其他客户端的回应竞争。自动处理的权限审批不进入待回答列表。
+服务端主动发来的请求不是普通 RPC 调用。`requests.list` 返回完整待响应请求、参数和 responseSchema，`requests.respond` 提交回答，不需要单独的 read 方法。请求标识绑定当前连接，重复或过期回应明确失败；提交成功不保证赢得与其他客户端的回应竞争。自动处理的权限审批不进入待回答列表。
 
 `notifications.list` 返回当前连接已收到的有界原生通知，按 threadId 和 cursor 读取并报告 gap。resume 会话以订阅，但不重放过去输出；未订阅、断线或淘汰会造成缺口。它不提供持久历史或全实例日志。原生历史可用时直接读取；待响应请求独立保存，不能从可淘汰事件日志推导。
 
@@ -36,6 +36,10 @@ Codex Connector 暴露原生 thread/turn 能力，以及连接通知和服务端
 权限请求、用户问题和动态工具调用使用不同响应 schema。`requests.*` 是 Agenvo 对 server request 的桥接方法，不是 Codex 原生 RPC。0.160.1 的历史查询可能返回 `list_turns is not supported yet`；只需元数据时，使用不带 `includeTurns` 的 `thread/read`。
 
 ## 验证依据
+
+`tests/system/codex-events.test.ts` 使用独立 Codex 0.160.1 和隔离的本地模型，通过构建后的 CLI 与 Relay MCP 验证 Unix socket、loopback WebSocket 两种连接：执行期间退出 Connector，模型继续完成；以相同设备配置重启后发现原线程、读取同一 turn 的结果，并检查模型请求数未增加。`tests/adapters/codex-turns.test.ts` 在客户端替换后继续 steer 和精确 interrupt 同一活跃 turn。进程生命周期由测试 fixture 持有，Connector 仅持有连接。
+
+协议测试覆盖自动权限响应、用户交互、多客户端请求失效、断线后恢复订阅且不重放输入，以及 home 身份与 Unix 目录权限检查。配置和 doctor 测试检查缺失服务保持不可用且不创建 home。Windows 使用同一 WebSocket 路径；Unix socket 测试只适用于 macOS/Linux。
 
 重构前的 `66aa871d17b1d912e709f4870fe75d9d09a84074` 使用隔离 Codex 0.160.1 和本地模型 mock 验证：禁用统一 management 方法后，创建、发现、读取模型输出、steer、拒绝错误 turnId、interrupt、归档和恢复仍能完成。协议 fixture 证明 `requests.list` 已包含原 `requests.read` 的完整条目，list 后直接 respond 可以回答，重复回应失败。
 

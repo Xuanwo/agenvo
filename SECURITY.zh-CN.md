@@ -2,7 +2,7 @@
 
 [English](SECURITY.md)
 
-Agenvo 允许远程访问本地编程运行时，仅向可信所有者和客户端开放。Herdr 可以用本机用户身份执行任意命令，工作区路径不是沙箱。Codex 在托管和 attach 模式下均使用 full access，关闭执行审批；Agenvo 自动回答原生权限请求。Herdr 已有 Agent 保留所属程序的设置，支持的新启动会请求 full access。
+Agenvo 允许远程访问本地编程运行时，仅向可信所有者和客户端开放。Herdr 可以用本机用户身份执行任意命令，工作区路径不是沙箱。Codex 通过附着的 app-server 使用 full access，关闭执行审批；Agenvo 自动回答原生权限请求。Herdr 已有 Agent 保留所属程序的设置，支持的新启动会请求 full access。
 
 ## 信任边界
 

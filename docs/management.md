@@ -57,7 +57,7 @@ Use `thread/list`, `thread/start`, `thread/read`, `thread/resume`, `thread/archi
 
 `notifications.list({threadId, cursor?, limit?})` reads bounded events received on this connection. It is not durable history or guaranteed coverage of every thread. Resume a thread to subscribe; resume does not replay past output. Retain nextCursor and inspect gap after eviction or reconnection. Native history may be unavailable for empty or ephemeral threads or in some runtime versions. Use native history when available and notifications for received output.
 
-`requests.list({threadId?, cursor?})` returns pending user questions and tool calls, including their parameters and responseSchema. Select the desired entry inside execute, then answer with `requests.respond({interactionId, result})`. IDs are connection-scoped; expired or duplicate responses fail. In attach mode, submission does not prove your answer won a race with another client. Permission approvals are automatic and do not enter this pending list.
+`requests.list({threadId?, cursor?})` returns pending user questions and tool calls, including their parameters and responseSchema. Select the desired entry inside execute, then answer with `requests.respond({interactionId, result})`. IDs are connection-scoped; expired or duplicate responses fail. Submission does not prove your answer won a race with another client. Permission approvals are automatic and do not enter this pending list.
 
 ## Herdr
 

@@ -58,7 +58,7 @@ export async function service(
       if (old !== def.content)
         throw new Fault(
           "service_update_requires_stop",
-          "Uninstall the old service before replacing its runtime; managed turns will stop.",
+          "Uninstall the old Connector service before replacing its service definition.",
         );
     } catch (e: any) {
       if (e.code !== "ENOENT") throw e;

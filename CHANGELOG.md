@@ -28,7 +28,7 @@ Follow the [installation guide](docs/installation.md) for relay deployment, pair
 ### Boundaries
 
 - CI uses Herdr 0.9.3, Codex CLI 0.160.1, and Paseo CLI 0.11.1 as reproducible test baselines, not runtime version restrictions.
-- Codex attach mode is experimental and requires a compatible control endpoint; it does not automatically expose Codex desktop conversations.
+- Codex connects to an independently running app-server through a Unix socket or loopback WebSocket. Stopping a Connector leaves native work running; desktop conversations are not automatically shared.
 - Amp integration is experimental. Tests cover the plugin protocol and native plugin loading, but do not establish authenticated cloud model execution.
 - Lody cloud account/provider execution has not been independently accepted. Local tests use Lody 0.104.0 with platform selection adapted to OSS; they do not validate an unmodified OSS distribution.
 - Isolated tests cover HTTP, WebSocket, MCP, native runtimes, and webhook delivery. They do not establish ChatGPT UI discovery or actual dot wakeups; those require separate client acceptance.

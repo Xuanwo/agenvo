@@ -31,10 +31,9 @@ test("Codex configuration is strict and full access is explicit in the approved 
     id: "test",
     label: "Test",
     kind: "codex",
-    binary: "/bin/codex",
     home: "/tmp/codex",
     cwd: "/tmp",
-    mode: "managed-stdio",
+    endpoint: "ws://127.0.0.1:4500",
   });
   assert.equal(
     instanceConfigSchema.safeParse({ ...config, policy: {} }).success,
@@ -56,10 +55,9 @@ test("free-form instance context survives discovery without changing the approve
     },
     {
       kind: "codex",
-      binary: "/bin/codex",
       cwd: "/work",
       home: "/config/codex",
-      mode: "managed-stdio",
+      endpoint: "ws://127.0.0.1:4500",
     },
     { kind: "paseo", endpoint: "ws://127.0.0.1:6767/ws", serverId: "daemon" },
     {

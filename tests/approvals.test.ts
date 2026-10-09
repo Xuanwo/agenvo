@@ -1,9 +1,9 @@
+import { codexFixture } from "./support/codex-server.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
-import { resolve } from "node:path";
 import { CodexAdapter } from "../apps/codex-app-server/src/codex.js";
 import { instanceConfigSchema } from "./support/config.js";
 
@@ -15,10 +15,9 @@ test("native transport automatically approves permissions and retains user quest
     kind: "codex",
     id: "test",
     label: "test",
-    binary: resolve("tests/fixtures/codex-backend.mjs"),
+    endpoint: await codexFixture(t, root),
     cwd: root,
     home: root,
-    mode: "managed-stdio",
   });
   if (config.kind !== "codex") throw new Error();
   const a = new CodexAdapter(config);
@@ -78,9 +77,9 @@ test("native transport automatically approves permissions and retains user quest
     );
   }
   history = (await a.call("thread/read", { threadId: "t" })).result;
-  assert.equal(history.responses.length, 6);
+  assert.equal(history.responses.length, 5);
   assert.equal(
-    history.responses.find((r: any) => r.id === "native-5").error.code,
-    -32601,
+    history.responses.find((r: any) => r.id === "native-5"),
+    undefined,
   );
 });

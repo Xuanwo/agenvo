@@ -1,3 +1,4 @@
+import { codexFixture } from "./support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
@@ -36,16 +37,21 @@ console.log(process.argv.includes('--version') ? 'fixture 9.0.0' : 'Logged in');
   }
   const common = { id: "test", label: "Test", binary, cwd: root };
   const codexConfig = codex.schema.parse({
-    ...common,
+    id: "test",
+    label: "Test",
+    cwd: root,
     kind: "codex",
     home: root,
-    mode: "managed-stdio",
+    endpoint: await codexFixture(t, root),
   });
   const codexChecks = await codex.doctor(codexConfig);
-  assert.equal(codexChecks.find((c) => c.check === "test:version")?.ok, true);
   assert.equal(
-    codexChecks.find((c) => c.check === "test:version")?.detail,
-    "fixture 9.0.0",
+    codexChecks.find((c) => c.check === "test:connection")?.ok,
+    true,
+  );
+  assert.equal(
+    codexChecks.find((c) => c.check === "test:connection")?.detail,
+    "codex-cli 0.161.0",
   );
   const configRoot = join(root, "herdr");
   await mkdir(configRoot);

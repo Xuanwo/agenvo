@@ -12,10 +12,9 @@ const config = instanceConfigSchema.parse({
   id: "coding",
   label: "Coding",
   kind: "codex",
-  binary: "/bin/codex",
   cwd: "/work",
   home: "/home/codex",
-  mode: "managed-stdio",
+  endpoint: "ws://127.0.0.1:4500",
 });
 if (config.kind !== "codex") throw new Error();
 test("UTF-8 limits and cursor preserve complete items", async () => {
@@ -52,8 +51,8 @@ test("UTF-8 limits and cursor preserve complete items", async () => {
 });
 test("all Codex work entry points force full access after caller overrides", () => {
   for (const method of ["thread/start", "thread/resume", "turn/start"]) {
-    for (const mode of ["managed-stdio", "attach-unix"] as const) {
-      const p = executionParams({ ...config, mode }, method, {
+    for (const endpoint of ["unix:///tmp/codex.sock", "ws://127.0.0.1:4500"]) {
+      const p = executionParams({ ...config, endpoint }, method, {
         approvalPolicy: "on-request",
         sandbox: "read-only",
         sandboxPolicy: { type: "readOnly" },
