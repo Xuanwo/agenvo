@@ -11,7 +11,7 @@ import { PaseoAdapter } from "../apps/paseo/src/paseo.js";
 import type { Adapter } from "@agenvo/connector/adapters/adapter";
 import { CodexAdapter } from "../apps/codex-app-server/src/codex.js";
 import { HerdrAdapter } from "../apps/herdr/src/herdr.js";
-import { fullAccessArgs } from "../apps/herdr/src/herdr-execution.js";
+import { Fault } from "@agenvo/protocol";
 import { Observations } from "@agenvo/connector/adapters/observations";
 import { registered, describe } from "@agenvo/connector/adapters/adapter";
 import { instanceConfigSchema } from "./support/config.js";
@@ -47,27 +47,82 @@ test("observations paginate with explicit eviction, truncation and reconnect gap
   );
 });
 
-test("Herdr launch flags force supported agents into full access", () => {
-  assert.ok(
-    fullAccessArgs("codex", ["--no-daemon"]).includes(
-      "--dangerously-bypass-approvals-and-sandbox",
-    ),
-  );
-  assert.deepEqual(fullAccessArgs("devin", []), [
-    "--permission-mode",
-    "dangerous",
-    "--respect-workspace-trust",
-    "false",
-  ]);
-  assert.ok(
-    fullAccessArgs("claude", []).includes("--dangerously-skip-permissions"),
-  );
-  assert.throws(() => fullAccessArgs("codex", ["--sandbox=read-only"]), {
-    code: "invalid_params",
+test("Herdr delegates agent kinds and execution arguments to the native launcher", async (t) => {
+  const adapter = new HerdrAdapter({
+    kind: "herdr",
+    id: "test",
+    label: "Test",
+    binary: "/bin/herdr",
+    cwd: "/tmp",
+    configRoot: "/tmp/herdr",
   });
-  assert.throws(() => fullAccessArgs("opencode", []), {
-    code: "unsupported_capability",
-  });
+  const ref = { session: "test" };
+  t.mock.method(adapter, "generation", async () => "a".repeat(64));
+  const launches: string[][] = [];
+  const agents = new Set<string>();
+  t.mock.method(
+    adapter as any,
+    "execute",
+    async (_session: string, args: string[]) => {
+      if (args[1] === "start") {
+        launches.push(args);
+        agents.add(args[2]);
+      } else if (!agents.has(args[2])) {
+        throw new Fault("native_error", "Agent not found", "rejected", {
+          code: "agent_not_found",
+        });
+      }
+      return { result: { agent: { name: args[2] } } };
+    },
+  );
+  const method = adapter.methods().find((m) => m.name === "agent.start")!;
+  assert.equal((method.inputSchema as any).properties.kind.enum, undefined);
+  const cases = [
+    { kind: "pi" },
+    { kind: "cursor", args: ["--model", "fixture"] },
+    { kind: "future-native-agent", args: [] },
+    {
+      kind: "codex",
+      args: [
+        "--sandbox=read-only",
+        "--ask-for-approval",
+        "on-request",
+        "--",
+        "literal input",
+      ],
+    },
+    { kind: "claude", args: ["--settings", '{"sandbox":{"enabled":true}}'] },
+    { kind: "devin", args: ["--permission-mode", "safe"] },
+  ];
+  for (const [index, input] of cases.entries()) {
+    const name = `agent-${index}`;
+    const started = await adapter.call("agent.start", {
+      ...ref,
+      name,
+      paneId: "pane",
+      ...input,
+    });
+    assert.equal(started.execution, "starting");
+    assert.deepEqual(launches[index], [
+      "agent",
+      "start",
+      name,
+      "--kind",
+      input.kind,
+      "--pane",
+      "pane",
+      "--timeout",
+      "30000",
+      "--",
+      ...(input.args ?? []),
+    ]);
+    const settled = await until(
+      () => adapter.call("agent.get", { ...ref, name }),
+      (r) => (r.result as any)?.startup?.state === "settled",
+    );
+    assert.equal((settled.result as any).startup.outcome.execution, "accepted");
+    assert.equal((settled.result as any).result.agent.name, name);
+  }
 });
 
 test("native registry rejects duplicates and Herdr input directly uses the supplied native target", async (t) => {
@@ -101,10 +156,17 @@ test("native registry rejects duplicates and Herdr input directly uses the suppl
   );
   const params = {
     session: "test",
-    backendGeneration: generation,
     name: "agent",
   };
-  await a.call("agent.prompt", { ...params, text: "Work" });
+  for (const method of a.methods()) {
+    assert.equal(
+      (method.inputSchema as any).properties.backendGeneration,
+      undefined,
+      method.name,
+    );
+  }
+  const prompted = await a.call("agent.prompt", { ...params, text: "Work" });
+  assert.deepEqual(prompted.result, { result: {}, session: "test" });
   await a.call("agent.send-keys", { ...params, keys: ["esc"] });
   assert.deepEqual(
     sent.map((args) => args.slice(0, 3)),
@@ -124,8 +186,8 @@ test("Herdr worktree trust is explicit and scoped to each native command", async
     cwd: "/repo",
     configRoot: "/tmp/herdr",
   });
-  const backendGeneration = "a".repeat(64);
-  t.mock.method(adapter, "generation", async () => backendGeneration);
+  const generation = "a".repeat(64);
+  t.mock.method(adapter, "generation", async () => generation);
   const sent: string[][] = [];
   t.mock.method(
     adapter as any,
@@ -144,7 +206,6 @@ test("Herdr worktree trust is explicit and scoped to each native command", async
     for (const trustRepository of [undefined, false, true]) {
       await adapter.call(method, {
         session: "test",
-        backendGeneration,
         ...params,
         trustRepository,
       });

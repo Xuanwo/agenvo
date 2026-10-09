@@ -12,9 +12,13 @@ import {
 } from "@agenvo/connector/adapters/adapter";
 import { Fault, digest, page, type Outcome } from "@agenvo/protocol";
 
-import { fullAccessArgs, managedAgentKinds } from "./herdr-execution.js";
-const session = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/);
-const ref = { session, backendGeneration: z.string().regex(/^[a-f0-9]{64}$/) };
+const session = z
+  .string()
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/)
+  .describe(
+    "Native service session. Calls address its current targets; names and IDs may be reused after restart.",
+  );
+const ref = { session };
 const id = z
   .string()
   .min(1)
@@ -91,7 +95,7 @@ const methods: Record<string, NativeMethod> = {
     schema: z.strictObject({ cursor: z.string().optional() }),
     readOnly: true,
     description:
-      "List native service sessions in the approved instance config root, including backendGeneration. A session is a running Herdr server, not a conversation thread. Service startup and shutdown are managed locally.",
+      "List native service sessions in the approved instance config root. A session is a running Herdr server, not a conversation thread. Calls address the current native service and targets; names and IDs may be reused after restart. Service startup and shutdown are managed locally.",
   },
   "workspace.list": {
     schema: z.strictObject(ref),
@@ -310,13 +314,18 @@ const methods: Record<string, NativeMethod> = {
       ...ref,
       name: agentName,
       paneId: id,
-      kind: z.enum(managedAgentKinds),
+      kind: z
+        .string()
+        .min(1)
+        .describe(
+          "Native Herdr agent kind, for example pi or codex. Herdr validates support.",
+        ),
       args: z.array(z.string()).max(64).default([]),
       timeoutMs: z.number().int().min(3001).max(300000).default(30000),
     }),
     readOnly: false,
     description:
-      "Create a work context by starting an agent in an existing terminal pane. Uses full access and starts asynchronously. Poll agent.get using the returned session, name and backendGeneration. A startup timeout does not stop the process; rediscover agents by pane ID if the launch name is gone. Do not repeat after lost confirmation. Startup tracking is connector-local; rediscover native agents after reconnect.",
+      "Create a work context by starting an agent in an existing terminal pane. Pass native agent arguments in args, including execution settings chosen using the instance context. Starts asynchronously. Poll agent.get using the returned session and name. A startup timeout does not stop the process; rediscover agents by pane ID if the launch name is gone. Do not repeat after lost confirmation. Startup tracking is connector-local; rediscover native agents after reconnect.",
     argv: (p) => [
       "agent",
       "start",
@@ -328,7 +337,7 @@ const methods: Record<string, NativeMethod> = {
       "--timeout",
       String(p.timeoutMs),
       "--",
-      ...fullAccessArgs(p.kind, p.args),
+      ...p.args,
     ],
   },
   "agent.prompt": {
@@ -522,12 +531,11 @@ export class HerdrAdapter implements Adapter {
         .filter((n) => session.safeParse(n).success)
         .sort()) {
         try {
-          const backendGeneration = await this.generation(name);
+          await this.generation(name);
           // Discovery does not probe every server serially: one unresponsive
           // socket must not consume the finite call budget for the whole list.
           sessions.push({
             session: name,
-            backendGeneration,
             endpointPresent: true,
           });
         } catch {
@@ -542,7 +550,6 @@ export class HerdrAdapter implements Adapter {
     } catch {
       throw new Fault("runtime_unavailable");
     }
-    if (generation !== p.backendGeneration) throw new Fault("stale_reference");
     const args = definition.argv!(p, this.config.cwd);
     const key = [p.session, generation, p.name].join(":");
     if (method === "agent.start") {
@@ -595,7 +602,6 @@ export class HerdrAdapter implements Adapter {
         result: {
           session: p.session,
           name: p.name,
-          backendGeneration: generation,
           query: "agent.get",
         },
       };
@@ -613,7 +619,6 @@ export class HerdrAdapter implements Adapter {
       ) {
         return accepted({
           session: p.session,
-          backendGeneration: generation,
           nativeError: error.outcome(),
           startup: this.starting.get(key),
         });
@@ -623,7 +628,6 @@ export class HerdrAdapter implements Adapter {
     return accepted({
       ...(result as object),
       session: p.session,
-      backendGeneration: generation,
       ...(method === "agent.get" && this.starting.has(key)
         ? { startup: this.starting.get(key) }
         : {}),

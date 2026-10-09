@@ -40,10 +40,8 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   assert.equal(a.available, true);
   const native = herdrFixture(cfg, "test");
   await native.start();
-  const ref = {
-    session: "test",
-    backendGeneration: await a.generation("test"),
-  };
+  const generation = await a.generation("test");
+  const ref = { session: "test" };
   assert.equal(
     a
       .methods()
@@ -56,7 +54,7 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   await assert.rejects(a.call("session.stop", ref), {
     code: "unsupported_method",
   });
-  assert.equal(await a.generation("test"), ref.backendGeneration);
+  assert.equal(await a.generation("test"), generation);
   t.after(async () => {
     try {
       await native.stop();
@@ -86,7 +84,7 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   });
   const b = new HerdrAdapter(cfg);
   await b.init();
-  assert.equal(await b.generation("test"), ref.backendGeneration);
+  assert.equal(await b.generation("test"), generation);
   let output = "";
   for (let i = 0; i < 20 && !output.includes("AGENVO_NATIVE_HERDR_OK"); i++) {
     output = JSON.stringify(
@@ -220,7 +218,11 @@ setInterval(() => {}, 1000);
     paneId: nativePane,
     kind: "codex",
     timeoutMs: 4000,
-    args: ["--no-alt-screen", "--no-daemon"],
+    args: [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--no-alt-screen",
+      "--no-daemon",
+    ],
   });
   assert.equal(started.execution, "starting");
   let discovered = false;
@@ -289,13 +291,11 @@ setInterval(() => {}, 1000);
     code: "runtime_unavailable",
   });
   await native.start();
-  assert.notEqual(await a.generation("test"), ref.backendGeneration);
-  await assert.rejects(b.call("agent.get", { ...ref, name: "inspect" }), {
-    code: "stale_reference",
-  });
-  await assert.rejects(a.call("pane.read", { ...ref, paneId: nativePane }), {
-    code: "stale_reference",
-  });
+  assert.notEqual(await a.generation("test"), generation);
+  assert.equal(
+    (await a.call("pane.read", { ...ref, paneId: nativePane })).execution,
+    "accepted",
+  );
 });
 
 test("Codex native API creates full-access threads without a model turn", async (t) => {

@@ -12,7 +12,6 @@ const adapter = new HerdrAdapter({
 await adapter.init();
 const ref = {
   session: "test",
-  backendGeneration: await adapter.generation("test"),
 };
 const workspace: any = (await adapter.call("workspace.create", ref)).result;
 const paneId = workspace.result.root_pane.pane_id;
