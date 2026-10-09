@@ -143,6 +143,7 @@ test("MCP returns earlier results when a later call is denied without rescanning
       eventsUnsubscribe: async () => ({}),
     },
     "grant",
+    "https://relay.test",
   );
   const wire: any = await response.json();
   assert.equal(wire.error, undefined, JSON.stringify(wire));

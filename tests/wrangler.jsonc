@@ -33,7 +33,7 @@
     },
   ],
   "vars": {
-    "ORIGIN": "https://agenvo.test",
+    "BASE_URL": "https://agenvo.test",
     "ADMIN_SECRET": "test-admin-secret-not-for-production-1234567890",
   },
   "observability": {

@@ -9,7 +9,7 @@ Use one Linux VPS with a public DNS name, ports 80/443 open, Docker Engine and C
 Get the release checkout and install the CLI using the [installation guide](installation.md). On the owner machine:
 
 ```sh
-agenvo-server init --origin https://relay.example.com \
+agenvo-server init --base-url https://relay.example.com \
   --data-dir /data --host 0.0.0.0 --port 8080 --trusted-proxy \
   --output deploy/vps/relay.local.json
 ```
@@ -30,6 +30,21 @@ curl --fail https://relay.example.com/health
 UID 1000 is the `node` user in the image. Caddy obtains and renews a public certificate. Only Caddy publishes ports; do not expose port 8080. Caddy must preserve the original Host header. Pass `--env-file deploy/vps/.env` to subsequent Compose commands as well.
 
 Continue with [device pairing and MCP authorization](usage.md). Open `/admin` and sign in with the administrator key.
+
+## Deploy under an existing domain path
+
+Set `--base-url https://example.com/tools/agents` (stored as `baseUrl`). The prefix may have any name and multiple segments. Forward the full path, including WebSocket upgrades, and add the two exact OAuth discovery routes. For Caddy, add this matcher to the existing site's block:
+
+```caddyfile
+@agenvo path /tools/agents /tools/agents/* /.well-known/oauth-authorization-server/tools/agents /.well-known/oauth-protected-resource/tools/agents/mcp
+handle @agenvo {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Use `relay:8080` for the bundled Compose network. Keep the site's other handlers for its other applications. Do not use `handle_path`, which strips the prefix. Open `https://example.com/tools/agents/admin`, connect each Connector to `https://example.com/tools/agents`, and give MCP clients `https://example.com/tools/agents/mcp`.
+
+The metadata paths are specific to this instance; forwarding all of `/.well-known/*` is unnecessary. Both must be publicly reachable for OAuth discovery. Root deployments use the same configuration with no path prefix. Applications sharing an origin share the browser's trust boundary; subpaths are not security isolation.
 
 ## Without Docker
 

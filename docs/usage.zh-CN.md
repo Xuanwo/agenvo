@@ -4,6 +4,8 @@
 
 以下命令假设 Relay 已部署到 `https://relay.example.com`。所有者与设备可以是不同电脑。`AGENVO_CONFIG_DIR` 选择本次安装的配置目录，Herdr 默认使用 `~/.config/agenvo/herdr`，Codex 使用 `~/.config/agenvo/codex-app-server`。每个 Connector 独立配对、持有凭据并安装服务；不要让两个 Connector 共享同一个目录或复制同一份凭据。
 
+使用 subpath 部署时，将所有示例中的 Relay 地址替换为完整基础地址，例如 `https://example.com/tools/agents`。Connector 的 `connect` 和管理命令的 `--base-url` 使用该地址，MCP 客户端使用该地址加 `/mcp`。
+
 连接器命令尚未安装时，先按[安装指南](installation.zh-CN.md)完成构建。
 
 ## 配置运行时
@@ -108,10 +110,10 @@ Relay 在 OAuth 资源元数据中声明名称 `Agenvo`，在 MCP 服务信息�
 只有显式管理操作需要在管理终端安全注入 `AGENVO_ADMIN_SECRET`。不要将它写入 Connector 配置、服务定义或命令行参数。可用命令：
 
 ```sh
-agenvo-herdr pairing list --origin https://relay.example.com
-agenvo-herdr pairing approve CODE --fingerprint SHA256 --origin https://relay.example.com
-agenvo-herdr admin state --origin https://relay.example.com
-agenvo-herdr admin approve-instance --device-id DEVICE --instance-id INSTANCE --fingerprint SHA256 --origin https://relay.example.com
+agenvo-herdr pairing list --base-url https://relay.example.com
+agenvo-herdr pairing approve CODE --fingerprint SHA256 --base-url https://relay.example.com
+agenvo-herdr admin state --base-url https://relay.example.com
+agenvo-herdr admin approve-instance --device-id DEVICE --instance-id INSTANCE --fingerprint SHA256 --base-url https://relay.example.com
 ```
 
 `connect --approve` 仅用于已经显式提供管理员密钥的可信管理终端。远程设备的配对可由管理终端批准，无需把管理员密钥传给设备。
@@ -121,9 +123,9 @@ agenvo-herdr admin approve-instance --device-id DEVICE --instance-id INSTANCE --
 ## 撤销与诊断
 
 ```sh
-agenvo-herdr admin revoke grant --id GRANT_ID --origin https://relay.example.com
-agenvo-herdr admin revoke instance --id DEVICE_ID --instance-id INSTANCE_ID --origin https://relay.example.com
-agenvo-herdr admin revoke device --id DEVICE_ID --origin https://relay.example.com
+agenvo-herdr admin revoke grant --id GRANT_ID --base-url https://relay.example.com
+agenvo-herdr admin revoke instance --id DEVICE_ID --instance-id INSTANCE_ID --base-url https://relay.example.com
+agenvo-herdr admin revoke device --id DEVICE_ID --base-url https://relay.example.com
 agenvo-herdr status --json
 agenvo-herdr doctor
 agenvo-herdr disconnect

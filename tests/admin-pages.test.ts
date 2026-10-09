@@ -30,7 +30,7 @@ test("management forms approve and revoke exact identities, and retain history a
     await rm(dir, { recursive: true, force: true });
   });
   const relay = new Relay({
-    origin,
+    baseUrl: origin,
     store,
     sockets: () => [],
     accept() {},
@@ -141,6 +141,7 @@ test("consent identity is escaped and browser recovery does not replace API erro
   });
   const consent = await consentPage(
     request,
+    origin,
     { clientName: "<script>alert(1)</script>", redirectHost: "client.example" },
     'handle"<>',
   ).text();
@@ -149,16 +150,17 @@ test("consent identity is escaped and browser recovery does not replace API erro
   assert.match(consent, /name="decision" value="approve"/);
   assert.match(consent, /name="decision" value="deny"/);
   assert.match(consent, /已开始的任务会继续运行/);
-  const error = browserError(request, 400)!;
+  const error = browserError(request, origin, 400)!;
   assert.equal(error.status, 400);
   assert.match(await error.text(), /重新发起授权/);
   assert.equal(
-    browserError(new Request(origin + "/authorize"), 400),
+    browserError(new Request(origin + "/authorize"), origin, 400),
     undefined,
   );
   assert.equal(
     browserError(
       new Request(origin + "/mcp", { headers: { Accept: "text/html" } }),
+      origin,
       403,
     ),
     undefined,

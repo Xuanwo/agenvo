@@ -1,4 +1,4 @@
-import { ownerOrigin, adminRequest } from "./admin-client.js";
+import { ownerBaseUrl, adminRequest } from "./admin-client.js";
 import { Fault } from "@agenvo/protocol";
 
 export async function pairingCommand(
@@ -6,7 +6,7 @@ export async function pairingCommand(
   code: string | undefined,
   options: Record<string, string | boolean>,
 ) {
-  const origin = ownerOrigin(String(options.origin ?? ""));
+  const baseUrl = ownerBaseUrl(String(options["base-url"] ?? ""));
   if (!["list", "approve"].includes(action))
     throw new Fault("invalid_arguments");
   const method = action === "list" ? "GET" : "POST";
@@ -23,5 +23,5 @@ export async function pairingCommand(
     action === "list"
       ? ""
       : JSON.stringify({ code, digest: options.fingerprint });
-  return adminRequest(origin, method, path, body);
+  return adminRequest(baseUrl, method, path, body);
 }

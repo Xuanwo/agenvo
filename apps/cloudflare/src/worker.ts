@@ -1,11 +1,12 @@
+import { RelayAddress } from "@agenvo/protocol/address";
+import { cookiePrefix } from "@agenvo/relay/admin/auth";
 import { logger } from "@agenvo/logging";
 import {
-  OAuthProvider,
+  OAuthAuthorizationServer,
+  OAuthResourceServer,
   OAuthError,
   AuthorizationError,
   CimdFetchError,
-  type OAuthResourceContext,
-  type OAuthHelpers,
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
 import { sameOrigin, loginRedirect } from "@agenvo/relay/admin/auth";
@@ -31,19 +32,16 @@ export { AgenvoRelay } from "./relay.js";
 const log = logger.child({ component: "worker" });
 
 type Identity = { userId: string; grantId: string };
-function createProvider(origin: string) {
-  return new OAuthProvider<Env>({
-    resourceMetadata: {
-      resource: origin + "/mcp",
-      authorization_servers: [origin],
-      resource_name: BRAND_NAME,
-    },
-    apiRoute: "/mcp",
-    authorizeEndpoint: "/authorize",
-    tokenEndpoint: "/oauth/token",
-    clientRegistrationEndpoint: "/oauth/register",
+function createProvider(baseUrl: string) {
+  const address = new RelayAddress(baseUrl);
+  const authorization = new OAuthAuthorizationServer<Env>({
+    issuer: address.baseUrl,
+    resources: [address.url("/mcp")],
+    authorizeEndpoint: address.path("/authorize"),
+    tokenEndpoint: address.path("/oauth/token"),
+    clientRegistrationEndpoint: address.path("/oauth/register"),
+    cookiePrefix: cookiePrefix(address.baseUrl) + "oauth-",
     scopesSupported: ["runtime:approved"],
-    requiredScopes: ["runtime:approved"],
     accessTokenTTL: 900,
     refreshTokenTTL: 2592000,
     async tokenExchangeCallback({
@@ -69,171 +67,211 @@ function createProvider(origin: string) {
         });
       return { newProps: { ...props, userId: "owner", grantId } };
     },
-    apiHandler: {
+  });
+  const resource = new OAuthResourceServer<Env, Identity>({
+    resourceMetadata: {
+      resource: address.url("/mcp"),
+      authorization_servers: [address.baseUrl],
+      resource_name: BRAND_NAME,
+    },
+    requiredScopes: ["runtime:approved"],
+    validateToken: (env) => (resource, token) =>
+      authorization.validateToken<Identity>(resource, token, env),
+    handler: {
       async fetch(request, env, ctx) {
-        const identity = ctx as OAuthResourceContext<Identity>;
+        const identity = ctx;
         if (identity.props?.userId !== "owner" || !identity.props.grantId)
           return new Response("Forbidden", { status: 403 });
         return mcp(
           request,
           env.RELAY.getByName("owner"),
           identity.props.grantId,
-        );
-      },
-    },
-    defaultHandler: {
-      async fetch(request, env, ctx) {
-        const path = new URL(request.url).pathname;
-        const relay = env.RELAY.getByName("owner");
-        if (path === "/login" || path === "/logout")
-          return relay.ownerPage(request);
-        if (path === "/")
-          return new Response(null, {
-            status: 303,
-            headers: { Location: "/admin" },
-          });
-        const managed = await admin(request, relay, (request) =>
-          relay.requireOwnerApi(
-            new Request(request.url, {
-              method: request.method,
-              headers: request.headers,
-            }),
-          ),
-        );
-        if (managed) return managed;
-        if (path === "/health" && request.method === "GET")
-          return Response.json({
-            service: "agenvo",
-            version: VERSION,
-            protocol: PROTOCOL,
-            ownerConfigured: Boolean(env.ADMIN_SECRET),
-          });
-        if (path === "/connect" || path === "/disconnect")
-          return relay.fetch(request);
-        if (path === "/pairings" && request.method === "POST") {
-          const result = await relay.createPairing(
-            JSON.parse(await readBody(request)),
-            request.headers.get("CF-Connecting-IP") ?? "local",
-          );
-          return Response.json(result, {
-            status: 201,
-            headers: { "Cache-Control": "no-store" },
-          });
-        }
-        if (
-          ["/pairings/poll", "/pairings/cancel"].includes(path) &&
-          request.method === "POST"
-        ) {
-          const { code } = z
-            .strictObject({ code: z.string().uuid() })
-            .parse(JSON.parse(await readBody(request)));
-          return Response.json(
-            await (path === "/pairings/cancel"
-              ? relay.cancelPairing(
-                  code,
-                  request.headers
-                    .get("authorization")
-                    ?.replace(/^Bearer /, "") ?? "",
-                )
-              : relay.pollPairing(
-                  code,
-                  request.headers
-                    .get("authorization")
-                    ?.replace(/^Bearer /, "") ?? "",
-                )),
-            { headers: { "Cache-Control": "no-store" } },
-          );
-        }
-        if (
-          path !== "/authorize" &&
-          path !== "/admin" &&
-          !path.startsWith("/admin/")
-        )
-          return new Response(null, { status: 404 });
-        if (
-          !(await relay.isOwner(
-            new Request(request.url, {
-              method: request.method,
-              headers: request.headers,
-            }),
-          ))
-        ) {
-          if (request.method === "GET") return loginRedirect(request);
-          throw new Fault("permission_denied");
-        }
-        const oauth = (env as Env & { OAUTH_PROVIDER: OAuthHelpers })
-          .OAUTH_PROVIDER;
-        if (path === "/authorize") {
-          if (request.method === "GET") {
-            const auth = await oauth.parseAuthRequest(request);
-            const details = await oauth.describeConsent(auth);
-            const consent = await oauth.beginConsent(auth);
-            return consentPage(
-              request,
-              details,
-              consent.handle,
-              consent.headers,
-            );
-          }
-          if (request.method !== "POST")
-            return new Response(null, { status: 405 });
-          sameOrigin(request, env);
-          const data = await request.formData();
-          const handle = String(data.get("handle"));
-          if (data.get("decision") !== "approve") {
-            const denied = await oauth.denyConsent(request, handle);
-            return consentRedirect(request, denied.redirectTo, denied.headers);
-          }
-          const approved = await oauth.approveConsent(request, handle, {
-            scope: ["runtime:approved"],
-          });
-          const { redirectTo } = await oauth.completeAuthorization({
-            request: approved.request,
-            userId: "owner",
-            metadata: {},
-            scope: ["runtime:approved"],
-            props: { userId: "owner" },
-          });
-          return consentRedirect(request, redirectTo, approved.headers);
-        }
-        return managementPage(request, relay, env.ORIGIN, (id) =>
-          oauth.revokeGrant(id, "owner"),
+          address.baseUrl,
         );
       },
     },
   });
-}
-export function createWorker() {
-  let cached:
-    { origin: string; provider: ReturnType<typeof createProvider> } | undefined;
   return {
     async fetch(
       request: Request,
       env: Env,
       ctx: ExecutionContext,
     ): Promise<Response> {
+      const path = address.route(request.url);
+      const url = new URL(request.url);
+      if (url.pathname === new URL(address.authorizationMetadataUrl).pathname)
+        return authorization.fetch(request, env, ctx);
+      if (
+        url.pathname === new URL(address.resourceMetadataUrl).pathname ||
+        path === "/mcp"
+      )
+        return resource.fetch(request, env, ctx);
+      if (path === "/oauth/token" || path === "/oauth/register")
+        return authorization.fetch(request, env, ctx);
+      const relay = env.RELAY.getByName("owner");
+      if (path === "/login" || path === "/logout")
+        return relay.ownerPage(request);
+      if (path === "/")
+        return new Response(null, {
+          status: 303,
+          headers: { Location: address.path("/admin") },
+        });
+      const managed = await admin(request, address.baseUrl, relay, (request) =>
+        relay.requireOwnerApi(
+          new Request(request.url, {
+            method: request.method,
+            headers: request.headers,
+          }),
+        ),
+      );
+      if (managed) return managed;
+      if (path === "/health" && request.method === "GET")
+        return Response.json({
+          service: "agenvo",
+          version: VERSION,
+          protocol: PROTOCOL,
+          ownerConfigured: Boolean(env.ADMIN_SECRET),
+        });
+      if (path === "/connect" || path === "/disconnect")
+        return relay.fetch(request);
+      if (path === "/pairings" && request.method === "POST") {
+        const result = await relay.createPairing(
+          JSON.parse(await readBody(request)),
+          request.headers.get("CF-Connecting-IP") ?? "local",
+        );
+        return Response.json(result, {
+          status: 201,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
+      if (
+        ["/pairings/poll", "/pairings/cancel"].includes(path ?? "") &&
+        request.method === "POST"
+      ) {
+        const { code } = z
+          .strictObject({ code: z.string().uuid() })
+          .parse(JSON.parse(await readBody(request)));
+        return Response.json(
+          await (path === "/pairings/cancel"
+            ? relay.cancelPairing(
+                code,
+                request.headers.get("authorization")?.replace(/^Bearer /, "") ??
+                  "",
+              )
+            : relay.pollPairing(
+                code,
+                request.headers.get("authorization")?.replace(/^Bearer /, "") ??
+                  "",
+              )),
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      if (
+        path !== "/authorize" &&
+        path !== "/admin" &&
+        !path?.startsWith("/admin/")
+      )
+        return new Response(null, { status: 404 });
+      if (
+        !(await relay.isOwner(
+          new Request(request.url, {
+            method: request.method,
+            headers: request.headers,
+          }),
+        ))
+      ) {
+        if (request.method === "GET")
+          return loginRedirect(request, address.baseUrl);
+        throw new Fault("permission_denied");
+      }
+      const oauth = authorization.getOAuthApi(env);
+      if (path === "/authorize") {
+        if (request.method === "GET") {
+          const auth = await oauth.parseAuthRequest(request);
+          const details = await oauth.describeConsent(auth);
+          const consent = await oauth.beginConsent(auth);
+          return consentPage(
+            request,
+            address.baseUrl,
+            details,
+            consent.handle,
+            consent.headers,
+          );
+        }
+        if (request.method !== "POST")
+          return new Response(null, { status: 405 });
+        sameOrigin(request, env);
+        const data = await request.formData();
+        const handle = String(data.get("handle"));
+        if (data.get("decision") !== "approve") {
+          const denied = await oauth.denyConsent(request, handle);
+          return consentRedirect(
+            request,
+            address.baseUrl,
+            denied.redirectTo,
+            denied.headers,
+          );
+        }
+        const approved = await oauth.approveConsent(request, handle, {
+          scope: ["runtime:approved"],
+        });
+        const { redirectTo } = await oauth.completeAuthorization({
+          request: approved.request,
+          userId: "owner",
+          metadata: {},
+          scope: ["runtime:approved"],
+          props: { userId: "owner" },
+        });
+        return consentRedirect(
+          request,
+          address.baseUrl,
+          redirectTo,
+          approved.headers,
+        );
+      }
+      return managementPage(request, relay, address.baseUrl, (id) =>
+        oauth.revokeGrant(id, "owner"),
+      );
+    },
+  };
+}
+
+export function createWorker() {
+  let cached:
+    | { baseUrl: string; provider: ReturnType<typeof createProvider> }
+    | undefined;
+  return {
+    async fetch(
+      request: Request,
+      env: Env,
+      ctx: ExecutionContext,
+    ): Promise<Response> {
+      let address: RelayAddress | undefined;
       try {
-        if (new URL(request.url).origin !== env.ORIGIN)
+        address = new RelayAddress(env.BASE_URL);
+        if (new URL(request.url).origin !== address.origin)
           return new Response("Wrong host", { status: 421 });
-        const asset = brandAsset(request);
+        const asset = brandAsset(request, env.BASE_URL);
         if (asset) return asset;
         // Bound bodies before handing them to OAuth or MCP libraries.
         if (request.body)
           request = new Request(request, { body: await readBody(request) });
-        if (!cached || cached.origin !== env.ORIGIN)
+        if (!cached || cached.baseUrl !== env.BASE_URL)
           cached = {
-            origin: env.ORIGIN,
-            provider: createProvider(env.ORIGIN),
+            baseUrl: env.BASE_URL,
+            provider: createProvider(env.BASE_URL),
           };
         return await cached.provider.fetch(request, env, ctx);
       } catch (error) {
+        if (!address)
+          return Response.json({ error: "invalid_base_url" }, { status: 503 });
         error = transportedFault(error) ?? error;
         if (
           error instanceof AuthorizationError ||
           error instanceof CimdFetchError
         )
           return (
-            browserError(request, 400) ??
+            browserError(request, env.BASE_URL, 400) ??
             Response.json(
               { error: "invalid_authorization_request" },
               { status: 400 },
@@ -241,7 +279,7 @@ export function createWorker() {
           );
         if (error instanceof z.ZodError || error instanceof SyntaxError)
           return (
-            browserError(request, 400) ??
+            browserError(request, env.BASE_URL, 400) ??
             Response.json({ error: "invalid_request" }, { status: 400 })
           );
         const status =
@@ -267,7 +305,7 @@ export function createWorker() {
             "Worker request failed",
           );
         return (
-          browserError(request, status) ??
+          browserError(request, env.BASE_URL, status) ??
           Response.json(asOutcome(error), { status })
         );
       }

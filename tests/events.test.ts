@@ -231,7 +231,7 @@ test("MCP 2 discovery and events use the authenticated production handler", asyn
   const store = new SqliteStore(":memory:");
   t.after(() => store.close());
   const relay = new Relay({
-    origin: "https://relay.test",
+    baseUrl: "https://relay.test",
     store,
     sockets: () => [],
     accept: () => {},
@@ -295,6 +295,7 @@ test("MCP 2 discovery and events use the authenticated production handler", asyn
       }),
       relay,
       "grant",
+      "https://relay.test",
     );
     const result: any = await r.json();
     assert.equal(r.status, 200, JSON.stringify(result));

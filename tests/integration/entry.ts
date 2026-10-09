@@ -42,7 +42,12 @@ export default {
       return new Response(null, { status: 204 });
     }
     if (new URL(request.url).pathname === "/fixture-mcp")
-      return mcp(request, env.RELAY.getByName("owner"), "fixture-grant");
+      return mcp(
+        request,
+        env.RELAY.getByName("owner"),
+        "fixture-grant",
+        env.BASE_URL,
+      );
     if (new URL(request.url).pathname === "/fixture") {
       const { method, args } = (await request.json()) as any;
       const relay = env.RELAY.getByName("owner");

@@ -31,7 +31,7 @@
     }
   ],
   "vars": {
-    "ORIGIN": "https://configure.example"
+    "BASE_URL": "https://configure.example"
   },
   "observability": {
     "enabled": true,

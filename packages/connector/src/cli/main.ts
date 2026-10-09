@@ -1,3 +1,4 @@
+import { baseUrlSchema } from "@agenvo/protocol/address";
 import { parseArgs } from "node:util";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -35,7 +36,7 @@ export async function connectorCli<T extends InstanceConfig>(
         "label",
         "binary",
         "cwd",
-        "origin",
+        "base-url",
         "fingerprint",
         "device-id",
         "instance-id",
@@ -116,7 +117,7 @@ export async function connectorCli<T extends InstanceConfig>(
     if (options.version) return output({ version: VERSION });
     if (options.help || !command)
       return console.log(
-        `${backend.command} ${VERSION}\n\n${backend.command} instance add --id ID ${backend.help}\n${backend.command} connect https://RELAY [--name NAME] [--approve | --no-wait --no-browser]\n${backend.command} connect --cancel\n${backend.command} pairing list --origin https://RELAY\n${backend.command} pairing approve CODE --fingerprint SHA256 --origin https://RELAY\n${backend.command} admin state --origin https://RELAY\n${backend.command} admin approve-instance --device-id ID --instance-id ID --fingerprint SHA256 --origin https://RELAY\n${backend.command} admin revoke device|instance|grant --id ID [--instance-id ID] --origin https://RELAY\n${backend.command} run\n${backend.command} service install|uninstall\n${backend.command} status --json\n${backend.command} doctor [--recover-lock]\n${backend.command} disconnect\n\nConfig: ${dir}\nAfter changing instances, restart this connector and approve the changed scope.`,
+        `${backend.command} ${VERSION}\n\n${backend.command} instance add --id ID ${backend.help}\n${backend.command} connect https://RELAY [--name NAME] [--approve | --no-wait --no-browser]\n${backend.command} connect --cancel\n${backend.command} pairing list --base-url https://RELAY\n${backend.command} pairing approve CODE --fingerprint SHA256 --base-url https://RELAY\n${backend.command} admin state --base-url https://RELAY\n${backend.command} admin approve-instance --device-id ID --instance-id ID --fingerprint SHA256 --base-url https://RELAY\n${backend.command} admin revoke device|instance|grant --id ID [--instance-id ID] --base-url https://RELAY\n${backend.command} run\n${backend.command} service install|uninstall\n${backend.command} status --json\n${backend.command} doctor [--recover-lock]\n${backend.command} disconnect\n\nConfig: ${dir}\nAfter changing instances, restart this connector and approve the changed scope.`,
       );
     if (command === "admin")
       return output(await adminCommand(subcommand, kind, options));
@@ -149,7 +150,7 @@ export async function connectorCli<T extends InstanceConfig>(
               next:
                 "Restart the connector, inspect " +
                 backend.command +
-                " admin state --origin " +
+                " admin state --base-url " +
                 c.relay +
                 ", then use " +
                 backend.command +
@@ -171,16 +172,7 @@ export async function connectorCli<T extends InstanceConfig>(
         await unlink(join(dir, "credentials.json")).catch(() => {});
         return output({ cancelled: true });
       }
-      const relay = new URL(subcommand);
-      if (
-        relay.protocol !== "https:" ||
-        relay.pathname !== "/" ||
-        relay.username ||
-        relay.password ||
-        relay.search ||
-        relay.hash
-      )
-        throw new Fault("https_origin_required");
+      const relay = baseUrlSchema.parse(subcommand);
       const c = await config();
       if (c.deviceId)
         throw new Fault(
@@ -190,7 +182,7 @@ export async function connectorCli<T extends InstanceConfig>(
       let p: any;
       try {
         p = JSON.parse(await readFile(join(dir, "pairing.json"), "utf8"));
-        if (p.relay !== relay.origin)
+        if (p.relay !== relay)
           throw new Fault(
             "pending_pairing",
             "Cancel the existing pairing before choosing a different relay",
@@ -223,14 +215,14 @@ export async function connectorCli<T extends InstanceConfig>(
             ),
           ),
         );
-        p = await post(new URL("/pairings", relay).href, {
+        p = await post(relay + "/pairings", {
           digest: await digest(secret),
           label: String(options.name ?? c.name),
           instances,
         });
         p = {
           ...p,
-          relay: relay.origin,
+          relay,
           expires: Date.now() + p.expiresIn * 1000,
           name: String(options.name ?? c.name),
           configHash: await digest(JSON.stringify(c.instances)),
@@ -245,7 +237,7 @@ export async function connectorCli<T extends InstanceConfig>(
       if (options["no-wait"]) return;
       if (options.approve) {
         await pairingCommand("approve", p.code, {
-          origin: relay.origin,
+          "base-url": relay,
           fingerprint: p.fingerprint,
         });
       } else {
@@ -254,13 +246,13 @@ export async function connectorCli<T extends InstanceConfig>(
       const expires = p.expires;
       while (Date.now() < expires) {
         const result = await post(
-          new URL("/pairings/poll", relay).href,
+          relay + "/pairings/poll",
           { code: p.code },
           p.pollSecret,
         );
         if (result.status === "approved") {
           c.deviceId = result.deviceId;
-          c.relay = relay.origin;
+          c.relay = relay;
           c.name = p.name;
           await saveConfig(c, dir, backend.schema);
           await unlink(join(dir, "pairing.json"));
@@ -421,7 +413,7 @@ export async function connectorCli<T extends InstanceConfig>(
                 backend.command +
                 " admin revoke device --id " +
                 revokedDeviceId +
-                " --origin " +
+                " --base-url " +
                 c.relay,
             }),
       });

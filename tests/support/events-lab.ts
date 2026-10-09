@@ -25,7 +25,7 @@ import { descriptor, atomicJson, type InstanceConfig } from "./config.js";
 import { digest } from "@agenvo/protocol";
 import { isolatedEnvironment, until } from "./environment.js";
 
-export async function eventsLab(t: TestContext) {
+export async function eventsLab(t: TestContext, prefix = "") {
   const cleanups: Array<() => unknown | Promise<unknown>> = [];
   t.after(async () => {
     const errors: unknown[] = [];
@@ -101,9 +101,10 @@ export async function eventsLab(t: TestContext) {
   const port = (probe.address() as { port: number }).port;
   await new Promise<void>((done) => probe.close(() => done()));
   const origin = `https://127.0.0.1:${port}`;
+  const baseUrl = origin + prefix;
   const ownerSecret = randomBytes(32).toString("hex");
   const serverConfig = {
-    origin,
+    baseUrl,
     dataDir: join(root, "relay"),
     port,
     tls: { cert: ca, key },
@@ -121,7 +122,7 @@ export async function eventsLab(t: TestContext) {
   cleanups.push(() => runtime.close());
   const request = (path: string, init: RequestInit = {}): Promise<Response> =>
     new Promise((done, reject) => {
-      const url = new URL(path, origin);
+      const url = new URL(prefix + path, origin);
       const body = init.body?.toString();
       const headers = Object.fromEntries(new Headers(init.headers));
       if (body) headers["content-length"] = String(Buffer.byteLength(body));
@@ -188,7 +189,7 @@ export async function eventsLab(t: TestContext) {
       code_challenge_method: "S256",
       code_challenge: createHash("sha256").update(verifier).digest("base64url"),
       scope: "runtime:approved",
-      resource: origin + "/mcp",
+      resource: baseUrl + "/mcp",
       state: "test",
     });
   const login = await request("/login", {
@@ -199,7 +200,7 @@ export async function eventsLab(t: TestContext) {
     },
     body: new URLSearchParams({
       secret: ownerSecret,
-      next: authorize,
+      next: prefix + authorize,
     }).toString(),
   });
   const cookie = login.headers
@@ -230,7 +231,7 @@ export async function eventsLab(t: TestContext) {
       code,
       redirect_uri: client.redirect_uris[0],
       code_verifier: verifier,
-      resource: origin + "/mcp",
+      resource: baseUrl + "/mcp",
     }).toString(),
   });
   assert.equal(exchanged.status, 200, await exchanged.clone().text());
@@ -322,7 +323,7 @@ export async function eventsLab(t: TestContext) {
     assert.equal(((await poll.json()) as any).deviceId, deviceId);
     await atomicJson(join(dir, "config.json"), {
       schema: 1,
-      relay: origin,
+      relay: baseUrl,
       deviceId,
       name: "test",
       instances,
@@ -412,7 +413,7 @@ export async function eventsLab(t: TestContext) {
       cleanups.push(action);
     },
     root,
-    origin,
+    origin: baseUrl,
     ownerSecret,
     ca,
     secret,

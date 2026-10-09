@@ -12,11 +12,11 @@ const log = logger.child({ component: "server" });
 type Options = Record<string, string | boolean>;
 export async function relayCommand(action: string, options: Options) {
   if (action === "init") {
-    const origin = String(options.origin ?? "");
+    const baseUrl = String(options["base-url"] ?? "");
     if (!options.output || !options["data-dir"])
       throw new Fault("invalid_arguments", "Pass --output and --data-dir");
     const config = serverConfig.parse({
-      origin,
+      baseUrl,
       dataDir: resolve(String(options["data-dir"])),
       host: String(options.host ?? "127.0.0.1"),
       port: Number(options.port ?? 8080),
@@ -43,7 +43,7 @@ export async function relayCommand(action: string, options: Options) {
       {
         event: "server.started",
         listening: runtime.server.address(),
-        origin: config.origin,
+        baseUrl: config.baseUrl,
       },
       "Relay server started",
     );
@@ -64,7 +64,7 @@ export async function relayCommand(action: string, options: Options) {
 const args = parseArgs({
   allowPositionals: true,
   options: {
-    origin: { type: "string" },
+    "base-url": { type: "string" },
     "data-dir": { type: "string" },
     output: { type: "string" },
     host: { type: "string" },
@@ -79,7 +79,7 @@ if (args.values.version) console.log(VERSION);
 else if (args.values.help || !args.positionals.length)
   console.log(`agenvo-server ${VERSION}
 
-agenvo-server init --origin https://RELAY --data-dir PATH --output CONFIG [--host 127.0.0.1 --port 8080 --trusted-proxy]
+agenvo-server init --base-url https://RELAY --data-dir PATH --output CONFIG [--host 127.0.0.1 --port 8080 --trusted-proxy]
 agenvo-server serve --config CONFIG
 
 Set AGENVO_ADMIN_SECRET in the server environment. Manage connectors and client authorizations in the Relay web interface.`);

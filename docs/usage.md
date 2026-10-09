@@ -4,6 +4,8 @@
 
 Commands below assume a deployed `https://relay.example.com`. The owner and devices can be different machines. `AGENVO_CONFIG_DIR` selects an installation; it defaults to `~/.config/agenvo/herdr` for Herdr and `~/.config/agenvo/codex-app-server` for Codex. Do not share this directory between simultaneous Connector processes.
 
+For a subpath deployment, replace the Relay address in every example with the complete base URL, such as `https://example.com/tools/agents`. Connector `connect` and administrator `--base-url` take that address; MCP clients use it with `/mcp` appended.
+
 If the connector commands are not installed, follow [installation](installation.md) first.
 
 ## Configure a runtime
@@ -108,10 +110,10 @@ Administration is organized into requests, Connectors and instances, and client 
 Inject `AGENVO_ADMIN_SECRET` securely into an explicit administration command's environment. Do not put it in Connector configuration, service definitions or command-line arguments. Available commands include:
 
 ```sh
-agenvo-herdr pairing list --origin https://relay.example.com
-agenvo-herdr pairing approve CODE --fingerprint SHA256 --origin https://relay.example.com
-agenvo-herdr admin state --origin https://relay.example.com
-agenvo-herdr admin approve-instance --device-id DEVICE --instance-id INSTANCE --fingerprint SHA256 --origin https://relay.example.com
+agenvo-herdr pairing list --base-url https://relay.example.com
+agenvo-herdr pairing approve CODE --fingerprint SHA256 --base-url https://relay.example.com
+agenvo-herdr admin state --base-url https://relay.example.com
+agenvo-herdr admin approve-instance --device-id DEVICE --instance-id INSTANCE --fingerprint SHA256 --base-url https://relay.example.com
 ```
 
 `connect --approve` is only for trusted administrator terminals with an explicitly supplied administrator key. Approve remote devices from the administrator terminal without sending that key to the device.
@@ -121,9 +123,9 @@ For task operations, see [Managing Agent threads](management.md).
 ## Revoke and diagnose
 
 ```sh
-agenvo-herdr admin revoke grant --id GRANT_ID --origin https://relay.example.com
-agenvo-herdr admin revoke instance --id DEVICE_ID --instance-id INSTANCE_ID --origin https://relay.example.com
-agenvo-herdr admin revoke device --id DEVICE_ID --origin https://relay.example.com
+agenvo-herdr admin revoke grant --id GRANT_ID --base-url https://relay.example.com
+agenvo-herdr admin revoke instance --id DEVICE_ID --instance-id INSTANCE_ID --base-url https://relay.example.com
+agenvo-herdr admin revoke device --id DEVICE_ID --base-url https://relay.example.com
 agenvo-herdr status --json
 agenvo-herdr doctor
 agenvo-herdr disconnect
