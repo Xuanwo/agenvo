@@ -51,6 +51,26 @@ The tool response contains `result.value` (your returned JSON) and, for execute,
 
 Each native call uses the existing access authorization. If a later call is denied, earlier results remain available to assess progress; previous work is not undone.
 
+### Wait between executions
+
+`execute` does not provide timers such as `setTimeout` or `sleep`, or blocking waits for task completion or future output. Return after submitting input. The calling Agent decides when to read again and waits outside `execute`, using its own waiting mechanism or the [events protocol](events.md). Do not busy-wait or poll for completion inside a script. The 30-second deadline protects script execution; it is not a task-waiting budget.
+
+For example, submit a Herdr command in one `execute`, using the discovered target, session, backendGeneration and paneId:
+
+```js
+return await call(target, "pane.run", {...base, command: "echo hi"});
+```
+
+After checking the receipt and waiting on the Agent side, read output in a separate `execute`. Define `target` and `base` again because script variables do not persist between executions:
+
+```js
+return await call(target, "pane.read", {
+  ...base, lines: 20, source: "recent-unwrapped"
+});
+```
+
+Inspect the output to decide whether the command has finished. If output is not ready, wait outside `execute` before reading again. If a script fails after submitting input, inspect `result.calls` and the native state before repeating the submission.
+
 ## Codex
 
 Use `thread/list`, `thread/start`, `thread/read`, `thread/resume`, `thread/archive` and `thread/unarchive` according to their schemas. Native listing filters determine provider/source coverage; inspect these when discovering other clients' threads. Use `turn/start` for input, `turn/steer` with expectedTurnId, and `turn/interrupt` with a known turnId. An unloaded thread may require resume before input. Full-access execution and automatic permission responses apply to Agenvo work entry points.

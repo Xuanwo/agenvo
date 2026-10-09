@@ -10,6 +10,8 @@ search 直接执行字符串匹配，不经过 QuickJS。实例过滤在 Relay �
 
 execute 的脚本时限为 30 秒，停止脚本后收集已派发调用的确认，最多再等待一个 Relay 调用超时。不另设调用次数、并发脚本数或脚本堆内存配额。原生调用仍遵循现有 Connector 通信帧限制；MCP 脚本返回值不经过该通道，由调用者选择返回内容，不套用通信帧大小限制。
 
+调用方 Agent 需要在提交输入后继续观察任务。execute 负责组合原生调用并返回结果；等待下一次观察由调用方 Agent 在请求之间完成，或使用现有事件协议触发后续读取。执行器不提供 `setTimeout`、`sleep`，Connector 不为等待任务完成或未来输出暴露阻塞式 wait 方法，包括 Herdr 的 `pane.wait-output`。脚本也不应通过忙等或持续轮询占用执行请求。这样可以及时释放请求，代价是提交和后续观察需要分成多次 execute。30 秒时限是执行保护上限，不是等待任务的预算。已派发调用的确认仍按既有规则收集。
+
 MCP 的 isError 表示脚本或目录执行失败。原生拒绝保留在 call 返回值和 result.calls 中，即使调用者已经在代码中处理该拒绝。外层 execution 汇总是否有 unknown、starting、accepted 或 rejected；每次原生调用的 execution 和 requestId 才是对应操作的确认依据。
 
 ## 引擎复用验证
