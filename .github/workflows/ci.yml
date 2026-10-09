@@ -74,9 +74,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - run: npm run build
         id: build
-      - run: npm run test:system
-        timeout-minutes: 3
       - run: npm run test:adapters
+        timeout-minutes: 3
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      - run: npm run test:system
         timeout-minutes: 3
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
   container:
