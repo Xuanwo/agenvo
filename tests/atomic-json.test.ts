@@ -156,6 +156,10 @@ test(
     assert.deepEqual(JSON.parse(await fs.readFile(path, "utf8")), {
       state: "online",
     });
-    assert.deepEqual(await fs.readdir(root), ["status.json"]);
+    // PowerShell may create AppData in its isolated home.
+    assert.deepEqual(
+      (await fs.readdir(root)).filter((name) => name.startsWith("status.json")),
+      ["status.json"],
+    );
   },
 );
