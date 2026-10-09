@@ -18,7 +18,8 @@
     "./engine": {
       "workerd": "./src/engine.cloudflare.ts",
       "default": "./src/engine.ts"
-    }
+    },
+    "./releases": "./src/releases.ts"
   },
   "dependencies": {
     "@agenvo/logging": "0.2.0-rc.1",
@@ -26,6 +27,7 @@
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@modelcontextprotocol/server": "2.3.1",
     "quickjs-emscripten-core": "0.32.0",
+    "semver": "^7.8.5",
     "standardwebhooks": "1.1.1",
     "zod": "4.6.5"
   }

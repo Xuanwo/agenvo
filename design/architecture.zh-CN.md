@@ -66,6 +66,8 @@ Herdr 适配器连接独立的原生服务，不提供 session.start/stop。原�
 
 兼容性只针对已正式对外发布的 Agenvo 版本。首次正式发布前，内部协议、配置和存储格式可以直接调整，调用方、测试和文档同步更新；不为内部开发版本或个人部署维护旧名称、兼容解析或迁移路径。具体维护规则见 [AGENTS.md](../AGENTS.md)。
 
+正式版本的部署与更新方案见[由 Agent 完成部署与更新](deployment-and-updates.zh-CN.md)：search 提示 server 与 Connector 的正式版本更新，提供发行说明和可用的更新指南，由 Agent 使用现有平台工具执行安装与部署。
+
 测试入口和环境条件见[贡献指南](../CONTRIBUTING.zh-CN.md)。
 
 事件通过 MCP Events 的 `runtime.changed` 订阅推送，使用现有设备 WebSocket 和 Relay 持久存储。详见[原生事件驱动的观察](events.zh-CN.md)。

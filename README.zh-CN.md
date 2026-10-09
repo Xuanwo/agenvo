@@ -28,6 +28,7 @@
 ## 如果你是 AI Agent
 
 - 为用户安装 Agenvo，接入电脑和助手：[安装指南](docs/installation.zh-CN.md)。
+- 查看正式版本提示并更新已有部署：[更新指南](docs/updating.zh-CN.md)。
 - 通过已有的 MCP 连接管理 Agent 工作：[Agent 管理](docs/management.zh-CN.md)。
 - 订阅 Agent 的变化并据此行动：[运行时事件](docs/events.zh-CN.md)。
 - 排查连接、授权或调用失败：[诊断说明](docs/usage.zh-CN.md#撤销与诊断)和[日志](docs/logging.zh-CN.md)。

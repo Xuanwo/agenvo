@@ -1,3 +1,5 @@
+import { noReleases } from "./releases.js";
+import type { ReleaseFetch } from "@agenvo/relay/releases";
 import { callCode, nativeOutcome } from "./code.js";
 import { stopProcess } from "./process.js";
 import { socketTempDir } from "./environment.js";
@@ -25,7 +27,11 @@ import { descriptor, atomicJson, type InstanceConfig } from "./config.js";
 import { digest } from "@agenvo/protocol";
 import { isolatedEnvironment, until } from "./environment.js";
 
-export async function eventsLab(t: TestContext, prefix = "") {
+export async function eventsLab(
+  t: TestContext,
+  prefix = "",
+  releaseFetch: ReleaseFetch = noReleases,
+) {
   const cleanups: Array<() => unknown | Promise<unknown>> = [];
   t.after(async () => {
     const errors: unknown[] = [];
@@ -118,7 +124,12 @@ export async function eventsLab(t: TestContext, prefix = "") {
     assert.equal(url, "https://receiver.example/events");
     return sendWebhook(receiverUrl, body, headers);
   };
-  let runtime = await startServer(serverConfig, ownerSecret, delivery);
+  let runtime = await startServer(
+    serverConfig,
+    ownerSecret,
+    delivery,
+    releaseFetch,
+  );
   cleanups.push(() => runtime.close());
   const request = (path: string, init: RequestInit = {}): Promise<Response> =>
     new Promise((done, reject) => {
@@ -435,7 +446,12 @@ export async function eventsLab(t: TestContext, prefix = "") {
     },
     async restart() {
       await runtime.close();
-      runtime = await startServer(serverConfig, ownerSecret, delivery);
+      runtime = await startServer(
+        serverConfig,
+        ownerSecret,
+        delivery,
+        releaseFetch,
+      );
     },
     subscription(deviceId: string, instanceId: string, filters = {}) {
       return {
