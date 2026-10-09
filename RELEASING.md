@@ -1,6 +1,6 @@
 # Releasing Agenvo
 
-Release Please maintains one release PR for Agenvo. Merging it creates a version tag and a draft GitHub Release, then GitHub Actions publishes every public npm workspace through Trusted Publishing. All workspaces share one version; private packages are never published. No npm or long-lived GitHub token is stored in GitHub.
+Release Please maintains one release PR for Agenvo. Merging it creates a version tag and a draft GitHub Release, then GitHub Actions publishes every public npm workspace through Trusted Publishing. All workspaces share one version; private packages are never published. A dedicated GitHub App creates PRs with short-lived installation tokens; npm publication uses OIDC.
 
 Cloudflare and Docker deployments use the source tag. Releasing does not deploy existing installations or publish a container image.
 
@@ -13,13 +13,21 @@ Cloudflare and Docker deployments use the source tag. Releasing does not deploy 
 
 The same `.github/workflows/release.yml` run creates the draft/tag and performs publication. It runs Linux, macOS, Windows, native-runtime, and container checks against that exact tag, requires its commit to belong to `main`, builds all public workspaces, and packs immutable tarballs. The publishing job uses OIDC, waits for registry availability, checks archive integrity, installs every exact version in a fresh directory, and runs its CLI entry points. Only then does it upload tarballs and `SHA256SUMS` and publish the GitHub Release.
 
-GitHub does not start tag-push workflows for tags created with `GITHUB_TOKEN`. Publication therefore continues directly from Release Please's output in the same workflow. Release PR updates explicitly dispatch `ci.yml` on the bot branch, avoiding a separate approval for bot-triggered CI. All publication stays in `release.yml`, preserving the npm Trusted Publisher workflow identity.
+The planning job uses the GitHub App token only to create or update release PRs, which triggers ordinary PR CI without a workflow approval. Tags and draft releases use `GITHUB_TOKEN`, so they do not trigger another tag-push workflow. Publication continues directly from Release Please's tag output in the same workflow. All publication stays in `release.yml`, preserving the npm Trusted Publisher workflow identity.
 
-The repository must allow GitHub Actions to create pull requests (Settings → Actions → General → Workflow permissions). Release Please uses the workflow's short-lived token. Only the planning job can write PRs and dispatch CI; the publishing job has `contents: write` and `id-token: write`.
+The App token is scoped to the current repository and revoked when the planning job finishes. The publishing job has `contents: write` and `id-token: write`; it does not receive the App private key or installation token.
 
 Stable tags use npm's `latest` dist-tag. Prerelease tags use `next`. Main's Release Please configuration prepares stable releases. For a deliberate preview, prepare matching versions and dated release notes, then push an annotated prerelease tag such as `v0.3.0-rc.0`; the same checks and publishing path apply. The workflow rejects a stable release that would replace a newer `latest` version.
 
 A manual Release run with an empty `tag` input performs checks and packing only. Providing an existing version tag explicitly publishes or recovers that tag. It never moves a tag. A rehearsal does not validate OIDC authentication; a successful real publish is required to validate npm trust.
+
+## Configure the release GitHub App once
+
+Create a private GitHub App with **Contents**, **Pull requests**, and **Issues** repository permissions set to **Read and write**. Disable webhooks and install it only on `Xuanwo/agenvo`. It does not need administration, Actions, workflow, or npm permissions.
+
+Set the repository Actions variable `RELEASE_APP_CLIENT_ID` to its client ID and the Actions secret `RELEASE_APP_PRIVATE_KEY` to its PEM private key. The workflow exchanges that key for a short-lived token on each main push. For key rotation, replace the repository secret with a new App key, verify a release PR update and its automatic CI, then revoke the previous key in the App settings.
+
+Do not replace the App token with `GITHUB_TOKEN` for PR creation: GitHub requires approval for those bot-triggered PR workflows. A separate `workflow_dispatch` run does not remove that approval requirement or reliably satisfy the PR's required checks.
 
 ## Versioned files and new workspaces
 
@@ -59,7 +67,8 @@ npm requires a package to exist before configuring its Trusted Publisher. Comple
    ```
 
    It refuses existing packages and stable versions, builds and packs the repository, publishes only the selected new packages to `next`, waits for their exact archives to appear, then configures trust. It uses interactive npm authentication, not a GitHub secret. npm processing can outlast the five-minute authorization window; trust setup may then require another browser verification.
-3. Prepare the stable version, for example `0.2.0`, and push its tag within two days. This first OIDC publication activates the new packages' trust alongside the existing packages.
+
+3. Merge the stable release PR within two days. This first OIDC publication activates the new packages' trust alongside the existing packages.
 
 If bootstrap stops partway, inspect registry state. Run it only for still-missing packages, then use `release:trust -- PACKAGE` for packages already published but not configured. Never overwrite or unpublish a successful version as a retry mechanism.
 
