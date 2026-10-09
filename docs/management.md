@@ -49,7 +49,17 @@ return {threadId, sent};
 
 `call` returns `{execution, requestId, result, nativeIds?, error?}`. Inspect errors in code; a native rejection is returned as data. Calls are independent, not transactional. Use loops for pagination and return only relevant fields. No host filesystem, network, environment variables or imports are available. Scripts have a 30-second deadline and a computation interrupt to stop stalled loops, with no additional call-count or script-result size quota. Already dispatched calls are collected before the response, so confirmation can extend beyond the script deadline by a native call timeout.
 
-The tool response contains `result.value` (your returned JSON) and, for execute, `result.calls` (compact receipts for every dispatched call). Script errors preserve receipts. `accepted` confirms submission, not business success. `starting` means initialization is still pending. After `unknown`, inspect native state before repeating a write. There is no automatic retry or rollback.
+execute delivers strings verbatim as MCP text and serializes other JSON values directly. No return or undefined produces `null`. Successful scripts receive no result envelope or automatic call receipts. Return complete call outcomes, selected objects, or prose; explicitly return any execution confirmations, request IDs, or native IDs you need. Native rejections remain data for your script to inspect; a normally returning script has MCP isError false even if a native call was rejected.
+
+If the script throws, times out, is interrupted, or returns a value that cannot be serialized, MCP isError is true. The response includes readable diagnostics, the script requestId, and confirmations for dispatched calls so you can inspect what already happened. Diagnostics are text for the calling Agent, not a fixed JSON path contract. `accepted` confirms submission, not business success. `starting` means initialization is still pending. After `unknown`, inspect native state before repeating a write. There is no automatic retry or rollback.
+
+For example, return only thread IDs as text:
+
+```js
+const r = await call(target, "thread/list", {});
+if (r.error) return r;
+return r.result.data.map(thread => thread.id).join("\n");
+```
 
 Each native call uses the existing access authorization. If a later call is denied, earlier results remain available to assess progress; previous work is not undone.
 
@@ -71,7 +81,7 @@ return await call(target, "pane.read", {
 });
 ```
 
-Inspect the output to decide whether the command has finished. If output is not ready, wait outside `execute` before reading again. If a script fails after submitting input, inspect `result.calls` and the native state before repeating the submission.
+Inspect the output to decide whether the command has finished. If output is not ready, wait outside `execute` before reading again. If a script fails after submitting input, inspect the confirmations attached to the error diagnostics and the native state before repeating the submission.
 
 ## Codex
 

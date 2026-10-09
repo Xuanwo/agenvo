@@ -542,23 +542,34 @@ test(
       assert.equal(response.status, 200);
       const body: any = await response.json();
       assert.equal(body.error, undefined, JSON.stringify(body));
+      assert.ok(!JSON.stringify(body).includes("user cancelled MCP tool call"));
+      if (name === "execute") return body.result;
       const outcome = JSON.parse(body.result.content[0].text);
       assert.equal(body.result.isError, Boolean(outcome.error));
       assert.match(outcome.requestId, /^[0-9a-f-]{36}$/);
-      assert.ok(!JSON.stringify(body).includes("user cancelled MCP tool call"));
       return outcome;
     };
     const interruptedScript = await mcpCall("execute", {
       code: "while(true){}",
     });
-    assert.equal(interruptedScript.error.code, "script_error");
+    assert.equal(interruptedScript.isError, true);
+    assert.match(
+      interruptedScript.content[0].text,
+      /Execution failed \(script_error\)/,
+    );
     const isolated = await mcpCall("execute", {
       code: "return [typeof process, typeof fetch, typeof require];",
     });
-    assert.deepEqual(isolated.result.value, [
-      "undefined",
-      "undefined",
-      "undefined",
+    assert.equal(isolated.isError, false);
+    assert.deepEqual(isolated.content, [
+      { type: "text", text: '["undefined","undefined","undefined"]' },
+    ]);
+    const text = await mcpCall("execute", {
+      code: 'return "Selected output\\n第二行";',
+    });
+    assert.equal(text.isError, false);
+    assert.deepEqual(text.content, [
+      { type: "text", text: "Selected output\n第二行" },
     ]);
     instance.context =
       "# Work\nUpdated before Connector hello. 代码在目标机器上。";
@@ -619,7 +630,11 @@ test(
       );
     const sharedResults = await Promise.all(overlapping);
     assert.deepEqual(
-      sharedResults.map((r) => r.result.value),
+      sharedResults.map((r) => {
+        assert.equal(r.isError, false);
+        assert.equal(r.content.length, 1);
+        return JSON.parse(r.content[0].text);
+      }),
       [
         [1, 1],
         [2, 2],
@@ -695,12 +710,13 @@ test(
       }),
     );
     const failedScript = await partial;
-    assert.equal(failedScript.error.code, "script_error");
-    assert.equal(failedScript.result.calls[0].nativeIds.paneId, "created");
-    assert.equal(
-      failedScript.result.calls[0].requestId,
-      partialRequest.requestId,
+    assert.equal(failedScript.isError, true);
+    assert.match(
+      failedScript.content[0].text,
+      /Execution failed \(script_error\)/,
     );
+    assert.match(failedScript.content[1].text, /"paneId":"created"/);
+    assert.ok(failedScript.content[1].text.includes(partialRequest.requestId));
     const nativePacket = nextCall();
     const nativeFailure = mcpCall(
       "execute",
@@ -722,7 +738,10 @@ test(
         },
       }),
     );
-    const nativeOutcome = (await nativeFailure).result.value;
+    const nativeResponse = await nativeFailure;
+    assert.equal(nativeResponse.isError, false);
+    assert.equal(nativeResponse.content.length, 1);
+    const nativeOutcome = JSON.parse(nativeResponse.content[0].text);
     assert.equal(nativeOutcome.error.native.code, "agent_not_idle");
     assert.equal(nativeOutcome.requestId, nativeRequest.requestId);
     assert.equal((await fetch(base + "/fixture-log-error")).status, 204);
@@ -824,7 +843,9 @@ test(
     const timeoutPacket = nextCall();
     const timedOut = mcpCall("execute", callCode(input));
     const timed = await timeoutPacket;
-    const timeoutOutcome = (await timedOut).result.value;
+    const timeoutResponse = await timedOut;
+    assert.equal(timeoutResponse.isError, false);
+    const timeoutOutcome = JSON.parse(timeoutResponse.content[0].text);
     assert.equal(timeoutOutcome.execution, "unknown");
     assert.equal(timeoutOutcome.error.code, "execution_unknown");
     assert.equal(timeoutOutcome.requestId, timed.requestId);
@@ -840,7 +861,9 @@ test(
     const oldCall = mcpCall("execute", callCode(input));
     const oldRequest = await oldPacket;
     const replacement = await connect();
-    const disconnected = (await oldCall).result.value;
+    const disconnectedResponse = await oldCall;
+    assert.equal(disconnectedResponse.isError, false);
+    const disconnected = JSON.parse(disconnectedResponse.content[0].text);
     assert.equal(disconnected.execution, "unknown");
     assert.equal(disconnected.error.code, "execution_unknown");
     assert.equal(disconnected.requestId, oldRequest.requestId);

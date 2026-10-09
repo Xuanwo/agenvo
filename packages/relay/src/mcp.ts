@@ -40,20 +40,12 @@ export async function mcp(
 ) {
   if (request.method !== "POST")
     return new Response(null, { status: 405, headers: { Allow: "POST" } });
-  const wrap = async (
+  const completed = (
     tool: string,
-    action: () => Outcome | Promise<Outcome>,
+    started: number,
+    outcome: Partial<Pick<Outcome, "requestId" | "execution" | "error">>,
+    error?: unknown,
   ) => {
-    const started = Date.now();
-    let outcome: Outcome;
-    let error: unknown;
-    try {
-      outcome = await action();
-    } catch (e) {
-      outcome = asOutcome(e);
-      if (outcome.error?.code === "internal_error") error = e;
-    }
-    outcome.requestId ??= crypto.randomUUID();
     const fields = {
       event: "mcp.tool.completed",
       tool,
@@ -69,6 +61,22 @@ export async function mcp(
     } else {
       log.info(fields, "MCP tool %s completed", tool);
     }
+  };
+  const wrap = async (
+    tool: string,
+    action: () => Outcome | Promise<Outcome>,
+  ) => {
+    const started = Date.now();
+    let outcome: Outcome;
+    let error: unknown;
+    try {
+      outcome = await action();
+    } catch (e) {
+      outcome = asOutcome(e);
+      if (outcome.error?.code === "internal_error") error = e;
+    }
+    outcome.requestId ??= crypto.randomUUID();
+    completed(tool, started, outcome, error);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(outcome) }],
       isError: Boolean(outcome.error),
@@ -99,52 +107,75 @@ export async function mcp(
         "execute",
         {
           description:
-            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover exact methods with search; use native IDs. Return a compact result. Calls are independent, never a transaction; all dispatched calls have receipts even on script failure. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports or timers (setTimeout/sleep). Return after submitting input; wait in the calling agent, then use a separate execute to read status or output. Do not busy-wait or poll for completion inside a script. The 30s script deadline bounds execution, not task waiting. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
+            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover exact methods with search; use native IDs. Choose what to return: strings are delivered verbatim and other JSON values are serialized directly, without an envelope or automatic receipts. No return produces null. Inspect call errors and return any confirmations you need. Calls are independent, never a transaction. Script failure returns diagnostics and receipts for dispatched calls. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports or timers (setTimeout/sleep). Return after submitting input; wait in the calling agent, then use a separate execute to read status or output. Do not busy-wait or poll for completion inside a script. The 30s script deadline bounds execution, not task waiting. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
           inputSchema: z.strictObject({ code: z.string() }),
         },
-        ({ code }) =>
-          wrap("execute", async () => {
-            return runCode(code, {
-              call: async (input) => {
-                let outcome: Outcome;
-                let error: unknown;
-                try {
-                  outcome = await relay.call(grantId, input);
-                } catch (e) {
-                  outcome = asOutcome(e);
-                  error = e;
-                }
-                const fields = {
-                  event: "runtime.call.completed",
-                  deviceId: input.deviceId,
-                  instanceId: input.instanceId,
-                  method: input.method,
-                  requestId: outcome.requestId,
-                  execution: outcome.execution,
-                  errorCode: outcome.error?.code,
-                  ...(outcome.error?.code === "internal_error"
-                    ? { err: error }
-                    : {}),
-                };
-                log[
-                  outcome.error
-                    ? outcome.error.code === "internal_error"
-                      ? "error"
-                      : "warn"
-                    : "info"
-                ](
-                  fields,
-                  "Native call %s on %s/%s: %s%s",
-                  input.method,
-                  input.deviceId,
-                  input.instanceId,
-                  outcome.execution,
-                  outcome.error ? ` (${outcome.error.code})` : "",
-                );
-                return outcome;
-              },
+        async ({ code }) => {
+          const started = Date.now();
+          const result = await runCode(code, {
+            call: async (input) => {
+              let outcome: Outcome;
+              let error: unknown;
+              try {
+                outcome = await relay.call(grantId, input);
+              } catch (e) {
+                outcome = asOutcome(e);
+                error = e;
+              }
+              const fields = {
+                event: "runtime.call.completed",
+                deviceId: input.deviceId,
+                instanceId: input.instanceId,
+                method: input.method,
+                requestId: outcome.requestId,
+                execution: outcome.execution,
+                errorCode: outcome.error?.code,
+                ...(outcome.error?.code === "internal_error"
+                  ? { err: error }
+                  : {}),
+              };
+              log[
+                outcome.error
+                  ? outcome.error.code === "internal_error"
+                    ? "error"
+                    : "warn"
+                  : "info"
+              ](
+                fields,
+                "Native call %s on %s/%s: %s%s",
+                input.method,
+                input.deviceId,
+                input.instanceId,
+                outcome.execution,
+                outcome.error ? ` (${outcome.error.code})` : "",
+              );
+              return outcome;
+            },
+          });
+          const requestId = crypto.randomUUID();
+          completed("execute", started, { requestId, error: result.error });
+          const content: Array<{ type: "text"; text: string }> = [];
+          if (!result.error || result.value !== undefined)
+            content.push({
+              type: "text",
+              text:
+                typeof result.value === "string"
+                  ? result.value
+                  : JSON.stringify(result.value ?? null),
             });
-          }),
+          if (result.error) {
+            content.push({
+              type: "text",
+              text: `Execution failed (${result.error.code}): ${result.error.message}\nRequest ID: ${requestId}`,
+            });
+            if (result.calls?.length)
+              content.push({
+                type: "text",
+                text: `Dispatched calls (not rolled back; inspect native state before repeating writes):\n${JSON.stringify(result.calls)}`,
+              });
+          }
+          return { content, isError: Boolean(result.error) };
+        },
       );
       const capabilities = { tools: {}, events: {} };
       server.server.registerCapabilities(capabilities);

@@ -34,7 +34,11 @@ test(
       },
     });
     assert.equal(failedScript.isError, true);
-    const receipt = JSON.parse(failedScript.content[0].text).result.calls[0];
+    assert.match(
+      failedScript.content[0].text,
+      /Execution failed \(script_error\)/,
+    );
+    const receipt = JSON.parse(failedScript.content[1].text.split("\n")[1])[0];
     assert.equal(receipt.execution, "accepted");
     assert.ok(receipt.nativeIds.sessionId);
     const createdId = receipt.nativeIds.sessionId;

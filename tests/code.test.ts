@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { Call, Outcome } from "@agenvo/protocol";
 import { runCode } from "../packages/relay/src/code.js";
 
 test("code executes without host capabilities", async () => {
@@ -7,9 +8,12 @@ test("code executes without host capabilities", async () => {
     "return [typeof process, typeof fetch, typeof require, typeof call];",
     {},
   );
-  assert.deepEqual(globals.result, {
-    value: ["undefined", "undefined", "undefined", "undefined"],
-  });
+  assert.deepEqual(globals.value, [
+    "undefined",
+    "undefined",
+    "undefined",
+    "undefined",
+  ]);
   assert.ok((await runCode("return await import('node:fs');", {})).error);
 });
 test("code retains dispatched receipts across errors and unawaited calls", async () => {
@@ -30,10 +34,14 @@ test("code retains dispatched receipts across errors and unawaited calls", async
       },
     );
     assert.equal(count, 1);
-    assert.equal(r.result.calls[0].requestId, "request");
-    assert.equal(r.result.calls[0].nativeIds.threadId, "created");
-    assert.equal(r.execution, "accepted");
-    if (suffix !== "return 1;") assert.ok(r.error);
+    if (suffix !== "return 1;") {
+      assert.ok(r.error);
+      assert.equal(r.calls[0].requestId, "request");
+      assert.equal(r.calls[0].nativeIds.threadId, "created");
+      assert.equal(r.calls[0].execution, "accepted");
+    } else {
+      assert.deepEqual(r, { value: 1 });
+    }
   }
 });
 test("code preserves native unknown and rejects invalid calls before dispatch", async () => {
@@ -47,8 +55,8 @@ test("code preserves native unknown and rejects invalid calls before dispatch", 
       }),
     },
   );
-  assert.equal(r.execution, "unknown");
-  assert.equal(r.result.value.error.code, "execution_unknown");
+  assert.equal(r.value.execution, "unknown");
+  assert.equal(r.value.error.code, "execution_unknown");
   let dispatched = false;
   const invalid = await runCode(
     'return await call({deviceId:"bad/",instanceId:"i"},"create",{});',
@@ -66,9 +74,7 @@ test("code interrupts stalled scripts and allows callers to compose native calls
   for (const code of ["while(true){}", "await new Promise(()=>{});"])
     assert.ok((await runCode(code, {})).error, code);
   await runCode("globalThis.marker = 1;", {});
-  assert.deepEqual((await runCode("return typeof marker;", {})).result, {
-    value: "undefined",
-  });
+  assert.equal((await runCode("return typeof marker;", {})).value, "undefined");
   let count = 0;
   const r: any = await runCode(
     'for(let i=0;i<33;i++) await call({deviceId:"d",instanceId:"i"},"read",{});',
@@ -80,16 +86,20 @@ test("code interrupts stalled scripts and allows callers to compose native calls
     },
   );
   assert.equal(count, 33);
-  assert.equal(r.result.calls.length, 33);
+  assert.equal(r.calls, undefined);
   assert.equal(r.error, undefined);
   const large = await runCode('return "x".repeat(100000);', {});
   assert.equal(large.error, undefined);
-  assert.equal((large.result as { value: string }).value.length, 100000);
+  assert.equal((large.value as string).length, 100000);
 });
 
-test("MCP returns earlier results when a later call is denied without rescanning authorization", async () => {
+async function execute(
+  code: string,
+  call: (input: Call) => Promise<Outcome> = async () => {
+    throw Error("Unexpected call");
+  },
+) {
   const { mcp } = await import("@agenvo/relay/mcp");
-  let calls = 0;
   const response = await mcp(
     new Request("https://relay.test/mcp", {
       method: "POST",
@@ -114,9 +124,7 @@ test("MCP returns earlier results when a later call is denied without rescanning
             "io.modelcontextprotocol/clientCapabilities": {},
           },
           name: "execute",
-          arguments: {
-            code: 'const first = await call({deviceId:"d",instanceId:"i"},"read",{}); await call({deviceId:"d",instanceId:"i"},"read",{}); return first;',
-          },
+          arguments: { code },
         },
       }),
     }),
@@ -127,20 +135,10 @@ test("MCP returns earlier results when a later call is denied without rescanning
       instances: () => {
         throw Error("execute must not scan the instance catalog");
       },
-      describe: async () => ({ execution: "accepted", result: { items: [] } }),
-      call: async () => {
-        calls++;
-        if (calls === 2)
-          return {
-            execution: "not_started",
-            error: { code: "permission_denied", message: "Access revoked" },
-          };
-        return {
-          execution: "accepted",
-          result: "earlier output",
-          nativeIds: { threadId: "thread" },
-        };
+      describe: async () => {
+        throw Error("execute must not query method metadata");
       },
+      call: (_grant, input) => call(input),
       eventsList: () => ({}),
       eventsSubscribe: async () => ({}),
       eventsUnsubscribe: async () => ({}),
@@ -148,16 +146,125 @@ test("MCP returns earlier results when a later call is denied without rescanning
     "grant",
     "https://relay.test",
   );
+  assert.equal(response.status, 200);
   const wire: any = await response.json();
   assert.equal(wire.error, undefined, JSON.stringify(wire));
-  const outcome = JSON.parse(wire.result.content[0].text);
-  assert.equal(wire.result.isError, false);
-  assert.equal(outcome.error, undefined);
-  assert.equal(outcome.result.value.result, "earlier output");
-  assert.equal(outcome.result.calls.length, 2);
-  assert.equal(outcome.result.calls[0].execution, "accepted");
-  assert.equal(outcome.result.calls[0].nativeIds.threadId, "thread");
-  assert.equal(outcome.result.calls[1].error.code, "permission_denied");
+  return wire.result;
+}
+
+test("MCP delivers caller-selected text and JSON without an execute envelope", async () => {
+  for (const value of [
+    "A\nB",
+    "",
+    "null",
+    { result: 1, calls: [], error: "caller-owned" },
+    [1, "two"],
+    0,
+    false,
+    null,
+  ]) {
+    const response = await execute(`return ${JSON.stringify(value)};`);
+    assert.equal(response.isError, false);
+    assert.equal(response.structuredContent, undefined);
+    assert.deepEqual(response.content, [
+      {
+        type: "text",
+        text: typeof value === "string" ? value : JSON.stringify(value),
+      },
+    ]);
+  }
+  const empty = await execute("");
+  assert.equal(empty.isError, false);
+  assert.deepEqual(empty.content, [{ type: "text", text: "null" }]);
+  for (const method of ["read", "write"]) {
+    const response = await execute(
+      `const r = await call({deviceId:'d',instanceId:'i'}, '${method}', {}); return r.result;`,
+      async () => ({
+        execution: "accepted",
+        result: "Selected output",
+        requestId: "native-request",
+      }),
+    );
+    assert.deepEqual(response.content, [
+      { type: "text", text: "Selected output" },
+    ]);
+    assert.equal(response.isError, false);
+  }
+});
+
+test("MCP leaves native errors and earlier results under caller control", async () => {
+  let calls = 0;
+  const first: Outcome = {
+    execution: "accepted",
+    result: "earlier output",
+    nativeIds: { threadId: "thread" },
+  };
+  const denied: Outcome = {
+    execution: "not_started",
+    error: { code: "permission_denied", message: "Access revoked" },
+  };
+  const response = await execute(
+    'const first = await call({deviceId:"d",instanceId:"i"},"read",{}); await call({deviceId:"d",instanceId:"i"},"read",{}); return first;',
+    async () => (++calls === 1 ? first : denied),
+  );
+  assert.equal(calls, 2);
+  assert.equal(response.isError, false);
+  assert.deepEqual(response.content, [
+    { type: "text", text: JSON.stringify(first) },
+  ]);
+  for (const code of ["return r;", 'return "Handled";']) {
+    const result = await execute(
+      'const r = await call({deviceId:"d",instanceId:"i"},"read",{});' + code,
+      async () => denied,
+    );
+    assert.equal(result.isError, false);
+    assert.deepEqual(result.content, [
+      {
+        type: "text",
+        text: code === "return r;" ? JSON.stringify(denied) : "Handled",
+      },
+    ]);
+  }
+});
+
+test("MCP supplies script diagnostics and dispatched confirmations only on script failure", async () => {
+  for (const ending of [
+    'throw Error("after");',
+    "return 1n;",
+    "const cycle = {}; cycle.self = cycle; return cycle;",
+    "while(true){}",
+  ]) {
+    const response = await execute(
+      'call({deviceId:"d",instanceId:"i"},"create",{});' + ending,
+      async () => ({
+        execution: "accepted",
+        requestId: "native-request",
+        nativeIds: { threadId: "created" },
+      }),
+    );
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /Execution failed \(script_error\)/);
+    assert.match(response.content[0].text, /Request ID: [0-9a-f-]{36}/);
+    assert.match(response.content[1].text, /Dispatched calls/);
+    assert.match(response.content[1].text, /"requestId":"native-request"/);
+    assert.match(response.content[1].text, /"threadId":"created"/);
+  }
+  const unknown = await execute(
+    'await call({deviceId:"d",instanceId:"i"},"write",{}); throw Error("after");',
+    async () => ({
+      execution: "unknown",
+      requestId: "lost",
+      error: { code: "execution_unknown", message: "Inspect state" },
+    }),
+  );
+  assert.equal(unknown.isError, true);
+  assert.match(unknown.content[1].text, /"execution":"unknown"/);
+  assert.match(unknown.content[1].text, /"requestId":"lost"/);
+  assert.match(unknown.content[1].text, /"code":"execution_unknown"/);
+  const invalid = await execute("return (");
+  assert.equal(invalid.isError, true);
+  assert.equal(invalid.content.length, 1);
+  assert.match(invalid.content[0].text, /Execution failed/);
 });
 
 test("shared engine keeps overlapping executions independent after a script failure", async () => {
@@ -186,7 +293,7 @@ test("shared engine keeps overlapping executions independent after a script fail
   const results = await Promise.all(runs);
   for (const [id, result] of results.entries()) {
     assert.equal(result.error, undefined);
-    assert.deepEqual((result.result as any).value, [id, id]);
+    assert.deepEqual(result.value, [id, id]);
   }
   assert.equal((await runCode("return typeof marker", {})).error, undefined);
 });

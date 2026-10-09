@@ -6,7 +6,7 @@ Agenvo uses Pino for application logs. Every event includes a readable `message`
 
 ## Find a failed call
 
-Filter application logs by `service = "agenvo"`, then search for the `requestId` returned by the MCP tool. Tool completion records include `tool`, `execution`, `durationMs` and, on failure, `errorCode`. Each entry in execute’s `result.calls` has its own requestId; its runtime.call.completed log includes deviceId, instanceId and method.
+Filter application logs by `service = "agenvo"`. A native call's requestId is available inside the script's call() result; return it when you need to correlate the response with runtime.call.completed logs. These logs include deviceId, instanceId, method and execution. Script failures also attach dispatched confirmations and a script requestId for mcp.tool.completed. Tool completion records include tool, durationMs and, on failure, errorCode; execute does not aggregate native execution states or append a script requestId to successful output.
 
 ```json
 {"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call thread/read on example-device/coding: not_started (device_offline)"}
