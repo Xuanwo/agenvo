@@ -93,7 +93,9 @@ Create a terminal container with `workspace.create`, or add a shell pane beside 
 
 `agent.prompt` and `agent.send-keys` address the native `name`; pane input addresses `paneId`. Callers can inspect the current agent or terminal when deciding what input to send.
 
-Read `agent.read` or `pane.read`. If history is unavailable while the Agent is busy, select source `visible` explicitly. Output is a bounded terminal snapshot. Questions can be answered with native text and keys after inspecting the current UI. Do not infer structured request IDs or durable history from terminal output.
+Read `agent.read` or `pane.read`; `lines` defaults to `80` and `source` to `recent-unwrapped`. If history is unavailable while the Agent is busy, select source `visible` explicitly. Output is a bounded terminal snapshot. Questions can be answered with native text and keys after inspecting the current UI. Do not infer structured request IDs or durable history from terminal output.
+
+Herdr parameter validation failures return `invalid_params` with field paths and reasons in `error.message`. Paths are JSON arrays such as `["lines"]`; `[]` identifies an error on the whole parameter object, such as an unrecognized key.
 
 For change-triggered observation, use the existing [events protocol](events.md), then read current state and output through execute.
 
