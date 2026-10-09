@@ -27,6 +27,16 @@ jobs:
       - run: npm test
       - run: npm run test:integration
         timeout-minutes: 3
+      - name: Diagnose repeated Windows Connector startup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 8
+        run: |
+          1..20 | ForEach-Object {
+            Write-Output "Connector startup attempt $_"
+            node node_modules/tsx/dist/cli.mjs --test tests/integration/lody.test.ts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - run: npm run test:packages
       - run: npm audit --audit-level=high
   native:
