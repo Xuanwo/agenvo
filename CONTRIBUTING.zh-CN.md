@@ -43,7 +43,7 @@ npm run test:adapters
 - `packages/protocol`：通信 schema、限制与执行结果。
 - `packages/relay`：共享 Relay、MCP、事件投递与管理网页。
 - `packages/connector`：共享连接、配置存储、观察与 CLI 机制。
-- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`：独立 Connector，拥有各自的配置 schema 与适配器。
+- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`、`apps/opencode`：独立 Connector，拥有各自的配置 schema 与适配器。
 - `apps/server`、`apps/cloudflare`：VPS 与 Cloudflare 宿主。
 
 新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器遵循 [Connector 契约](design/agent-management.zh-CN.md#新增或扩展-connector)：通过现有 `search` 和 `execute` 工具暴露可发现的原生方法，使用共同操作术语，并说明交互语义。不添加可能重复写入的自动重试。
@@ -52,7 +52,7 @@ npm run test:adapters
 
 兼容性只针对已正式对外发布的 Agenvo 版本，内部开发版本不作为兼容目标。详见 [AGENTS.md](AGENTS.md)。
 
-六个发行包统一版本，内部 workspace 包保持 private 并在构建时打包。`npm run test:packages` 在临时目录安装真实 npm tarball，验证入口与后端隔离。测试不会发布 npm 包。
+发行包统一版本，内部 workspace 包保持 private 并在构建时打包。`npm run test:packages` 在临时目录安装真实 npm tarball，验证入口与后端隔离。测试不会发布 npm 包。
 
 回归测试覆盖启动确认先于真实 Agent 就绪而超时、重新发现但不重复启动、没有受管启动元数据的 Agent 仍可发送、工作中备用屏幕历史读取回退到可见终端，以及原生错误、Relay 超时和 Connector 断线保留 requestId。测试身份、状态和凭据全部在本地生成；不要把事件截图、真实提示词或生产标识复制到测试中。客户端尚未发出 HTTP 请求时的取消，不属于服务端测试可证明的范围。
 
@@ -63,3 +63,5 @@ Lody 云端协议测试随 `npm test` 和 `npm run test:integration` 执行，�
 Lody 本地系统测试使用固定的 `lody@0.104.0` 原生 daemon/ACP、Codex 0.160.1 和隔离模型，通过 Relay MCP 验证创建、发送、读取、精确取消与断线后不重发。npm bundle 固定为云端构建，fixture 只将四处平台选择常量改为 OSS；这不等于验证未经改动的 OSS 发行物。协议和执行代码未修改，不读取个人配置或使用生产账号。
 
 PR 标题使用 Conventional Commits（`fix:`、`feat:`，不兼容变更使用 `feat!:`）。Squash merge 使用标题确定下一版本。Release Please 为全部 workspace 维护一个发版 PR，详见[发版流程](RELEASING.md)。
+
+OpenCode 系统测试使用安装器固定的 `opencode-ai@1.18.35`、隔离原生状态和本地模型，覆盖跨项目外部会话、真实 MCP 调用、事件、执行中重启 Connector 后保持运行、中断与继续，不使用个人凭据或生产模型提供者。

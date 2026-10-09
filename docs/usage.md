@@ -59,6 +59,10 @@ The default configuration directory is `~/.config/agenvo/paseo`. Instance setup 
 
 Discovery includes agents created by other clients. Creating an agent sends no prompt. Sends request Codex `full-access` or Claude `bypassPermissions`; existing native provider options can take precedence over these modes. Default input interrupts active work; `steer` can also replace or start a turn. Question/decision responses are explicit. Native cancel, archive and resume are available through `paseo.agents.*`; archive stops execution, and resume can return a new Agent ID. Keep that ID: resumed agents without a workspace may not appear in the native directory. `paseo.workspaces.archive` archives a workspace and stops its agents and terminals. Paseo may remove its managed worktree checkout when no active workspace still references it, keeping the branch. Successful archival does not confirm directory removal: native cleanup can be skipped or fail independently. Closing the Connector leaves Paseo and its agents running.
 
+## OpenCode
+
+Use `agenvo-opencode` to attach an existing OpenCode HTTP service and manage native sessions across projects. See the [OpenCode guide](opencode.md).
+
 ## Lody
 
 Use `agenvo-lody` for an authorized cloud workspace or an existing local daemon; see the [Lody guide](lody.md) for configuration, credentials and behavior.

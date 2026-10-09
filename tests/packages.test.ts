@@ -27,6 +27,7 @@ test("workspace boundaries keep shared libraries independent of applications", a
     "apps/herdr",
     "apps/codex-app-server",
     "apps/paseo",
+    "apps/opencode",
     "apps/amp",
 
     "apps/lody",
@@ -41,6 +42,7 @@ test("workspace boundaries keep shared libraries independent of applications", a
     herdr: ["protocol", "connector"],
     "codex-app-server": ["protocol", "connector"],
     paseo: ["protocol", "connector"],
+    opencode: ["protocol", "connector"],
     amp: ["protocol", "connector"],
 
     lody: ["protocol", "connector"],
