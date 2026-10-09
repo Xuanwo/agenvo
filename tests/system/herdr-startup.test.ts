@@ -53,7 +53,12 @@ exit $LASTEXITCODE
     };
     const native = herdrFixture(config, "test");
     await native.start();
-    lab.cleanup(() => native.stop());
+    let paneId: string | undefined;
+    lab.cleanup(async () => {
+      if (!t.passed)
+        t.diagnostic(JSON.stringify(await native.diagnostics(paneId)));
+      await native.stop();
+    });
     const deviceId = await lab.connect([config]);
     const target = { deviceId, instanceId: "runtime" };
     const call = async (method: string, params = {}) =>
@@ -71,7 +76,7 @@ exit $LASTEXITCODE
     const ref = {
       session: "test",
     };
-    const paneId = (await call("workspace.create", ref)).result.result.root_pane
+    paneId = (await call("workspace.create", ref)).result.result.root_pane
       .pane_id;
     if (process.platform === "win32") {
       // Herdr's Windows PTY rebuilds PATH from the registry. Configure this
@@ -101,6 +106,8 @@ exit $LASTEXITCODE
         "fixture",
         "-c",
         'model_provider="fixture"',
+        "-c",
+        'tui.status_line=["model"]',
         ...Object.entries(model.config).flatMap(([key, value]) => [
           "-c",
           `${key}=${JSON.stringify(value)}`,
@@ -138,8 +145,16 @@ exit $LASTEXITCODE
         });
         return { agent, visible };
       },
-      ({ agent, visible }) =>
-        !!agent && JSON.stringify(visible).includes("Ask Codex to do anything"),
+      ({ agent, visible }) => {
+        const output = visible.result?.output ?? "";
+        // The provisional composer also shows the placeholder. The configured
+        // model status line appears only after the real chat widget initializes.
+        return (
+          !!agent &&
+          output.includes("Ask Codex to do anything") &&
+          /^\s*fixture\s*$/m.test(output)
+        );
+      },
       20000,
     );
     const agent = ready.agent;

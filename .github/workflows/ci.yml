@@ -47,6 +47,18 @@ jobs:
         include:
           - os: windows-latest
             replica: 2
+          - os: windows-latest
+            replica: 3
+          - os: windows-latest
+            replica: 4
+          - os: windows-latest
+            replica: 5
+          - os: windows-latest
+            replica: 6
+          - os: windows-latest
+            replica: 7
+          - os: windows-latest
+            replica: 8
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +78,7 @@ jobs:
         timeout-minutes: 3
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       - name: Compare delayed unmanaged startup before and after the fix
-        if: ${{ matrix.os == 'windows-latest' && matrix.replica == 1 }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.os == 'windows-latest' && matrix.replica == 1 }}
         shell: bash
         run: |
           node --input-type=module <<'JS'
@@ -78,10 +90,11 @@ jobs:
           const before = execFileSync('git', ['show', '7e6259d:tests/adapters/herdr-external.test.ts'], { encoding: 'utf8' });
           const inject = (source) => source
             .replace('realpath, rm', 'realpath, rm, writeFile')
+            .replace('      backendGeneration: service.backendGeneration,', '')
             .replace('    const args = [\n      codex,', `
               await writeFile(join(root, 'codex.cmd'), [
                 '@echo off',
-                '"' + process.execPath + '" -e "setTimeout(()=>{},11000)"',
+                '"' + process.execPath + '" -e "setTimeout(()=>{},12000)"',
                 'call "' + codex + '" %*',
               ].join('\\r\\n'));
               const args = [

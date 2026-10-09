@@ -64,6 +64,8 @@ test(
       "fixture",
       "-c",
       'model_provider="fixture"',
+      "-c",
+      'tui.status_line=["model"]',
       ...Object.entries(model.config).flatMap(([key, value]) => [
         "-c",
         `${key}=${JSON.stringify(value)}`,
@@ -92,8 +94,16 @@ test(
         });
         return { agent, visible };
       },
-      ({ agent, visible }) =>
-        !!agent && JSON.stringify(visible).includes("Ask Codex to do anything"),
+      ({ agent, visible }) => {
+        const output = visible.output ?? "";
+        // The provisional composer also shows the placeholder. The configured
+        // model status line appears only after the real chat widget initializes.
+        return (
+          !!agent &&
+          output.includes("Ask Codex to do anything") &&
+          /^\s*fixture\s*$/m.test(output)
+        );
+      },
       20000,
     );
     milestone("Codex UI ready");

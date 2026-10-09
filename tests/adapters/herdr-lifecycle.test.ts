@@ -55,13 +55,7 @@ test(
     await adapter.init();
     const call = async (method: string, params = {}) =>
       (await adapter.call(method, params)).result as any;
-    const service = (await call("session.list")).items.find(
-      (s: any) => s.session === "test",
-    );
-    const ref = {
-      session: "test",
-      backendGeneration: service.backendGeneration,
-    };
+    const ref = { session: "test" };
     const paneId = (await call("workspace.create", ref)).result.root_pane
       .pane_id;
     // A separate console keeps this child alive when the pane's ConPTY closes.
@@ -82,7 +76,7 @@ test(
     pid = undefined;
     await native.start();
     await native.stop();
-    // No filesystem retries: stop must finish releasing the owned working directory.
-    await rm(root, { recursive: true });
+    // Windows may release filesystem handles shortly after process exit.
+    await rm(root, { recursive: true, maxRetries: 10, retryDelay: 100 });
   },
 );

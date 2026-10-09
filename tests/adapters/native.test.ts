@@ -1,6 +1,7 @@
 import { codexServer } from "../support/codex-server.js";
 import { socketTempDir } from "../support/environment.js";
 import { until } from "../support/environment.js";
+import { modelServer } from "../support/model-server.js";
 import { binary } from "@agenvo/connector/cli/binary";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -199,6 +200,8 @@ setInterval(() => {}, 1000);
   }
   assert.ok(recovered, "same pane must accept new work after interruption");
   // Start only the interactive UI: no prompt/model turn or approval is submitted.
+  const model = await modelServer();
+  t.after(() => model.close());
   if (process.platform === "win32") {
     // Herdr's Windows PTY uses the registry PATH, not the fixture server's PATH.
     await b.call("pane.run", {
@@ -217,44 +220,35 @@ setInterval(() => {}, 1000);
     name: "inspect",
     paneId: nativePane,
     kind: "codex",
-    timeoutMs: 4000,
+    timeoutMs: 20000,
     args: [
       "--dangerously-bypass-approvals-and-sandbox",
       "--no-alt-screen",
       "--no-daemon",
+      "--model",
+      "fixture",
+      "-c",
+      'model_provider="fixture"',
+      ...Object.entries(model.config).flatMap(([key, value]) => [
+        "-c",
+        `${key}=${JSON.stringify(value)}`,
+      ]),
     ],
   });
   assert.equal(started.execution, "starting");
-  let discovered = false;
-  for (let i = 0; i < 70; i++) {
-    const agents = await b.call("agent.list", ref);
-    if (JSON.stringify(agents).includes('"inspect"')) {
-      try {
-        await b.call("agent.explain", { ...ref, name: nativePane });
-        discovered = true;
-        break;
-      } catch (error: any) {
-        if (
-          !["agent_explain_unavailable", "agent_not_found"].includes(
-            error.native?.code,
-          )
-        )
-          throw error;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!discovered) {
-    t.diagnostic(
-      JSON.stringify(await b.call("agent.get", { ...ref, name: "inspect" })),
-    );
-    t.diagnostic(
-      JSON.stringify(await b.call("pane.read", { ...ref, paneId: nativePane })),
-    );
-  }
-  assert.ok(discovered, "native agent must be discoverable");
-  const startup: any = (await a.call("agent.get", { ...ref, name: "inspect" }))
-    .result;
+  // Names are visible while native startup is still pending and can disappear
+  // on timeout. Observe the completed launch before testing name-based calls.
+  const startup: any = await until(
+    async () =>
+      (await a.call("agent.get", { ...ref, name: "inspect" })).result as any,
+    (value) => value.startup?.state === "settled",
+    25000,
+  );
+  assert.equal(
+    startup.startup.outcome.execution,
+    "accepted",
+    JSON.stringify(startup),
+  );
   assert.equal(startup.result.agent.name, "inspect");
   const found: any = (await b.call("agent.list", ref)).result;
   assert.ok(found.result.agents.some((agent: any) => agent.name === "inspect"));
@@ -286,6 +280,7 @@ setInterval(() => {}, 1000);
     (await b.call("agent.read", { ...ref, name: nativePane })).execution,
     "accepted",
   );
+  assert.equal(model.requests.length, 0);
   await native.stop();
   await assert.rejects(a.call("pane.read", { ...ref, paneId: nativePane }), {
     code: "runtime_unavailable",
