@@ -43,7 +43,7 @@ Source responsibilities:
 - `packages/protocol`: wire schemas, limits and execution outcomes.
 - `packages/relay`: shared Relay, MCP, event delivery and administration UI.
 - `packages/connector`: shared connection, configuration storage, observation and CLI mechanisms.
-- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`: independently installed Connectors owning their configuration schemas and adapters.
+- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`, `apps/opencode`: independently installed Connectors owning their configuration schemas and adapters.
 - `apps/server`, `apps/cloudflare`: VPS and Cloudflare hosts.
 
 New deployment hosts must reuse the routing core and preserve authorization, epoch and uncertain-execution semantics. Native adapter additions follow the [Connector contract (Chinese)](design/agent-management.zh-CN.md#新增或扩展-connector): expose discoverable native methods through the existing `search` and `execute` tools, with shared operation terms and explicit interaction semantics. Do not add retry mechanisms that can duplicate writes.
@@ -52,7 +52,7 @@ Before sending a change, review the diff for private paths and credentials, run 
 
 Compatibility commitments apply only to formally published Agenvo releases; internal development versions are not compatibility targets. See [AGENTS.md](AGENTS.md).
 
-The six release packages share a version; internal workspace packages remain private and are bundled at build time. `npm run test:packages` installs real npm tarballs into temporary directories and verifies their entry points and backend isolation. Tests never publish packages.
+Release packages share a version; internal workspace packages remain private and are bundled at build time. `npm run test:packages` installs real npm tarballs into temporary directories and verifies their entry points and backend isolation. Tests never publish packages.
 
 Regression coverage includes startup confirmation expiring before the real agent is ready, rediscovery without duplicate launch, sending to an agent without managed startup metadata, busy alternate-screen history falling back to the visible viewport, and preserving request IDs for native errors, Relay timeouts and Connector disconnects. Fixtures generate all identities, state and credentials locally; never copy incident screenshots, prompts or production identifiers into tests. Client cancellation before an HTTP request is dispatched remains outside server-side test coverage.
 
@@ -63,3 +63,5 @@ Lody cloud protocol tests run with `npm test` and `npm run test:integration`, st
 Lody local system tests use pinned `lody@0.104.0` native daemon/ACP, Codex 0.160.1 and an isolated model through Relay MCP, covering creation, sending, history, exact cancellation and no replay after disconnect. The npm bundle is a cloud build; the fixture changes only its four platform selection constants to OSS. This does not certify an unmodified OSS distribution. Protocol and execution code are unchanged; no personal configuration or production account is used.
 
 For package publication and GitHub releases, follow [Releasing](RELEASING.md).
+
+OpenCode system tests use the installer-pinned `opencode-ai@1.18.35`, isolated native state and a local model. They cover external sessions across projects, real MCP calls, events, active execution surviving Connector restart, interruption and continuation. No personal credentials or production providers are used.

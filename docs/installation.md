@@ -64,3 +64,5 @@ Paseo also runs independently; configure its daemon and providers before attachi
 Experimental Amp integration uses a local plugin and an independently running Amp host. Follow the [Amp guide](amp.md) for setup, scope, and verification limits.
 
 Lody supports cloud access and local daemon attachment in one Connector. See the [Lody guide](lody.md) to select and configure the connection.
+
+OpenCode support is new in the current source tree and is not included in the published preview. Build it from the current checkout and follow the [OpenCode guide](opencode.md).

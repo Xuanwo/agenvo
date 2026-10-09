@@ -1,0 +1,44 @@
+{
+  "name": "@agenvo/opencode",
+  "version": "0.2.0-rc.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xuanwo/agenvo.git",
+    "directory": "apps/opencode"
+  },
+  "engines": {
+    "node": ">=24.13.0"
+  },
+  "devDependencies": {
+    "@agenvo/connector": "0.2.0-rc.1",
+    "@agenvo/protocol": "0.2.0-rc.1",
+    "zod": "4.6.5"
+  },
+  "description": "OpenCode server connector for Agenvo",
+  "bin": {
+    "agenvo-opencode": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build.mjs opencode",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "execa": "9.6.0",
+    "pino": "10.4.0",
+    "ws": "8.22.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  }
+}

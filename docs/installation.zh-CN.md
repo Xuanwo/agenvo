@@ -64,3 +64,5 @@ Paseo 同样独立运行；先配置 daemon 和 provider，再附着 `agenvo-pas
 实验性的 Amp 集成通过本地插件接入独立运行的 Amp 宿主。配置、共享范围和验证边界见 [Amp 指南](amp.zh-CN.md)。
 
 Lody 在同一个 Connector 中支持云端访问与本机 daemon 附着。按 [Lody 指南](lody.zh-CN.md)选择连接方式并配置和验证。
+
+OpenCode 支持是当前源码树中的新增能力，不包含在已发布的预览版中。从当前 checkout 构建，并按 [OpenCode 指南](opencode.zh-CN.md)连接。

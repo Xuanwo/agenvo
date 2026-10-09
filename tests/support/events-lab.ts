@@ -278,7 +278,7 @@ export async function eventsLab(t: TestContext, prefix = "") {
   const connect = async (instances: InstanceConfig[]) => {
     instances = await Promise.all(
       instances.map(async (c) =>
-        c.kind === "paseo" || c.kind === "lody"
+        c.kind === "paseo" || c.kind === "lody" || c.kind === "opencode"
           ? c
           : {
               ...c,

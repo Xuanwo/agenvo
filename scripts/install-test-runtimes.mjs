@@ -60,6 +60,7 @@ await execa(
     "@getpaseo/cli@0.11.1",
     "@ampcode/cli@0.0.1791446565-g95411c",
     "lody@0.104.0",
+    "opencode-ai@1.18.35",
   ],
   { maxBuffer: 1024 * 1024 },
 );

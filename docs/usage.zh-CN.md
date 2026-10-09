@@ -59,6 +59,10 @@ agenvo-paseo run
 
 发现范围包括其他客户端创建的 Agent。创建不发送提示词。输入请求 Codex `full-access` 或 Claude `bypassPermissions`，已有原生 provider options 可能优先于 mode。默认输入会中断活跃执行；`steer` 也可能替换执行或启动新轮。问题和决定通过显式交互回答。原生 cancel、archive 和 resume 使用 `paseo.agents.*`：archive 会停止执行，resume 可能返回新 Agent ID。保留该 ID；没有 workspace 的恢复 Agent 可能不出现在原生目录中。`paseo.workspaces.archive` 归档 workspace 并停止其中的 Agent 和终端。没有其他活跃 workspace 引用时，Paseo 可能移除其管理的 worktree 检出，分支保留。归档成功不保证目录已删除：原生清理可能被跳过或独立失败。关闭 Connector 后 Paseo 和 Agent 继续运行。
 
+## OpenCode
+
+使用 `agenvo-opencode` 连接已有 OpenCode HTTP 服务，跨项目管理原生会话。配置与操作见 [OpenCode 指南](opencode.zh-CN.md)。
+
 ## Lody
 
 使用 `agenvo-lody` 连接已授权的云端 workspace 或已有本机 daemon；配置、凭据和行为边界见 [Lody 指南](lody.zh-CN.md)。

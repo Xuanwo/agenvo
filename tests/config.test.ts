@@ -59,6 +59,7 @@ test("free-form instance context survives discovery without changing the approve
       home: "/config/codex",
       endpoint: "ws://127.0.0.1:4500",
     },
+    { kind: "opencode", endpoint: "http://127.0.0.1:4096" },
     { kind: "paseo", endpoint: "ws://127.0.0.1:6767/ws", serverId: "daemon" },
     {
       kind: "amp",
