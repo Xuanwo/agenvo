@@ -125,33 +125,27 @@ exit $LASTEXITCODE
     t.diagnostic(`Native startup deadline result: ${code}`);
 
     await writeFile(gate, "release");
-    const listed = await until(
-      () => call("agent.list", ref),
-      (r) =>
-        r.result.result.agents.some(
+    // A timed-out launch can have no readiness metadata, and process detection
+    // can identify the launcher before Codex starts. Wait for both discovery and
+    // the input UI within one cold-start deadline.
+    const ready = await until(
+      async () => {
+        const listed = await call("agent.list", ref);
+        const agent = listed.result.result.agents.find(
           (a: any) => a.pane_id === paneId && a.agent === "codex",
-        ),
+        );
+        const visible = await call("pane.read", {
+          ...ref,
+          paneId,
+          source: "visible",
+        });
+        return { agent, visible };
+      },
+      ({ agent, visible }) =>
+        !!agent && JSON.stringify(visible).includes("Ask Codex to do anything"),
       20000,
-    ).catch(async (error) => {
-      const visible = await call("pane.read", {
-        ...ref,
-        paneId,
-        source: "visible",
-        lines: 100,
-      });
-      throw new Error(
-        `Delayed native Codex was not discovered: ${JSON.stringify(visible)}; launches: ${await readFile(launches, "utf8").catch(() => "missing")}`,
-        { cause: error },
-      );
-    });
-    // A timed-out launch may have no readiness metadata. Use the terminal UI.
-    await until(
-      () => call("pane.read", { ...ref, paneId, source: "visible" }),
-      (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
     );
-    const agent = listed.result.result.agents.find(
-      (a: any) => a.pane_id === paneId,
-    );
+    const agent = ready.agent;
     assert.notEqual(agent.interactive_ready, true);
     assert.equal(
       (

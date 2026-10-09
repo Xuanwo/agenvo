@@ -1,7 +1,8 @@
 import { isolatedEnvironment, until } from "../support/environment.js";
+import { stopProcess } from "../support/process.js";
 // Test-owned native service. Runtime provisioning deliberately bypasses Agenvo.
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { type HerdrConfig } from "../support/config.js";
@@ -118,7 +119,16 @@ export function herdrFixture(
       throw new Error("Test Herdr did not start");
     },
     async stop() {
-      if (!owned || !(await exists())) return;
+      if (!owned) return;
+      if (process.platform === "win32") {
+        // Herdr 0.9.3 can exit without terminating pane descendants on Windows.
+        // Kill the test-owned tree while its root still exists for taskkill /T.
+        await stopProcess(server!);
+        await rm(socket, { force: true });
+        owned = false;
+        return;
+      }
+      if (!(await exists())) return;
       await exec(config.binary, ["server", "stop"], {
         env,
         cwd: config.cwd,
@@ -127,7 +137,6 @@ export function herdrFixture(
       for (let i = 0; i < 80; i++) {
         if (!(await exists())) {
           // The endpoint disappears before Herdr finishes closing its panes.
-          // Windows keeps their working directory locked until process exit.
           await until(
             () => server!.exitCode !== null || server!.signalCode !== null,
             (exited) => exited,
