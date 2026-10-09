@@ -13,9 +13,21 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
   });
   const secret = "fixture-sensitive-content";
   const cases = [
-    { result: { execution: "accepted", result: secret }, level: "info" },
-    { result: new Fault("device_offline", secret), level: "warn" },
-    { result: new Error(secret, { cause: new Error(secret) }), level: "error" },
+    {
+      result: { execution: "accepted", result: secret },
+      level: "info",
+      summary: "accepted",
+    },
+    {
+      result: new Fault("device_offline", secret),
+      level: "warn",
+      summary: "not_started (device_offline)",
+    },
+    {
+      result: new Error(secret, { cause: new Error(secret) }),
+      level: "error",
+      summary: "unknown (internal_error)",
+    },
   ] as const;
   for (const [id, scenario] of cases.entries()) {
     const relay: McpRelay = {
@@ -76,6 +88,10 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
     assert.equal(record.deviceId, "device");
     assert.equal(record.instanceId, "runtime");
     assert.equal(record.method, "thread/read");
+    assert.equal(
+      record.message,
+      `Native call thread/read on device/runtime: ${scenario.summary}`,
+    );
     const completed = records.find((r) => r.requestId === outcome.requestId);
     assert.equal(completed.event, "mcp.tool.completed");
     assert.equal(completed.tool, "execute");

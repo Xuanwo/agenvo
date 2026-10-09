@@ -360,7 +360,8 @@ export class Relay {
     this.host.accept(socket, id);
     log.info(
       { event: "connector.connected", deviceId: id, epoch },
-      "Connector connected",
+      "Connector %s connected",
+      id,
     );
   }
   instances(
@@ -615,7 +616,8 @@ export class Relay {
     const { deviceId, epoch } = ws.deserializeAttachment();
     log[code === 1000 || code === 1001 ? "info" : "warn"](
       { event: "connector.disconnected", deviceId, epoch, closeCode: code },
-      "Connector disconnected with code %d",
+      "Connector %s disconnected with code %d",
+      deviceId,
       code,
     );
     this.failConnection(ws);
@@ -626,7 +628,8 @@ export class Relay {
     const { deviceId, epoch } = ws.deserializeAttachment();
     log.error(
       { event: "connector.connection.failed", deviceId, epoch },
-      "Connector connection failed",
+      "Connector %s connection failed",
+      deviceId,
     );
     this.failConnection(ws);
     ws.close(1011, "connection_error");

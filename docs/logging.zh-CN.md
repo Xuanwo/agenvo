@@ -9,7 +9,7 @@ Agenvo 使用 Pino 记录应用日志。每条事件包含可读的 `message`、
 先按 `service = "agenvo"` 筛选应用日志，再搜索 MCP 工具返回的 `requestId`。工具完成记录包含 `tool`、`execution`、`durationMs`，失败时还包含 `errorCode`。运行时调用还包含 `deviceId`、`instanceId` 和 `method`。
 
 ```json
-{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call completed"}
+{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call thread/read on example-device/coding: not_started (device_offline)"}
 ```
 
 成功调用使用 `info`；设备离线、原生拒绝等失败结果使用 `warn`；内部故障使用 `error`。MCP 调用完成不代表原生任务已经完成；重复写操作前应检查 `execution` 和原生状态。
@@ -18,7 +18,9 @@ Agenvo 使用 Pino 记录应用日志。每条事件包含可读的 `message`、
 
 ## Cloudflare 调用日志
 
-Cloudflare 会独立于 Pino 生成平台日志：HTTP 方法与 URL、WebSocket 事件的 `message` 和 `close`、RPC 入口名称以及 alarm 的计划时间。这些内容不是应用消息。日常排障可以按应用的 `service` 字段筛选，需要检查平台调用时再取消筛选。仓库配置保留调用日志，并从日志和 trace 中移除 URL 查询参数。
+仓库通过 `observability.logs.invocation_logs: false` 默认关闭 Cloudflare 调用日志，让日常日志显示应用事件。原生调用消息直接包含方法、设备与实例、执行状态和错误码，连接消息标明设备。结构化字段仍可用于筛选。
+
+Cloudflare 调用日志包含 HTTP 方法与 URL、WebSocket 事件的 `message` 和 `close`、RPC 入口名称以及 alarm 的计划时间。这些是平台调用摘要，不是应用消息。排查平台调用时，在部署配置中设置 `observability.logs.invocation_logs: true` 并重新部署，即可恢复逐次调用的请求、响应和平台元数据。按 `service = "agenvo"` 筛选可只查看应用事件。仓库配置从日志和 trace 中移除 URL 查询参数。
 
 本地 workerd 测试验证传入 console 的对象。生产控制台的展示和筛选效果取决于实际部署版本与 Cloudflare 的日志采集。
 

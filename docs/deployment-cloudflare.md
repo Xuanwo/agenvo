@@ -36,4 +36,4 @@ Verify `/health`, sign in, pair a device, and call `search` from your MCP client
 
 ## Logs
 
-See [Reading logs](logging.md) to separate application events from Cloudflare invocation logs and correlate failed calls. When updating an existing local manifest, copy `observability.redact_query_string: true` from the repository manifest before deploying.
+See [Reading logs](logging.md) to correlate failed calls and enable Cloudflare invocation logs when needed. When updating an existing local manifest, copy `observability.logs.invocation_logs: false` and `observability.redact_query_string: true` from the repository manifest before deploying.
