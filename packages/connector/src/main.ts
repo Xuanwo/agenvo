@@ -98,7 +98,13 @@ export async function run<T extends InstanceConfig>(
       .then(() => atomicJson(join(dir, "status.json"), snapshot))
       .catch((err) => {
         connectionLog.error(
-          { event: "connector.status.failed", state: snapshot.state, err },
+          {
+            event: "connector.status.failed",
+            state: snapshot.state,
+            code: (err as NodeJS.ErrnoException).code,
+            syscall: (err as NodeJS.ErrnoException).syscall,
+            err,
+          },
           "Could not persist Connector status",
         );
       });
