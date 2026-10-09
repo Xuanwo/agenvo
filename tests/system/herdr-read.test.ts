@@ -47,7 +47,12 @@ test(
       await t.test(`${method} discovery`, async () => {
         const response = await lab.rpc("tools/call", {
           name: "search",
-          arguments: { query: method, deviceId, instanceId: "herdr" },
+          arguments: {
+            query: method,
+            deviceId,
+            instanceId: "herdr",
+            includeSchema: true,
+          },
         });
         const catalog = JSON.parse(response.content[0].text);
         const schema = catalog.result.items[0].methods.find(
