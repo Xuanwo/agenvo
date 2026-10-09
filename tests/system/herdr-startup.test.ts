@@ -90,12 +90,14 @@ exit $LASTEXITCODE
         (r) => JSON.stringify(r).includes("AGENVO_PATH_READY"),
       );
     }
+    const timeoutMs = 4000;
+    const launchStarted = performance.now();
     const created = await call("agent.start", {
       ...ref,
       name: "delayed",
       paneId,
       kind: "codex",
-      timeoutMs: 4000,
+      timeoutMs,
       args: [
         "--no-daemon",
         "--model",
@@ -114,7 +116,13 @@ exit $LASTEXITCODE
       () => call(query.method, query.params),
       (r) => r.result?.startup?.state === "settled",
     );
-    assert.equal(settled.result.startup.outcome.error.native.code, "timeout");
+    // Herdr expires the name at its server deadline. Its CLI can observe that
+    // before its own polling deadline and report the lost name instead of timeout.
+    const code = settled.result.startup.outcome.error.native.code;
+    assert.ok(["timeout", "agent_name_not_found"].includes(code), code);
+    assert.ok(performance.now() - launchStarted >= timeoutMs);
+    assert.equal((await readFile(launches, "utf8")).trim(), "started");
+    t.diagnostic(`Native startup deadline result: ${code}`);
 
     await writeFile(gate, "release");
     const listed = await until(
