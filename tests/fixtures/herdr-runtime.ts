@@ -43,21 +43,6 @@ export function herdrFixture(
       const sources: Record<string, Promise<unknown>> = {
         agents: command(["agent", "list"]),
         herdrLog: readFile(join(dirname(socket), "herdr-server.log"), "utf8"),
-        codexLog: (async () => {
-          const { DatabaseSync } = await import("node:sqlite");
-          const db = new DatabaseSync(join(env.CODEX_HOME, "logs_2.sqlite"), {
-            readOnly: true,
-          });
-          try {
-            return db
-              .prepare(
-                "SELECT ts, level, target, feedback_log_body FROM logs ORDER BY id DESC LIMIT 100",
-              )
-              .all();
-          } finally {
-            db.close();
-          }
-        })(),
       };
       if (paneId) {
         sources.processes = command(["pane", "process-info", "--pane", paneId]);
