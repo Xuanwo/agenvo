@@ -9,6 +9,7 @@ This prerelease validates tag-triggered npm Trusted Publishing. It is published 
 - Add Paseo workspace archival.
 - Unify Agenvo branding and redesign browser administration.
 - Retry transient Windows file replacement failures so Connector status reaches `online` after a successful connection. Persistent errors are reported without exposing credentials.
+- Emit readable structured application logs on Cloudflare Workers.
 
 Install a preview package explicitly, for example `npm install --global @agenvo/herdr@0.2.0-rc.1`. See the [installation guide](docs/installation.md) for the complete package set.
 
