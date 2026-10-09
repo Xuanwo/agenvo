@@ -121,6 +121,9 @@ test("MCP returns earlier results when a later call is denied without rescanning
       }),
     }),
     {
+      release: () => {
+        throw Error("execute must not query releases");
+      },
       instances: () => {
         throw Error("execute must not scan the instance catalog");
       },

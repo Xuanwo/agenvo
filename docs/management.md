@@ -30,6 +30,8 @@ Both Connectors use common operation terms: list, create, read, submit input, in
 
 Discovery results also carry the optional owner-supplied `context` text unchanged. Read it when choosing and using an instance. Empty queries, matching method queries, and offline instances can all include the last announcement. Context does not participate in method keyword matching, guarantee live capabilities or permissions, or automatically enter native calls. See [instance context configuration](usage.md#add-instance-context).
 
+Search may also return optional `result.updates` for newer formal Agenvo server and Connector versions within the selected approved scope. These are release notices, not native runtime updates or compatibility guarantees. See [Updating](updating.md) to assess and apply them with existing tools. Missing notices do not prove the installed versions are current.
+
 ## Execute
 
 Pass this body to `execute`, replacing the target with discovered IDs:

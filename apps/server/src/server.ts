@@ -1,3 +1,4 @@
+import type { ReleaseFetch } from "@agenvo/relay/releases";
 import { RelayAddress, baseUrlSchema } from "@agenvo/protocol/address";
 import { logger } from "@agenvo/logging";
 import { sendWebhook } from "@agenvo/relay/webhook";
@@ -59,6 +60,7 @@ export async function startServer(
   input: ServerConfig,
   adminSecret = process.env.AGENVO_ADMIN_SECRET ?? "",
   webhook: WebhookTransport = sendWebhook,
+  fetchRelease: ReleaseFetch = fetch,
 ) {
   const config = serverConfig.parse(input);
   const address = new RelayAddress(config.baseUrl);
@@ -109,6 +111,7 @@ export async function startServer(
       connections.set(id, set);
     },
     sendWebhook: webhook,
+    fetchRelease,
     scheduleCleanup: async (at = Date.now() + 600000) => {
       if (closing || at >= eventDue) return;
       clearTimeout(eventTimer);

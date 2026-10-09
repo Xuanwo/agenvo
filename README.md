@@ -28,6 +28,7 @@ Ask your coding agent to set up Agenvo with the [installation guide](docs/instal
 ## If you are an AI agent
 
 - Set up Agenvo for the user and connect their computers and assistant: [Installation](docs/installation.md).
+- Inspect a formal release notice and update an existing deployment: [Updating](docs/updating.md).
 - Manage agent work through an existing MCP connection: [Agent management](docs/management.md).
 - Watch for agent changes and react to them: [Runtime events](docs/events.md).
 - Diagnose connection, authorization, or failed calls: [Diagnostics](docs/usage.md#revoke-and-diagnose) and [logs](docs/logging.md).
