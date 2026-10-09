@@ -1,25 +1,31 @@
 # Releasing Agenvo
 
-Push a version tag to publish every public npm workspace through GitHub Actions and npm Trusted Publishing. The workflow discovers packages from the root `workspaces`; packages marked `private: true` are excluded. No npm token is stored in GitHub.
+Release Please maintains one release PR for Agenvo. Merging it creates a version tag and a draft GitHub Release, then GitHub Actions publishes every public npm workspace through Trusted Publishing. All workspaces share one version; private packages are never published. No npm or long-lived GitHub token is stored in GitHub.
 
 Cloudflare and Docker deployments use the source tag. Releasing does not deploy existing installations or publish a container image.
 
 ## Release a version
 
-1. Prepare the release on `main`. Align the root and workspace versions, internal dependency references, `package-lock.json`, and `packages/protocol/src/index.ts`. Update versioned installation commands and links. Add a dated `## VERSION - YYYY-MM-DD` section to `CHANGELOG.md`, retaining any actual-client acceptance gaps.
-2. Ensure any new public package has completed the one-time setup below.
-3. Push an annotated tag matching the package version:
+1. Use Conventional Commit PR titles. The repository uses squash merges with the PR title as the commit title, and the PR title workflow checks the format. `fix:` and `perf:` select a patch release; `feat:` selects a minor release. Mark incompatible changes with `!`, for example `feat!: change pairing configuration`, and explain the migration in the PR. During `0.x`, breaking changes also select a minor release; from `1.0.0`, they select a major release. Documentation, tests, CI, and maintenance changes alone do not trigger a release.
+2. Release Please collects merged changes into `chore(main): release ...`. It updates root and workspace versions, local dependency references, the lockfile, protocol version, annotated installation instructions, and `CHANGELOG.md`. Check the user-facing release notes and migration instructions. The initial manifest starts at the last stable release, `0.1.0`, so the first stable release includes changes already published in the `0.2.0` previews.
+3. Complete the one-time setup below for any new public package before merging the release PR.
+4. Merge the release PR when it is ready. No manual version edits or tag push are needed.
 
-   ```sh
-   git tag -a v0.2.0 -m 'Agenvo 0.2.0'
-   git push origin v0.2.0
-   ```
+The same `.github/workflows/release.yml` run creates the draft/tag and performs publication. It runs Linux, macOS, Windows, native-runtime, and container checks against that exact tag, requires its commit to belong to `main`, builds all public workspaces, and packs immutable tarballs. The publishing job uses OIDC, waits for registry availability, checks archive integrity, installs every exact version in a fresh directory, and runs its CLI entry points. Only then does it upload tarballs and `SHA256SUMS` and publish the GitHub Release.
 
-`.github/workflows/release.yml` runs the existing Linux, macOS, Windows, native-runtime, and container checks. It requires the tagged commit to belong to `main`, builds all public workspaces, validates versions and release notes, and packs immutable tarballs. The publishing job downloads these artifacts, publishes through OIDC, waits for registry availability, checks archive integrity, installs every exact version in a fresh directory, and runs its CLI entry points. Only then does it publish the GitHub Release with the tarballs and `SHA256SUMS`.
+GitHub does not start tag-push workflows for tags created with `GITHUB_TOKEN`. Publication therefore continues directly from Release Please's output in the same workflow. Release PR updates explicitly dispatch `ci.yml` on the bot branch, avoiding a separate approval for bot-triggered CI. All publication stays in `release.yml`, preserving the npm Trusted Publisher workflow identity.
 
-Stable tags such as `v0.2.0` use npm's `latest` dist-tag. Prerelease tags such as `v0.2.0-rc.0` use `next` and create a GitHub prerelease. The workflow rejects a stable release that would replace a newer `latest` version.
+The repository must allow GitHub Actions to create pull requests (Settings → Actions → General → Workflow permissions). Release Please uses the workflow's short-lived token. Only the planning job can write PRs and dispatch CI; the publishing job has `contents: write` and `id-token: write`.
 
-A manual run of the Release workflow performs checks and packing only. It never publishes, and it does not validate OIDC authentication. A successful real publish is required to validate npm trust.
+Stable tags use npm's `latest` dist-tag. Prerelease tags use `next`. Main's Release Please configuration prepares stable releases. For a deliberate preview, prepare matching versions and dated release notes, then push an annotated prerelease tag such as `v0.3.0-rc.0`; the same checks and publishing path apply. The workflow rejects a stable release that would replace a newer `latest` version.
+
+A manual Release run with an empty `tag` input performs checks and packing only. Providing an existing version tag explicitly publishes or recovers that tag. It never moves a tag. A rehearsal does not validate OIDC authentication; a successful real publish is required to validate npm trust.
+
+## Versioned files and new workspaces
+
+`release-please-config.json` treats Agenvo as one release component. Its globbed JSON updaters cover `apps/*/package.json` and `packages/*/package.json`, including new packages and `@agenvo/` dependency references. Lockfile updates are limited to workspace records and internal references, preserving external dependency versions. Private workspaces remain version-aligned without being published.
+
+Versioned prose and source use native `x-release-please-version` annotations. For new package READMEs, place installation commands inside an `x-release-please-start-version` / `x-release-please-end` HTML comment block, as in existing packages. Keep one Agenvo version per annotated line, and keep third-party runtime versions outside annotated lines or blocks. Root workspace patterns and Release Please globs must stay aligned if the repository layout changes.
 
 ## Configure existing packages once
 
@@ -59,7 +65,7 @@ If bootstrap stops partway, inspect registry state. Run it only for still-missin
 
 ## Recover a failed release
 
-Rerun the failed Release workflow at the same tag. Publication is not atomic across packages. Before writing, the script inspects the complete package set: an unregistered package stops the release with bootstrap instructions; an already-published version must have exactly the same integrity as the packed artifact. Matching versions are skipped and only missing versions are published. Authentication failures never fall back to a stored token.
+Rerun the failed jobs in the original Release workflow. If starting a new run, use `gh workflow run release.yml --ref main -f tag=vVERSION` to select the existing tag explicitly. Publication is not atomic across packages. Before writing, the script inspects the complete package set: an unregistered package stops the release with bootstrap instructions; an already-published version must have exactly the same integrity as the packed artifact. Matching versions are skipped and only missing versions are published. Authentication failures never fall back to a stored token.
 
 The registry may take several minutes to expose a newly accepted package. The workflow waits up to ten minutes per package; if npm takes longer, inspect registry state and rerun after processing finishes. Do not move the tag or republish different contents under the same version. A content mismatch requires investigation and, if the published content is wrong, a new version.
 
@@ -75,3 +81,7 @@ npm run release:pack -- /tmp/agenvo-release v0.2.0
 ```
 
 The output contains `manifest.json` with the source commit and archive digests, `SHA256SUMS`, release notes, and all public-package tarballs. Keep the exact artifacts when diagnosing a publication failure.
+
+## Validation boundaries
+
+Automated release checks cover isolated HTTP, WebSocket, MCP, native-runtime integration, package installation, CLI entry points, and archive integrity. They do not establish authenticated Amp or Lody cloud/provider execution, ChatGPT UI discovery, or actual dot wakeups. Those need separate actual-client acceptance; generated release notes link here rather than silently implying those checks passed. Runtime-specific limitations remain in the corresponding user guides.

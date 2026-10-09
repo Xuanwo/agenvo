@@ -1,23 +1,87 @@
 name: Release
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to publish or recover; leave empty for a packing rehearsal"
+        type: string
+        required: false
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+    outputs:
+      ref: ${{ steps.target.outputs.ref }}
+      tag: ${{ steps.target.outputs.tag }}
+      publish: ${{ steps.target.outputs.publish }}
+      build: ${{ steps.target.outputs.build }}
+    steps:
+      - uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4, release-please 17.6.1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: release
+        with:
+          token: ${{ github.token }}
+      - name: Start CI for the release pull request
+        if: steps.release.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+        run: gh workflow run ci.yml --ref "$PR_BRANCH"
+      - name: Select the release checkout
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SOURCE_REF: ${{ github.ref }}
+          SOURCE_SHA: ${{ github.sha }}
+          CREATED_TAG: ${{ steps.release.outputs.tag_name }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          tag="$CREATED_TAG"
+          if [[ "$SOURCE_REF" == refs/tags/* ]]; then tag="${SOURCE_REF#refs/tags/}"; fi
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then tag="$REQUESTED_TAG"; fi
+          if [[ -n "$tag" ]]; then
+            [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "Invalid release tag" >&2; exit 1; }
+            {
+              echo "ref=refs/tags/$tag"
+              echo "tag=$tag"
+              echo "publish=true"
+              echo "build=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "ref=$SOURCE_SHA"
+              echo "publish=false"
+              echo "build=$([[ "$EVENT_NAME" == workflow_dispatch ]] && echo true || echo false)"
+            } >> "$GITHUB_OUTPUT"
+          fi
   checks:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.plan.outputs.ref }}
   build:
-    needs: checks
+    needs: [plan, checks]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ needs.plan.outputs.ref }}
           fetch-depth: 0
       - name: Require a commit on main
         run: git merge-base --is-ancestor HEAD origin/main
@@ -30,7 +94,7 @@ jobs:
       - run: npm run build
       - name: Pack the release
         env:
-          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
         run: npm run release:pack -- "$RUNNER_TEMP/release" "$RELEASE_TAG"
       - uses: actions/upload-artifact@v7
         with:
@@ -38,8 +102,8 @@ jobs:
           path: ${{ runner.temp }}/release/
           if-no-files-found: error
   publish:
-    if: github.event_name == 'push'
-    needs: build
+    if: needs.plan.outputs.publish == 'true'
+    needs: [plan, build]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -47,6 +111,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
