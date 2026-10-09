@@ -1,4 +1,4 @@
-import { codexFixture } from "./support/codex-server.js";
+import { codexServer } from "./support/codex-server.js";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -11,11 +11,12 @@ test("native transport automatically approves permissions and retains user quest
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "agenvo-approval-")),
   );
+  const native = await codexServer(root);
   const config = instanceConfigSchema.parse({
     kind: "codex",
     id: "test",
     label: "test",
-    endpoint: await codexFixture(t, root),
+    endpoint: native.endpoint,
     cwd: root,
     home: root,
   });
@@ -23,6 +24,7 @@ test("native transport automatically approves permissions and retains user quest
   const a = new CodexAdapter(config);
   t.after(async () => {
     await a.close();
+    await native.close();
     await rm(root, {
       recursive: true,
       force: true,

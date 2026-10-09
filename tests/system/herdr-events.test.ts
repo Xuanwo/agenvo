@@ -31,14 +31,14 @@ test(
     lab.cleanup(() => native.stop());
     const device = await lab.connect([config]);
     // Two separately installed backends on one host have independent connection identities.
-    const codex = await codexServer(lab.root);
-    lab.cleanup(codex.close);
+    const codexNative = await codexServer(lab.root);
+    lab.cleanup(codexNative.close);
     const codexDevice = await lab.connect([
       {
         kind: "codex",
         id: "herdr",
         label: "Codex on the same host",
-        endpoint: codex.endpoint,
+        endpoint: codexNative.endpoint,
         cwd: lab.root,
         home: lab.root,
       },

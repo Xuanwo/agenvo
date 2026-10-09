@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { WebSocketServer, type WebSocket } from "ws";
 import { backend } from "../apps/codex-app-server/src/backend.js";
-import { codexFixture } from "./support/codex-server.js";
+import { codexServer } from "./support/codex-server.js";
 import { CodexAdapter } from "../apps/codex-app-server/src/codex.js";
 import { instanceConfigSchema } from "./support/config.js";
 
@@ -373,20 +373,27 @@ test("handshake rejects a different Codex home and doctor reports that boundary"
   );
   const otherHome = join(root, "other");
   await mkdir(otherHome);
+  const native = await codexServer(root);
   const config = await backend.configure(
     {
       id: "test",
       cwd: root,
       home: otherHome,
-      endpoint: await codexFixture(t, root),
+      endpoint: native.endpoint,
     },
     root,
   );
-  t.after(() =>
-    rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
-  );
   const adapter = new CodexAdapter(config);
-  t.after(() => adapter.close());
+  t.after(async () => {
+    await adapter.close();
+    await native.close();
+    await rm(root, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    });
+  });
   await assert.rejects(adapter.init(), { code: "backend_home_mismatch" });
   assert.equal(adapter.available, false);
   const check = (await backend.doctor(config))[0];

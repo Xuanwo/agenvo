@@ -14,14 +14,14 @@ test(
       return true;
     });
     const lab = await eventsLab(t);
-    const codex = await codexServer(lab.root);
-    lab.cleanup(codex.close);
+    const native = await codexServer(lab.root);
+    lab.cleanup(native.close);
     const device = await lab.connect([
       {
         id: "codex",
         label: "Isolated Codex protocol fixture",
         kind: "codex",
-        endpoint: codex.endpoint,
+        endpoint: native.endpoint,
         cwd: lab.root,
         home: lab.root,
       },

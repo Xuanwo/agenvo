@@ -335,13 +335,13 @@ test(
     const welcome = once(ws, "message");
     ws.send(JSON.stringify({ v: 1, type: "hello", instances: [instance] }));
     assert.equal(JSON.parse((await welcome)[0].toString()).type, "welcome");
-    const codex = await codexServer(dataDir);
-    cleanups.push(codex.close);
+    const native = await codexServer(dataDir);
+    cleanups.push(native.close);
     const adapterConfig = instanceConfigSchema.parse({
       id: "test",
       label: "Test runtime",
       kind: "codex",
-      endpoint: codex.endpoint,
+      endpoint: native.endpoint,
       cwd: dataDir,
       home: dataDir,
     });
