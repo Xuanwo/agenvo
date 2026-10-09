@@ -48,9 +48,18 @@ export async function eventsLab(
   const root = await realpath(
     await mkdtemp(join(socketTempDir(), "agenvo-lab-")),
   );
-  cleanups.push(() =>
-    rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
-  );
+  // The suite launcher owns files until this test process has exited. Native
+  // libraries and current-directory handles may outlive an individual test.
+  // Direct invocations have no outer owner, so keep their local cleanup.
+  if (!process.env.AGENVO_TEST_ROOT)
+    cleanups.push(() =>
+      rm(root, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      }),
+    );
   const ca = join(root, "cert.pem"),
     key = join(root, "key.pem");
   await promisify(execFile)("openssl", [

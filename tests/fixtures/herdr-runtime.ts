@@ -1,9 +1,11 @@
 import { isolatedEnvironment, until } from "../support/environment.js";
+import { stopProcess } from "../support/process.js";
 // Test-owned native service. Runtime provisioning deliberately bypasses Agenvo.
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { type HerdrConfig } from "../support/config.js";
 const exec = promisify(execFile);
 export function herdrFixture(
@@ -30,6 +32,49 @@ export function herdrFixture(
   let owned = false;
   let server: ChildProcess | undefined;
   return {
+    async diagnostics(paneId?: string) {
+      const command = async (args: string[]) =>
+        exec(config.binary, args, {
+          env,
+          cwd: config.cwd,
+          timeout: 2000,
+          maxBuffer: 256 * 1024,
+        });
+      const sources: Record<string, Promise<unknown>> = {
+        agents: command(["agent", "list"]),
+        herdrLog: readFile(join(dirname(socket), "herdr-server.log"), "utf8"),
+      };
+      if (paneId) {
+        sources.processes = command(["pane", "process-info", "--pane", paneId]);
+        sources.detection = command(["agent", "explain", paneId, "--json"]);
+        sources.terminal = command([
+          "pane",
+          "read",
+          paneId,
+          "--source",
+          "visible",
+          "--lines",
+          "100",
+        ]);
+      }
+      // Capture before stopping the service. A missing log or failed probe must
+      // not hide the original failure or prevent the remaining diagnostics.
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(sources).map(async ([name, source]) => {
+            try {
+              const value = await source;
+              return [
+                name,
+                typeof value === "string" ? value.slice(-65536) : value,
+              ];
+            } catch (error) {
+              return [name, { error: String(error) }];
+            }
+          }),
+        ),
+      );
+    },
     async start() {
       if (await exists()) throw new Error("Test endpoint already exists");
       await mkdir(dirname(socket), { recursive: true });
@@ -60,7 +105,39 @@ export function herdrFixture(
       throw new Error("Test Herdr did not start");
     },
     async stop() {
-      if (!owned || !(await exists())) return;
+      if (!owned) return;
+      if (process.platform === "win32") {
+        // Herdr 0.9.3 may leave descendants alive, but force-killing the server
+        // skips session persistence. Hold child handles before graceful shutdown
+        // so survivors remain identifiable even after their parent has exited.
+        try {
+          await exec(
+            "pwsh.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-File",
+              fileURLToPath(new URL("./stop-herdr.ps1", import.meta.url)),
+              "-ServerPid",
+              String(server!.pid),
+              "-HerdrBinary",
+              config.binary,
+            ],
+            { env, cwd: config.cwd, timeout: 20000 },
+          );
+          await until(
+            () => server!.exitCode !== null || server!.signalCode !== null,
+            (exited) => exited,
+            8000,
+          );
+        } finally {
+          await stopProcess(server!);
+          await rm(socket, { force: true });
+          owned = false;
+        }
+        return;
+      }
+      if (!(await exists())) return;
       await exec(config.binary, ["server", "stop"], {
         env,
         cwd: config.cwd,
@@ -69,7 +146,6 @@ export function herdrFixture(
       for (let i = 0; i < 80; i++) {
         if (!(await exists())) {
           // The endpoint disappears before Herdr finishes closing its panes.
-          // Windows keeps their working directory locked until process exit.
           await until(
             () => server!.exitCode !== null || server!.signalCode !== null,
             (exited) => exited,

@@ -53,7 +53,12 @@ exit $LASTEXITCODE
     };
     const native = herdrFixture(config, "test");
     await native.start();
-    lab.cleanup(() => native.stop());
+    let paneId: string | undefined;
+    lab.cleanup(async () => {
+      if (!t.passed)
+        t.diagnostic(JSON.stringify(await native.diagnostics(paneId)));
+      await native.stop();
+    });
     const deviceId = await lab.connect([config]);
     const target = { deviceId, instanceId: "runtime" };
     const call = async (method: string, params = {}) =>
@@ -71,7 +76,7 @@ exit $LASTEXITCODE
     const ref = {
       session: "test",
     };
-    const paneId = (await call("workspace.create", ref)).result.result.root_pane
+    paneId = (await call("workspace.create", ref)).result.result.root_pane
       .pane_id;
     if (process.platform === "win32") {
       // Herdr's Windows PTY rebuilds PATH from the registry. Configure this
@@ -101,6 +106,8 @@ exit $LASTEXITCODE
         "fixture",
         "-c",
         'model_provider="fixture"',
+        "-c",
+        "tui.status_line=['model']",
         ...Object.entries(model.config).flatMap(([key, value]) => [
           "-c",
           `${key}=${JSON.stringify(value)}`,
@@ -122,33 +129,35 @@ exit $LASTEXITCODE
     t.diagnostic(`Native startup deadline result: ${code}`);
 
     await writeFile(gate, "release");
-    const listed = await until(
-      () => call("agent.list", ref),
-      (r) =>
-        r.result.result.agents.some(
+    // A timed-out launch can have no readiness metadata, and process detection
+    // can identify the launcher before Codex starts. Wait for both discovery and
+    // the input UI within one cold-start deadline.
+    const ready = await until(
+      async () => {
+        const listed = await call("agent.list", ref);
+        const agent = listed.result.result.agents.find(
           (a: any) => a.pane_id === paneId && a.agent === "codex",
-        ),
+        );
+        const visible = await call("pane.read", {
+          ...ref,
+          paneId,
+          source: "visible",
+        });
+        return { agent, visible };
+      },
+      ({ agent, visible }) => {
+        const output = visible.result?.output ?? "";
+        // The provisional composer also shows the placeholder. The configured
+        // model status line appears only after the real chat widget initializes.
+        return (
+          !!agent &&
+          output.includes("Ask Codex to do anything") &&
+          /^\s*fixture\s*$/m.test(output)
+        );
+      },
       20000,
-    ).catch(async (error) => {
-      const visible = await call("pane.read", {
-        ...ref,
-        paneId,
-        source: "visible",
-        lines: 100,
-      });
-      throw new Error(
-        `Delayed native Codex was not discovered: ${JSON.stringify(visible)}; launches: ${await readFile(launches, "utf8").catch(() => "missing")}`,
-        { cause: error },
-      );
-    });
-    // A timed-out launch may have no readiness metadata. Use the terminal UI.
-    await until(
-      () => call("pane.read", { ...ref, paneId, source: "visible" }),
-      (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
     );
-    const agent = listed.result.result.agents.find(
-      (a: any) => a.pane_id === paneId,
-    );
+    const agent = ready.agent;
     assert.notEqual(agent.interactive_ready, true);
     assert.equal(
       (
