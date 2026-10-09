@@ -2,22 +2,43 @@
 
 [简体中文](installation.zh-CN.md) · [README](../README.md)
 
-Use this guide when your task is to set up Agenvo. It links the build, relay deployment, device pairing, and client authorization steps. Read the [access boundaries](../SECURITY.md) before choosing which services to share.
+Use this guide when your task is to set up Agenvo. It links command installation, relay deployment, device pairing, and client authorization steps. Read the [access boundaries](../SECURITY.md) before choosing which services to share.
 
-## Build the commands
+## Install the commands
 
-Agenvo has no public releases yet; use the repository source. Requirements:
+Requirements:
 
 - Node.js 24.13+ and npm.
 - macOS, Linux or Windows for connectors; Linux for a VPS relay.
-- Herdr, Codex CLI or Paseo on the computers that will run agents, with the agents' provider credentials configured separately.
+- The native runtime (Herdr, Codex CLI, Paseo, Amp or Lody) on the computers that will run agents, with the agents' provider credentials configured separately.
 
 CI pins Herdr 0.9.3, Codex CLI 0.160.1 and Paseo CLI 0.11.1 for reproducible tests. These are test baselines, not required exact versions; Agenvo does not reject a runtime just because its version differs. Compatibility depends on the native interfaces used by the connector.
 
+Install only the packages needed on this machine. Connectors can coexist:
+
 ```sh
-git clone https://github.com/Xuanwo/agenvo.git
+npm install --global @agenvo/herdr@0.1.0
+npm install --global @agenvo/codex-app-server@0.1.0
+npm install --global @agenvo/paseo@0.1.0
+npm install --global @agenvo/amp@0.1.0
+npm install --global @agenvo/lody@0.1.0
+```
+
+For a VPS relay, install `npm install --global @agenvo/server@0.1.0`. Each package provides its corresponding `agenvo-<name>` command. Installation does not start services or install native agent runtimes. Configure each runtime and its credentials separately.
+
+## Get deployment files or build from source
+
+Cloudflare deployment and the VPS Docker setup use files from the release checkout:
+
+```sh
+git clone --branch v0.1.0 --depth 1 https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
+```
+
+To build the commands from source instead of installing the npm packages:
+
+```sh
 npm run build
 npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
 ```
@@ -27,7 +48,7 @@ This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-am
 ## Deploy and connect
 
 1. **Deploy one relay:** follow either [Cloudflare](deployment-cloudflare.md) or [single VPS](deployment-vps.md). The guide covers the public HTTPS address, administrator key, and persistent state.
-2. **Pair each connector:** follow [device setup](usage.md). Herdr, Codex and Paseo have separate commands, configuration directories, and credentials. All may run on the same computer.
+2. **Pair each connector:** follow [device setup](usage.md). Each Connector has separate commands, configuration directories, and credentials. All may run on the same computer.
    During setup, [add instance context](usage.md#add-instance-context) from the known environment and user requirements so remote Agents can read it during discovery.
 3. **Authorize the MCP client:** use [MCP authorization](usage.md#authorize-mcp-clients), or the [ChatGPT connection guide](chatgpt.md). The endpoint is `https://YOUR_RELAY/mcp`. Clients need OAuth and Streamable HTTP support; ChatGPT must allow custom MCP servers.
 4. **Check the connection:** use `search` to discover targets and method schemas, then use `execute` to call native `session.list` (Herdr) or `thread/list` (Codex). Check both connector availability and native service reachability before reporting that the environment is ready.

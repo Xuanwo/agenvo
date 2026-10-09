@@ -59,3 +59,5 @@ Amp integration tests use a deterministic Plugin API fixture through the real MC
 Lody cloud protocol tests run with `npm test` and `npm run test:integration`, starting an isolated Streams server with pinned Loro CLI 0.6.0 and fixture account/execution peers. They use no production account; authenticated Lody cloud and real provider execution remain separate acceptance checks.
 
 Lody local system tests use pinned `lody@0.104.0` native daemon/ACP, Codex 0.160.1 and an isolated model through Relay MCP, covering creation, sending, history, exact cancellation and no replay after disconnect. The npm bundle is a cloud build; the fixture changes only its four platform selection constants to OSS. This does not certify an unmodified OSS distribution. Protocol and execution code are unchanged; no personal configuration or production account is used.
+
+For package publication and GitHub releases, follow [Releasing](RELEASING.md).
