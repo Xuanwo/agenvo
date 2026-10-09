@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0-rc.0 - 2026-10-09
+## 0.2.0-rc.1 - 2026-10-09
 
 This prerelease validates tag-triggered npm Trusted Publishing. It is published under `next`; `latest` remains on 0.1.0.
 
@@ -8,8 +8,10 @@ This prerelease validates tag-triggered npm Trusted Publishing. It is published 
 - Add Herdr worktree and tab management.
 - Add Paseo workspace archival.
 - Unify Agenvo branding and redesign browser administration.
+- Retry transient Windows file replacement failures so Connector status reaches `online` after a successful connection. Persistent errors are reported without exposing credentials.
+- Emit readable structured application logs on Cloudflare Workers.
 
-Install a preview package explicitly, for example `npm install --global @agenvo/herdr@0.2.0-rc.0`. See the [installation guide](docs/installation.md) for the complete package set.
+Install a preview package explicitly, for example `npm install --global @agenvo/herdr@0.2.0-rc.1`. See the [installation guide](docs/installation.md) for the complete package set.
 
 The native runtime, cloud execution, and actual-client acceptance boundaries documented for 0.1.0 still apply. This prerelease does not establish authenticated Amp or Lody cloud execution, ChatGPT UI discovery, or actual dot wakeups.
 
