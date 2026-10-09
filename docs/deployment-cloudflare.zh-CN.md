@@ -36,4 +36,4 @@ DO 保存配对、网页会话和路由授权；KV 保存 OAuth Provider 状态�
 
 ## 日志
 
-参见[读取日志](logging.zh-CN.md)，区分应用事件与 Cloudflare 调用日志，并关联失败的调用。更新已有本地配置时，部署前从仓库配置同步 `observability.redact_query_string: true`。
+参见[读取日志](logging.zh-CN.md)，关联失败的调用，并按需启用 Cloudflare 调用日志。更新已有本地配置时，部署前从仓库配置同步 `observability.logs.invocation_logs: false` 和 `observability.redact_query_string: true`。
