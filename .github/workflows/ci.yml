@@ -86,6 +86,7 @@ jobs:
           import { execFileSync, spawnSync } from 'node:child_process';
           const file = 'tests/adapters/herdr-external.test.ts';
           const fixed = readFileSync(file, 'utf8');
+          execFileSync('git', ['fetch', '--depth=1', 'origin', '7e6259d8b68191dcc2b9636d8a58dfcdafb95f4c']);
           const before = execFileSync('git', ['show', '7e6259d:tests/adapters/herdr-external.test.ts'], { encoding: 'utf8' });
           const inject = (source) => source
             .replace('realpath, rm', 'realpath, rm, writeFile')
