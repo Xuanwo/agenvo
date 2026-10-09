@@ -10,6 +10,7 @@
     "./admin/management": "./src/admin/management.ts",
     "./admin/page": "./src/admin/page.ts",
     "./admin": "./src/admin.ts",
+    "./brand": "./src/brand.ts",
     "./core": "./src/core.ts",
     "./events": "./src/events.ts",
     "./mcp": "./src/mcp.ts",

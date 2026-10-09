@@ -12,7 +12,12 @@ import { sameOrigin, loginRedirect } from "@agenvo/relay/admin/auth";
 import { managementPage } from "@agenvo/relay/admin/management";
 import { admin } from "@agenvo/relay/admin";
 import { mcp } from "@agenvo/relay/mcp";
-import { consentPage, consentRedirect } from "@agenvo/relay/admin/page";
+import { BRAND_NAME, brandAsset } from "@agenvo/relay/brand";
+import {
+  consentPage,
+  consentRedirect,
+  browserError,
+} from "@agenvo/relay/admin/page";
 import {
   readBody,
   Fault,
@@ -31,6 +36,7 @@ function createProvider(origin: string) {
     resourceMetadata: {
       resource: origin + "/mcp",
       authorization_servers: [origin],
+      resource_name: BRAND_NAME,
     },
     apiRoute: "/mcp",
     authorizeEndpoint: "/authorize",
@@ -209,6 +215,8 @@ export function createWorker() {
       try {
         if (new URL(request.url).origin !== env.ORIGIN)
           return new Response("Wrong host", { status: 421 });
+        const asset = brandAsset(request);
+        if (asset) return asset;
         // Bound bodies before handing them to OAuth or MCP libraries.
         if (request.body)
           request = new Request(request, { body: await readBody(request) });
@@ -224,12 +232,18 @@ export function createWorker() {
           error instanceof AuthorizationError ||
           error instanceof CimdFetchError
         )
-          return Response.json(
-            { error: "invalid_authorization_request" },
-            { status: 400 },
+          return (
+            browserError(request, 400) ??
+            Response.json(
+              { error: "invalid_authorization_request" },
+              { status: 400 },
+            )
           );
         if (error instanceof z.ZodError || error instanceof SyntaxError)
-          return Response.json({ error: "invalid_request" }, { status: 400 });
+          return (
+            browserError(request, 400) ??
+            Response.json({ error: "invalid_request" }, { status: 400 })
+          );
         const status =
           error instanceof Fault
             ? ["permission_denied", "csrf_rejected"].includes(error.code)
@@ -252,7 +266,10 @@ export function createWorker() {
             },
             "Worker request failed",
           );
-        return Response.json(asOutcome(error), { status });
+        return (
+          browserError(request, status) ??
+          Response.json(asOutcome(error), { status })
+        );
       }
     },
   } satisfies ExportedHandler<Env>;

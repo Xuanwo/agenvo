@@ -1,4 +1,7 @@
 import { callCode } from "../support/code.js";
+import { assertPublicBrand, assertServerBrand } from "../support/brand.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { stopProcess } from "../support/process.js";
 const ADMIN_SECRET = "test-admin-secret-not-for-production-1234567890";
 import test from "node:test";
@@ -88,6 +91,10 @@ test(
       assert.equal(r.status, 200, await r.clone().text());
       return r.json() as Promise<any>;
     };
+    await assertPublicBrand(
+      (path, init) => fetch(base + path, init),
+      "https://agenvo.test",
+    );
     for (const [value, status] of [
       [{ kind: "grant", id: "missing" }, 404],
       [{ kind: "device", id: "missing" }, 404],
@@ -119,6 +126,19 @@ test(
       .getSetCookie()
       .map((c) => c.split(";")[0])
       .join("; ");
+    const failedForm = await fetch(base + "/admin/pair", {
+      method: "POST",
+      headers: {
+        Cookie: ownerCookie,
+        Origin: "https://agenvo.test",
+        Accept: "text/html",
+      },
+      body: new URLSearchParams({ code: "invalid", digest: "a".repeat(64) }),
+    });
+    assert.equal(failedForm.status, 400);
+    assert.match(failedForm.headers.get("Content-Type")!, /text\/html/);
+    assert.match(await failedForm.text(), /Unable to complete this request/);
+
     assert.equal(
       (await fetch(base + "/admin", { headers: { Cookie: ownerCookie } }))
         .status,
@@ -183,6 +203,12 @@ test(
         assert.equal(page.headers.get("Content-Language"), locale);
         assert.match(page.headers.get("Vary")!, /Accept-Language/i);
         const body = await page.text();
+        assert.match(body, /<link rel="icon"[^>]+href="\/assets\/agenvo.png"/);
+        assert.match(body, /<img src="\/assets\/agenvo.png"/);
+        assert.match(
+          page.headers.get("Content-Security-Policy")!,
+          /img-src 'self'/,
+        );
         assert.ok(body.includes(`<html lang="${locale}">`));
         assert.ok(body.includes(titles[index]));
         assert.ok(!body.includes(excluded[index]));
@@ -280,6 +306,16 @@ test(
       renewed.status === 200 ? "" : await renewed.clone().text(),
     );
     Object.assign(tokens, await renewed.json());
+    const mcp = new Client({ name: "brand-test", version: "1" });
+    await mcp.connect(
+      new StreamableHTTPClientTransport(new URL(base + "/mcp"), {
+        requestInit: {
+          headers: { Authorization: "Bearer " + tokens.access_token },
+        },
+      }),
+    );
+    assertServerBrand(mcp.getServerVersion(), "https://agenvo.test");
+    await mcp.close();
     const toolsCall = (token: string) =>
       fetch(base + "/mcp", {
         method: "POST",

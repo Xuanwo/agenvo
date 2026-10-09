@@ -1,4 +1,5 @@
 import { codexServer } from "../support/codex-server.js";
+import { assertPublicBrand, assertServerBrand } from "../support/brand.js";
 import { callCode, nativeOutcome } from "../support/code.js";
 const ADMIN_SECRET = "test-admin-secret-not-for-production-1234567890";
 import test from "node:test";
@@ -87,6 +88,7 @@ test(
       return r.json() as Promise<any>;
     };
     assert.equal((await request("/health")).status, 200);
+    await assertPublicBrand(request, origin);
     assert.equal((await request("/api/admin/state")).status, 403);
     for (const [value, expected] of [
       [{ kind: "grant", id: "missing" }, 404],
@@ -150,6 +152,15 @@ test(
       .getSetCookie()
       .map((c) => c.split(";")[0])
       .join("; ");
+    const failedForm = await request("/admin/pair", {
+      method: "POST",
+      headers: { Cookie: ownerCookie, Origin: origin, Accept: "text/html" },
+      body: new URLSearchParams({ code: "invalid", digest: "a".repeat(64) }),
+    });
+    assert.equal(failedForm.status, 400);
+    assert.match(failedForm.headers.get("Content-Type")!, /text\/html/);
+    assert.match(await failedForm.text(), /Unable to complete this request/);
+
     for (const [locale, titles, excluded] of [
       [
         "zh-CN",
@@ -173,6 +184,12 @@ test(
         assert.equal(page.headers.get("Content-Language"), locale);
         assert.match(page.headers.get("Vary")!, /Accept-Language/i);
         const body = await page.text();
+        assert.match(body, /<link rel="icon"[^>]+href="\/assets\/agenvo.png"/);
+        assert.match(body, /<img src="\/assets\/agenvo.png"/);
+        assert.match(
+          page.headers.get("Content-Security-Policy")!,
+          /img-src 'self'/,
+        );
         assert.ok(body.includes(`<html lang="${locale}">`));
         assert.ok(body.includes(titles[index]));
         assert.ok(!body.includes(excluded[index]));
@@ -306,10 +323,29 @@ test(
         }),
       )
     ).json()) as any;
-    const device = await admin("/api/admin/pairings/approve", {
-      code: pair.code,
-      digest: await digest(secret),
+    const pairingPage = await request("/admin/pair?code=" + pair.code, {
+      headers: { Cookie: ownerCookie },
     });
+    assert.match(
+      await pairingPage.text(),
+      new RegExp(`name="code" value="${pair.code}"`),
+    );
+    const approvePairing = await request("/admin/pair", {
+      method: "POST",
+      headers: { Cookie: ownerCookie, Origin: origin, Accept: "text/html" },
+      body: new URLSearchParams({
+        code: pair.code,
+        digest: await digest(secret),
+      }),
+    });
+    assert.equal(approvePairing.status, 303);
+    assert.equal(
+      approvePairing.headers.get("Location"),
+      "/admin?notice=paired#connectors",
+    );
+    const device = {
+      deviceId: (await admin("/api/admin/state")).devices[0].id,
+    };
     const poll = await request("/pairings/poll", {
       ...json({ code: pair.code }),
       headers: {
@@ -384,6 +420,7 @@ test(
       },
     );
     await mcp.connect(transport);
+    assertServerBrand(mcp.getServerVersion(), origin);
     const tools = await mcp.listTools();
     assert.deepEqual(tools.tools.map((v) => v.name).sort(), [
       "execute",
