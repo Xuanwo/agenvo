@@ -6,7 +6,7 @@ Agenvo 使用 Pino 记录应用日志。每条事件包含可读的 `message`、
 
 ## 查找失败的调用
 
-先按 `service = "agenvo"` 筛选应用日志，再搜索 MCP 工具返回的 `requestId`。工具完成记录包含 `tool`、`execution`、`durationMs`，失败时还包含 `errorCode`。运行时调用还包含 `deviceId`、`instanceId` 和 `method`。
+先按 `service = "agenvo"` 筛选应用日志。原生调用的 requestId 位于脚本内部的 call() 结果中，需要关联日志时显式返回它，对应 runtime.call.completed 记录中的 deviceId、instanceId、method 和 execution。脚本失败时还会附带已派发调用的确认，以及对应 mcp.tool.completed 的脚本 requestId。工具完成记录包含 tool、durationMs，失败时还包含 errorCode；execute 不汇总原生执行状态，也不在成功输出中追加脚本 requestId。
 
 ```json
 {"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call thread/read on example-device/coding: not_started (device_offline)"}
@@ -27,5 +27,3 @@ Cloudflare 调用日志包含 HTTP 方法与 URL、WebSocket 事件的 `message`
 ## 记录的数据
 
 应用事件显式选择诊断字段，不包含 bearer token、请求参数、原生结果、审批内容和 WebSocket 关闭原因正文。非预期异常的 `err` 包含错误类型和调用栈位置；不记录任意异常消息与 cause，因为依赖可能在其中嵌入敏感内容。日志仍包含设备标识和栈路径等运维信息，需要限制访问。
-
-execute 的 result.calls 中每次原生调用都有自己的 requestId，对应 runtime.call.completed 日志；外层 requestId 对应整段脚本的 mcp.tool.completed 日志。

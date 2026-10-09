@@ -36,7 +36,7 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
       describe: async () => ({ execution: "accepted", result: { items: [] } }),
       call: async () => {
         if (scenario.result instanceof Error) throw scenario.result;
-        return scenario.result as Outcome;
+        return { ...scenario.result, requestId: `native-${id}` } as Outcome;
       },
       eventsList: () => ({}),
       eventsSubscribe: async () => ({}),
@@ -94,8 +94,15 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
       record.message,
       `Native call thread/read on device/runtime: ${scenario.summary}`,
     );
-    const completed = records.find((r) => r.requestId === outcome.requestId);
-    assert.equal(completed.event, "mcp.tool.completed");
+    const completed = records.filter((r) => r.event === "mcp.tool.completed")[
+      id
+    ];
+    assert.match(completed.requestId, /^[0-9a-f-]{36}$/);
+    assert.equal(completed.execution, undefined);
+    if (!(scenario.result instanceof Error)) {
+      assert.equal(record.requestId, outcome.requestId);
+      assert.notEqual(completed.requestId, outcome.requestId);
+    }
     assert.equal(completed.tool, "execute");
     assert.ok(!lines.join("\n").includes(secret));
   }

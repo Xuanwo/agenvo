@@ -10,7 +10,6 @@ export function callCode(input: {
   };
 }
 export function nativeOutcome(response: any) {
-  const script = JSON.parse(response.content[0].text);
-  if (script.error) throw new Error(JSON.stringify(script));
-  return script.result.value;
+  if (response.isError) throw new Error(JSON.stringify(response.content));
+  return JSON.parse(response.content[0].text);
 }

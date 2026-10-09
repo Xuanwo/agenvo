@@ -316,10 +316,11 @@ if (!process.env.AGENVO_E2E_DIR) {
     );
     const tool = async (name: string, args: Record<string, unknown>) => {
       const result: any = await client!.callTool({ name, arguments: args });
-      return result.structuredContent ?? JSON.parse(result.content[0].text);
+      if (result.isError) throw new Error(JSON.stringify(result.content));
+      return JSON.parse(result.content[0].text);
     };
     const invoke = async (input: Parameters<typeof callCode>[0]) =>
-      (await tool("execute", callCode(input))).result.value;
+      tool("execute", callCode(input));
     const describeMethod = async (method: string) =>
       (
         await tool("search", {

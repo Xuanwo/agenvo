@@ -528,10 +528,12 @@ test(
         code: `await call(${JSON.stringify({ deviceId: device.deviceId, instanceId: "test" })}, "thread/start", {}); throw Error("after dispatch");`,
       },
     });
-    const failedScript = JSON.parse((partial.content as any)[0].text);
     assert.equal(partial.isError, true);
-    assert.equal(failedScript.error.code, "script_error");
-    assert.equal(failedScript.result.calls[0].nativeIds.threadId, "t");
+    assert.match(
+      (partial.content as any)[0].text,
+      /Execution failed \(script_error\)/,
+    );
+    assert.match((partial.content as any)[1].text, /"threadId":"t"/);
 
     // A temporarily absent instance must still have its retained approval revoked.
     let changed = once(ws, "message");

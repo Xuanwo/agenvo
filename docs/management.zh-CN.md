@@ -49,7 +49,17 @@ return {threadId, sent};
 
 call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中检查错误；原生拒绝作为数据返回。调用相互独立，不构成事务。用循环处理分页，只返回相关字段。执行器不提供宿主文件、网络、环境变量或模块导入。脚本总时限 30 秒，并通过计算中断结束死循环；不另设调用次数或脚本结果大小配额。响应前会收集已派发调用的确认，因此收尾最多可能再等待一个原生调用超时。
 
-工具响应的 result.value 是代码返回的 JSON；execute 的 result.calls 是每次已派发调用的精简确认。脚本错误仍保留这些确认。accepted 只表示提交，不代表业务成功；starting 表示仍在启动。unknown 后先检查原生状态再决定是否重试写入。没有自动重试或回滚。
+execute 将字符串原样作为 MCP 文本返回，将其他 JSON 值直接序列化；没有 return 或返回 undefined 时输出 `null`。正常返回不添加结果包装或调用回执。你可以返回完整的 call 结果、筛选后的对象或一段文字；需要执行确认、requestId 或原生 ID 时，在脚本中显式返回它们。原生拒绝作为 call 返回的数据，由脚本检查；正常返回的脚本即使包含原生拒绝，MCP isError 也为 false。
+
+脚本抛错、超时、中断或返回值不能序列化时，MCP isError 为 true。响应包含错误诊断、脚本 requestId，以及已派发调用的确认信息，帮助判断哪些操作已经发生。诊断是供 Agent 阅读的文本，不要求依赖固定 JSON 路径。accepted 只表示提交，不代表业务成功；starting 表示仍在启动。unknown 后先检查原生状态再决定是否重试写入。没有自动重试或回滚。
+
+例如，只返回会话 ID 文本：
+
+```js
+const r = await call(target, "thread/list", {});
+if (r.error) return r;
+return r.result.data.map(thread => thread.id).join("\n");
+```
 
 每次原生调用沿用现有访问授权。后续调用被拒绝时，先前调用已返回的结果仍可用于判断进展；已发生的工作不会撤销。
 
@@ -71,7 +81,7 @@ return await call(target, "pane.read", {
 });
 ```
 
-根据输出判断命令是否完成。输出尚未就绪时，在 `execute` 之外等待后再读取。如果脚本在提交输入后失败，先检查 `result.calls` 和原生状态，再决定是否重复提交。
+根据输出判断命令是否完成。输出尚未就绪时，在 `execute` 之外等待后再读取。如果脚本在提交输入后失败，先检查错误诊断附带的调用确认和原生状态，再决定是否重复提交。
 
 ## Codex
 

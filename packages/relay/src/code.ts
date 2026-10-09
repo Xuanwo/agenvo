@@ -17,12 +17,18 @@ type Receipt = Pick<Call, "deviceId" | "instanceId" | "method"> &
     error?: { code: string };
   };
 
+export type CodeResult = {
+  value?: unknown;
+  error?: { code: string; message: string };
+  calls?: Receipt[];
+};
+
 // QuickJS provides the same JavaScript environment on Node and Workers.
 // The API exposes native calls, using JSON at the VM boundary.
 export async function runCode(
   code: string,
   options: { call?: (input: Call) => Promise<Outcome> },
-): Promise<Outcome> {
+): Promise<CodeResult> {
   const receipts: Receipt[] = [];
   const pending = new Set<Promise<void>>();
   const deadline = Date.now() + CODE_LIMITS.milliseconds;
@@ -171,23 +177,8 @@ export async function runCode(
       clearTimeout(timer);
     }
   }
-  const outcome: Outcome = {
-    execution: receipts.some((c) => c.execution === "unknown")
-      ? "unknown"
-      : receipts.some((c) => c.execution === "starting")
-        ? "starting"
-        : receipts.some((c) => c.execution === "accepted")
-          ? "accepted"
-          : receipts.some((c) => c.execution === "rejected")
-            ? "rejected"
-            : receipts.length || error
-              ? "not_started"
-              : "accepted",
-    result: {
-      ...(result === undefined ? {} : { value: result }),
-      ...(options.call ? { calls: receipts } : {}),
-    },
-    ...(error ? { error } : {}),
+  return {
+    ...(result === undefined ? {} : { value: result }),
+    ...(error ? { error, calls: receipts } : {}),
   };
-  return outcome;
 }
