@@ -63,6 +63,15 @@ jobs:
       - run: npm run test:adapters
         timeout-minutes: 3
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      - name: Reproduce Windows native startup
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          for ($attempt = 1; $attempt -le 12; $attempt++) {
+            Write-Output "Native adapter reproduction attempt $attempt"
+            npm run test:adapters
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
   container:
     runs-on: ubuntu-latest
     steps:

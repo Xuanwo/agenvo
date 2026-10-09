@@ -1,7 +1,7 @@
 import { isolatedEnvironment, until } from "../support/environment.js";
 // Test-owned native service. Runtime provisioning deliberately bypasses Agenvo.
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { type HerdrConfig } from "../support/config.js";
@@ -30,6 +30,64 @@ export function herdrFixture(
   let owned = false;
   let server: ChildProcess | undefined;
   return {
+    async diagnostics(paneId?: string) {
+      const command = async (args: string[]) =>
+        exec(config.binary, args, {
+          env,
+          cwd: config.cwd,
+          timeout: 2000,
+          maxBuffer: 256 * 1024,
+        });
+      const sources: Record<string, Promise<unknown>> = {
+        agents: command(["agent", "list"]),
+        herdrLog: readFile(join(dirname(socket), "herdr-server.log"), "utf8"),
+        codexLog: (async () => {
+          const { DatabaseSync } = await import("node:sqlite");
+          const db = new DatabaseSync(join(env.CODEX_HOME, "logs_2.sqlite"), {
+            readOnly: true,
+          });
+          try {
+            return db
+              .prepare(
+                "SELECT ts, level, target, feedback_log_body FROM logs ORDER BY id DESC LIMIT 100",
+              )
+              .all();
+          } finally {
+            db.close();
+          }
+        })(),
+      };
+      if (paneId) {
+        sources.processes = command(["pane", "process-info", "--pane", paneId]);
+        sources.detection = command(["agent", "explain", paneId, "--json"]);
+        sources.terminal = command([
+          "pane",
+          "read",
+          paneId,
+          "--source",
+          "visible",
+          "--lines",
+          "100",
+        ]);
+      }
+      // Capture before stopping the service. A missing log or failed probe must
+      // not hide the original failure or prevent the remaining diagnostics.
+      return Object.fromEntries(
+        await Promise.all(
+          Object.entries(sources).map(async ([name, source]) => {
+            try {
+              const value = await source;
+              return [
+                name,
+                typeof value === "string" ? value.slice(-65536) : value,
+              ];
+            } catch (error) {
+              return [name, { error: String(error) }];
+            }
+          }),
+        ),
+      );
+    },
     async start() {
       if (await exists()) throw new Error("Test endpoint already exists");
       await mkdir(dirname(socket), { recursive: true });

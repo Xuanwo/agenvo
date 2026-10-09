@@ -31,7 +31,10 @@ test(
       configRoot: join(root, "herdr"),
     });
     const native = herdrFixture(adapter.config, "test");
+    let paneId: string | undefined;
     t.after(async () => {
+      if (!t.passed)
+        t.diagnostic(JSON.stringify(await native.diagnostics(paneId)));
       await native.stop();
       await model.close();
       await rm(root, {
@@ -52,8 +55,7 @@ test(
       session: "test",
       backendGeneration: service.backendGeneration,
     };
-    const paneId = (await call("workspace.create", ref)).result.root_pane
-      .pane_id;
+    paneId = (await call("workspace.create", ref)).result.root_pane.pane_id;
     const args = [
       codex,
       "--no-alt-screen",
