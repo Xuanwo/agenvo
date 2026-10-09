@@ -6,7 +6,7 @@
 
 ## 配置与启动
 
-先按[安装指南](installation.zh-CN.md)构建 CLI。在所有者电脑上运行：
+先按[安装指南](installation.zh-CN.md)获取对应版本的 checkout 并安装 CLI。在所有者电脑上运行：
 
 ```sh
 agenvo-server init --origin https://relay.example.com \

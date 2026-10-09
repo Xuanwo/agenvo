@@ -4,8 +4,12 @@
 
 Attach to an independently running Paseo daemon and manage its native agents. Closing the Connector leaves the daemon and native execution running.
 
-For AI agents: use the [source installation guide](https://github.com/Xuanwo/agenvo/blob/main/docs/installation.md). Agenvo has no public releases yet.
+```sh
+npm install --global @agenvo/paseo@0.1.0
+```
+
+For AI agents: use the [installation guide](https://github.com/Xuanwo/agenvo/blob/v0.1.0/docs/installation.md).
 
 Requires Node.js 24.13+. The Connector does not install Paseo or its providers.
 
-[Configuration, pairing and usage](https://github.com/Xuanwo/agenvo/blob/main/docs/usage.md)
+[Configuration, pairing and usage](https://github.com/Xuanwo/agenvo/blob/v0.1.0/docs/usage.md)

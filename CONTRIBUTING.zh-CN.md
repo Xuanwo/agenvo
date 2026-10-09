@@ -59,3 +59,5 @@ Amp 集成测试使用确定性的 Plugin API fixture，经过真实 MCP 和 web
 Lody 云端协议测试随 `npm test` 和 `npm run test:integration` 执行，使用固定的 Loro CLI 0.6.0 启动隔离的 Streams 服务，账号服务与执行端使用 fixture。测试不使用生产账号；真实 Lody 云端与 provider 执行仍需单独验收。
 
 Lody 本地系统测试使用固定的 `lody@0.104.0` 原生 daemon/ACP、Codex 0.160.1 和隔离模型，通过 Relay MCP 验证创建、发送、读取、精确取消与断线后不重发。npm bundle 固定为云端构建，fixture 只将四处平台选择常量改为 OSS；这不等于验证未经改动的 OSS 发行物。协议和执行代码未修改，不读取个人配置或使用生产账号。
+
+发布 npm 包和 GitHub Release 时，遵循[发版流程](RELEASING.md)。

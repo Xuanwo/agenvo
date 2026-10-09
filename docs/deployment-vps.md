@@ -6,7 +6,7 @@ Use one Linux VPS with a public DNS name, ports 80/443 open, Docker Engine and C
 
 ## Configure and start
 
-Build the CLI using the [installation guide](installation.md). On the owner machine:
+Get the release checkout and install the CLI using the [installation guide](installation.md). On the owner machine:
 
 ```sh
 agenvo-server init --origin https://relay.example.com \
