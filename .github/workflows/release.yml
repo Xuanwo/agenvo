@@ -97,7 +97,7 @@ jobs:
         run: git merge-base --is-ancestor HEAD origin/main
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.21.0
           package-manager-cache: false
       - run: npm install --global npm@11.19.1
       - run: npm ci
@@ -125,7 +125,7 @@ jobs:
           ref: ${{ needs.plan.outputs.ref }}
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 24.21.0
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - run: npm install --global npm@11.19.1

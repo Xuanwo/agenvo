@@ -26,8 +26,9 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
+      - run: npm install --global npm@11.19.1
       - run: npm ci
       - run: npm run check
       - run: npm run build
@@ -50,8 +51,9 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.21.0
           cache: npm
+      - run: npm install --global npm@11.19.1
       - run: npm ci
       - run: node scripts/install-test-runtimes.mjs "${{ runner.temp }}/agenvo-runtimes"
         env:
