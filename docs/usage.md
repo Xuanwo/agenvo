@@ -99,6 +99,10 @@ After adding instances or changing runtime scope, restart the Connector and appr
 
 Add `https://relay.example.com/mcp` in a client supporting dynamic OAuth registration, S256 PKCE and Streamable HTTP. Sign in on Agenvo's page, review the client, callback and scope, then allow access. The browser returns to the client automatically. Access tokens last 15 minutes; grants last up to 30 days. All authorized clients can access every approved instance.
 
+The Relay declares `Agenvo` in OAuth protected resource metadata and provides a display name, project website, and pigeon icon in MCP server information. Login and consent pages use the same branding. The icon is publicly available at `/assets/agenvo.png` on the Relay's origin without signing in. Third-party clients decide whether to display this metadata; MCP server information is generally fetched after authentication, so the icon may not appear before initial authorization.
+
+Administration is organized into requests, Connectors and instances, and client grants. New pairings and instances requiring approval appear together under requests; inspect their scope and fingerprints before approving. Connection and approval states are shown separately. Revoked Connectors and inactive client grants remain available in expandable history sections. Use Refresh to retrieve current state; approving or revoking returns to the relevant section with a result message. The same workflow is available on mobile.
+
 ## Optional administrator automation
 
 Inject `AGENVO_ADMIN_SECRET` securely into an explicit administration command's environment. Do not put it in Connector configuration, service definitions or command-line arguments. Available commands include:

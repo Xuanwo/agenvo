@@ -1,4 +1,5 @@
 import { codexServer } from "../support/codex-server.js";
+import { assertPublicBrand } from "../support/brand.js";
 import { VERSION } from "@agenvo/protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -401,23 +402,44 @@ test(
         );
       return line ? JSON.parse(line).listening.port : undefined;
     }, Boolean);
-    const health = await new Promise<string>((resolve, reject) => {
-      request(
-        {
-          hostname: "127.0.0.1",
-          port: Number(port),
-          path: "/health",
-          headers: { Host: "relay.example" },
-        },
-        (res) => {
-          let body = "";
-          res.on("data", (chunk) => (body += chunk));
-          res.on("end", () => resolve(body));
-        },
-      )
-        .on("error", reject)
-        .end();
-    });
-    assert.equal(JSON.parse(health).service, "agenvo");
+    // Preserve the configured Host when exercising the installed server over loopback.
+    const installedRequest = (path: string, init: RequestInit = {}) =>
+      new Promise<Response>((resolve, reject) => {
+        request(
+          {
+            hostname: "127.0.0.1",
+            port: Number(port),
+            path,
+            method: init.method ?? "GET",
+            headers: { Host: "relay.example" },
+          },
+          (res) => {
+            const chunks: Buffer[] = [];
+            res.on("data", (chunk) => chunks.push(chunk));
+            res.on("error", reject);
+            res.on("end", () =>
+              resolve(
+                new Response(
+                  init.method === "HEAD" ? null : Buffer.concat(chunks),
+                  {
+                    status: res.statusCode,
+                    headers: Object.fromEntries(
+                      Object.entries(res.headers).map(([key, value]) => [
+                        key,
+                        String(value),
+                      ]),
+                    ),
+                  },
+                ),
+              ),
+            );
+          },
+        )
+          .on("error", reject)
+          .end();
+      });
+    const health = await installedRequest("/health");
+    assert.equal(JSON.parse(await health.text()).service, "agenvo");
+    await assertPublicBrand(installedRequest, "https://relay.example");
   },
 );

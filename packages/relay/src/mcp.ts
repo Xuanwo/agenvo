@@ -1,4 +1,5 @@
 import { runCode } from "./code.js";
+import { serverInfo } from "./brand.js";
 import { search } from "./catalog.js";
 import { logger } from "@agenvo/logging";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
@@ -6,7 +7,7 @@ import { ProtocolError } from "@modelcontextprotocol/server";
 import { subscribeInput, unsubscribeInput } from "@agenvo/protocol/events";
 import { Fault } from "@agenvo/protocol";
 import { z } from "zod";
-import { VERSION, asOutcome, type Outcome, type Call } from "@agenvo/protocol";
+import { asOutcome, type Outcome, type Call } from "@agenvo/protocol";
 
 const log = logger.child({ component: "relay.mcp" });
 
@@ -68,7 +69,7 @@ export async function mcp(request: Request, relay: McpRelay, grantId: string) {
   };
   const handler = createMcpHandler(
     () => {
-      const server = new McpServer({ name: "agenvo", version: VERSION });
+      const server = new McpServer(serverInfo(new URL(request.url).origin));
       server.registerTool(
         "search",
         {
