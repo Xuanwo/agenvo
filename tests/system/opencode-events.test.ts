@@ -73,7 +73,12 @@ test(
     ]) {
       const response = await lab.rpc("tools/call", {
         name: "search",
-        arguments: { query, deviceId: device, instanceId: "opencode" },
+        arguments: {
+          query,
+          deviceId: device,
+          instanceId: "opencode",
+          includeSchema: true,
+        },
       });
       const entries = JSON.parse(response.content[0].text).result.items;
       assert.ok(

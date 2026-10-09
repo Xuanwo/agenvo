@@ -12,17 +12,17 @@ Agenvo 只提供 `search` 和 `execute` 两个 MCP 工具。search 接受关键�
 {"query": ""}
 ```
 
-按操作搜索，或者限制目标并搜索准确的方法名：
+先按操作浏览方法摘要，再限制目标并获取所需方法的完整 schema：
 
 ```json
 {"query": "submit input"}
 ```
 
 ```json
-{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding"}
+{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding", "includeSchema": true}
 ```
 
-响应的 result.items 包含实例及匹配的 methods，每个方法包含 name、description、readOnly 和 inputSchema。query 不区分大小写，按空白拆分关键词，所有词都需要出现在 Connector 类型、方法名或描述中。不执行代码，不使用正则或语义搜索。搜索 codex 或 herdr 可以列出该类型的全部方法；deviceId 和 instanceId 用于限定目标。
+响应的 result.items 包含实例及匹配的 methods，默认每个方法只包含 name、description 和 readOnly。需要参数定义时，限定目标和方法名并传入 includeSchema: true，获取完整 inputSchema。省略 includeSchema 或传入 false 均返回摘要；描述原样保留，不截断调用约束。空查询即使传入 true 也只列实例。query 不区分大小写，按空白拆分关键词，所有词都需要出现在 Connector 类型、方法名或描述中。不执行代码，不使用正则或语义搜索。搜索 codex 或 herdr 可以列出该类型的全部方法；deviceId 和 instanceId 用于限定目标。
 
 deviceId 标识一个 Connector，不是一台物理机器。离线或无法查询的实例仍返回状态或错误；方法查询失败可能留下部分结果。没有匹配方法的在线实例不出现在非空查询结果中。名称在实例内唯一，不添加 Agenvo 命名空间。
 
