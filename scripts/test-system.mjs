@@ -3,7 +3,10 @@ import { mkdtemp, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const root = await mkdtemp(join(tmpdir(), "agenvo-system-"));
+// Keep Unix socket paths short even when fixtures live under the suite root.
+const root = await mkdtemp(
+  join(process.platform === "win32" ? tmpdir() : "/tmp", "ag-"),
+);
 const suites = process.argv.includes("--adapters")
   ? ["tests/adapters"]
   : ["tests/system"];
@@ -24,6 +27,7 @@ try {
       stdio: "inherit",
       env: {
         PATH: process.env.PATH,
+        AGENVO_TEST_ROOT: root,
         ...(process.platform === "win32"
           ? {
               SystemRoot: process.env.SystemRoot,
@@ -54,6 +58,9 @@ try {
     child.once("exit", (code) => resolve(code ?? 1));
   });
 } finally {
+  // Reclaim files after the isolated test processes exit and release their
+  // handles. Fixtures must still stop their native services before returning;
+  // surviving processes that hold files make this cleanup fail on Windows.
   await rm(root, {
     recursive: true,
     force: true,

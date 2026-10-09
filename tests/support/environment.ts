@@ -49,4 +49,5 @@ export async function until<T>(
 
 // Native Unix sockets have a small path limit, especially on macOS.
 export const socketTempDir = () =>
-  process.platform === "win32" ? tmpdir() : "/tmp";
+  process.env.AGENVO_TEST_ROOT ??
+  (process.platform === "win32" ? tmpdir() : "/tmp");
