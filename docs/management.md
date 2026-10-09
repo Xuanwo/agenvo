@@ -65,7 +65,7 @@ Use `session.list` to obtain session and backendGeneration, then native workspac
 
 Create a terminal container with `workspace.create`, or add a shell pane beside existing panes with `tab.create`. `tab.close` closes that tab and its terminals. These resources do not start an agent. Use `worktree.list`, `worktree.create`, `worktree.open` and `worktree.remove` to manage Git worktree workspaces, including worktrees created outside Herdr. Removal keeps the branch; `force: true` discards uncommitted changes. Worktree methods accept `trustRepository` (default `false`) to trust the selected repository for that Git command without changing Git configuration. Creation and opening preserve user focus.
 
-`agent.start` requires an existing pane and returns starting with native query keys. Poll `agent.get`. A startup timeout does not stop the child; rediscover by pane ID before considering another launch. Full-access startup supports Codex, Claude and Devin.
+`agent.start` requires an existing pane and returns starting with native query keys. Poll `agent.get`. A startup timeout does not stop the child; rediscover by pane ID before considering another launch. Herdr validates `kind`; Agenvo forwards `args` unchanged without injecting or rejecting execution permission settings. Owners can declare launch conventions in instance `context`, and callers choose the corresponding native arguments.
 
 `agent.prompt` and `agent.send-keys` address the native `name`; pane input addresses `paneId`. Callers can inspect the current agent or terminal when deciding what input to send.
 

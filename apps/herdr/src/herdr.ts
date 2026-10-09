@@ -12,7 +12,6 @@ import {
 } from "@agenvo/connector/adapters/adapter";
 import { Fault, digest, page, type Outcome } from "@agenvo/protocol";
 
-import { fullAccessArgs, managedAgentKinds } from "./herdr-execution.js";
 const session = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/);
 const ref = { session, backendGeneration: z.string().regex(/^[a-f0-9]{64}$/) };
 const id = z
@@ -310,13 +309,18 @@ const methods: Record<string, NativeMethod> = {
       ...ref,
       name: agentName,
       paneId: id,
-      kind: z.enum(managedAgentKinds),
+      kind: z
+        .string()
+        .min(1)
+        .describe(
+          "Native Herdr agent kind, for example pi or codex. Herdr validates support.",
+        ),
       args: z.array(z.string()).max(64).default([]),
       timeoutMs: z.number().int().min(3001).max(300000).default(30000),
     }),
     readOnly: false,
     description:
-      "Create a work context by starting an agent in an existing terminal pane. Uses full access and starts asynchronously. Poll agent.get using the returned session, name and backendGeneration. A startup timeout does not stop the process; rediscover agents by pane ID if the launch name is gone. Do not repeat after lost confirmation. Startup tracking is connector-local; rediscover native agents after reconnect.",
+      "Create a work context by starting an agent in an existing terminal pane. Pass native agent arguments in args, including execution settings chosen using the instance context. Starts asynchronously. Poll agent.get using the returned session, name and backendGeneration. A startup timeout does not stop the process; rediscover agents by pane ID if the launch name is gone. Do not repeat after lost confirmation. Startup tracking is connector-local; rediscover native agents after reconnect.",
     argv: (p) => [
       "agent",
       "start",
@@ -328,7 +332,7 @@ const methods: Record<string, NativeMethod> = {
       "--timeout",
       String(p.timeoutMs),
       "--",
-      ...fullAccessArgs(p.kind, p.args),
+      ...p.args,
     ],
   },
   "agent.prompt": {

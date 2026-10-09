@@ -99,6 +99,7 @@ exit $LASTEXITCODE
       kind: "codex",
       timeoutMs,
       args: [
+        "--dangerously-bypass-approvals-and-sandbox",
         "--no-daemon",
         "--model",
         "fixture",

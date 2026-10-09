@@ -220,7 +220,11 @@ setInterval(() => {}, 1000);
     paneId: nativePane,
     kind: "codex",
     timeoutMs: 4000,
-    args: ["--no-alt-screen", "--no-daemon"],
+    args: [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--no-alt-screen",
+      "--no-daemon",
+    ],
   });
   assert.equal(started.execution, "starting");
   let discovered = false;

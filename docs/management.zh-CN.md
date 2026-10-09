@@ -65,7 +65,7 @@ call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中�
 
 通过 `workspace.create` 创建终端容器，或用 `tab.create` 在已有 pane 旁增加 shell pane；`tab.close` 关闭该 tab 及其中的终端。这些资源操作不启动 Agent。通过 `worktree.list`、`worktree.create`、`worktree.open` 和 `worktree.remove` 管理 Git worktree 工作区，包括 Herdr 之外创建的 worktree。删除保留分支，`force: true` 会丢弃未提交改动。worktree 方法接受默认 `false` 的 `trustRepository`，只为本次 Git 命令信任选定仓库，不修改 Git 配置。创建与打开不改变用户焦点。
 
-agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agent.get。启动确认超时不停止子进程；考虑再次启动前，先按 pane ID 重新发现。全权限启动支持 Codex、Claude、Devin。
+agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agent.get。启动确认超时不停止子进程；考虑再次启动前，先按 pane ID 重新发现。`kind` 由 Herdr 校验；Agenvo 原样转发 `args`，不注入或拒绝执行权限设置。配置者可以在实例 `context` 中声明启动约定，调用者据此选择原生参数。
 
 agent.prompt 和 agent.send-keys 使用原生 name 寻址，pane 输入使用 paneId。调用者可以按需查看当前 Agent 或终端，再决定发送什么输入。
 
