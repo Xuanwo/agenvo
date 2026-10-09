@@ -16,6 +16,9 @@ test(
   "an unmanaged Codex in Herdr accepts input and reaches an isolated model",
   { timeout: 40000 },
   async (t) => {
+    const startedAt = performance.now();
+    const milestone = (stage: string) =>
+      t.diagnostic(`${stage}: ${Math.round(performance.now() - startedAt)}ms`);
     const root = await realpath(
       await mkdtemp(join(socketTempDir(), "agenvo-external-")),
     );
@@ -77,6 +80,7 @@ test(
       command:
         (process.platform === "win32" ? "& " : "") + args.map(quote).join(" "),
     });
+    milestone("Command submitted");
     const list = await until(
       () => call("agent.list", ref),
       (r) =>
@@ -95,11 +99,25 @@ test(
         { cause: error },
       );
     });
+    milestone("Codex discovered");
     // External launches do not have managed readiness metadata. Inspect the UI.
     await until(
       () => call("pane.read", { ...ref, paneId, source: "visible" }),
       (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
-    );
+    ).catch(async (error) => {
+      milestone("Initial UI deadline expired");
+      t.diagnostic(JSON.stringify(await native.diagnostics(paneId)));
+      await until(
+        () => call("pane.read", { ...ref, paneId, source: "visible" }),
+        (r) => JSON.stringify(r).includes("Ask Codex to do anything"),
+        15000,
+      ).then(
+        () => milestone("UI appeared after initial deadline"),
+        () => milestone("UI still absent after observation period"),
+      );
+      throw error;
+    });
+    milestone("Codex UI ready");
     const agent = list.result.agents.find((a: any) => a.pane_id === paneId);
     assert.notEqual(agent.interactive_ready, true);
     const sent = await adapter.call("agent.prompt", {
