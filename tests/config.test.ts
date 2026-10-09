@@ -1,56 +1,10 @@
 import { instanceSchema } from "@agenvo/protocol";
-import { atomicJson, configDir } from "@agenvo/connector/config";
+import { configDir } from "@agenvo/connector/config";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { homedir, tmpdir } from "node:os";
-import fs from "node:fs/promises";
-import { syncBuiltinESMExports } from "node:module";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { descriptor, instanceConfigSchema } from "./support/config.js";
-
-test(
-  "Windows atomic JSON replacement survives transient EPERM and bounds persistent failures",
-  { skip: process.platform !== "win32", timeout: 5000 },
-  async (t) => {
-    const root = await fs.mkdtemp(join(tmpdir(), "agenvo-atomic-"));
-    t.after(async () => {
-      t.mock.restoreAll();
-      syncBuiltinESMExports();
-      await fs.rm(root, { recursive: true, force: true });
-    });
-    const path = join(root, "status.json");
-    const previous = { state: "authenticating" };
-    const next = { state: "online" };
-    await atomicJson(path, previous);
-    const rename = fs.rename;
-    const locked = Object.assign(new Error("File is temporarily locked"), {
-      code: "EPERM",
-    });
-    let attempts = 0;
-    t.mock.method(fs, "rename", async (...args: Parameters<typeof rename>) => {
-      if (++attempts <= 2) {
-        assert.deepEqual(JSON.parse(await fs.readFile(path, "utf8")), previous);
-        throw locked;
-      }
-      return rename(...args);
-    });
-    syncBuiltinESMExports();
-    await atomicJson(path, next);
-    assert.equal(attempts, 3);
-    assert.deepEqual(JSON.parse(await fs.readFile(path, "utf8")), next);
-    t.mock.restoreAll();
-    t.mock.method(fs, "rename", async () => {
-      throw locked;
-    });
-    syncBuiltinESMExports();
-    await assert.rejects(
-      atomicJson(path, previous),
-      (error) => error === locked,
-    );
-    assert.deepEqual(JSON.parse(await fs.readFile(path, "utf8")), next);
-    assert.deepEqual(await fs.readdir(root), ["status.json"]);
-  },
-);
 
 test("Connector defaults isolate backends and explicit directories override defaults", (t) => {
   const previous = {

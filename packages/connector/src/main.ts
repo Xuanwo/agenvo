@@ -96,16 +96,16 @@ export async function run<T extends InstanceConfig>(
     const snapshot = structuredClone(status);
     saving = saving
       .then(() => atomicJson(join(dir, "status.json"), snapshot))
-      .catch((err) => {
+      .catch((err: NodeJS.ErrnoException) => {
         connectionLog.error(
           {
-            event: "connector.status.failed",
+            event: "connector.status.write_failed",
             state: snapshot.state,
-            code: (err as NodeJS.ErrnoException).code,
-            syscall: (err as NodeJS.ErrnoException).syscall,
+            code: err.code,
+            syscall: err.syscall,
             err,
           },
-          "Could not persist Connector status",
+          "Failed to publish connector status",
         );
       });
   };

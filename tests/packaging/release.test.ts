@@ -323,13 +323,6 @@ test(
       env,
       stdio: "pipe",
     });
-    let connectorLogs = "";
-    child.stdout.on("data", (chunk) => {
-      connectorLogs += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      connectorLogs += chunk;
-    });
     const exited = once(child, "exit");
     cleanups.push(async () => {
       if (child.exitCode === null && child.signalCode === null) {
@@ -343,12 +336,7 @@ test(
           await readFile(join(dir, "status.json"), "utf8").catch(() => "{}"),
         ),
       (s) => s.state === "online",
-    ).catch((cause) => {
-      throw new Error(
-        `Installed Connector did not become online; output: ${connectorLogs}`,
-        { cause },
-      );
-    });
+    );
     const thread = await lab.call(config.deviceId, "test", "thread/start");
     assert.ok(thread.thread.id);
     await exec(process.execPath, [cli, "disconnect"], { cwd: root, env });

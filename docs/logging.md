@@ -9,7 +9,7 @@ Agenvo uses Pino for application logs. Every event includes a readable `message`
 Filter application logs by `service = "agenvo"`, then search for the `requestId` returned by the MCP tool. Tool completion records include `tool`, `execution`, `durationMs` and, on failure, `errorCode`. Each entry in execute’s `result.calls` has its own requestId; its runtime.call.completed log includes deviceId, instanceId and method.
 
 ```json
-{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call completed"}
+{"level":"warn","service":"agenvo","component":"relay.mcp","event":"runtime.call.completed","requestId":"example-request","deviceId":"example-device","instanceId":"coding","method":"thread/read","execution":"not_started","errorCode":"device_offline","message":"Native call thread/read on example-device/coding: not_started (device_offline)"}
 ```
 
 Successful calls use `info`; unsuccessful outcomes such as an offline device or a native rejection use `warn`; internal failures use `error`. A completed MCP call does not imply that the native task finished: inspect `execution` and native state before repeating a write.
@@ -18,7 +18,9 @@ Connection events include `deviceId` and, on the Relay, `epoch`. Use these field
 
 ## Cloudflare invocation logs
 
-Cloudflare also creates platform logs independently of Pino: HTTP method/URL, `message` and `close` for WebSocket events, RPC entrypoint names, and scheduled times for alarms. These are not application messages. Filter by the application `service` field for routine diagnosis, and remove that filter when investigating platform invocations. The repository configuration retains invocation logs and removes URL query strings from logs and traces.
+The repository disables Cloudflare invocation logs with `observability.logs.invocation_logs: false` so routine logs show application events. Native call messages include the method, device/instance, execution state and error code; connection messages identify the device. Structured fields remain available for filtering.
+
+Cloudflare invocation logs contain HTTP method/URL, `message` and `close` for WebSocket events, RPC entrypoint names, and scheduled times for alarms. These are platform summaries, not application messages. To investigate platform invocations, set `observability.logs.invocation_logs: true` in your deployment manifest and redeploy. This restores per-invocation request, response and platform metadata. Filter by `service = "agenvo"` to see only application events. The repository configuration removes URL query strings from logs and traces.
 
 The local workerd tests verify the objects passed to the console. Production dashboard rendering and filters depend on the deployed version and Cloudflare's ingestion.
 

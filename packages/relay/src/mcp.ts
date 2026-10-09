@@ -125,7 +125,15 @@ export async function mcp(request: Request, relay: McpRelay, grantId: string) {
                       ? "error"
                       : "warn"
                     : "info"
-                ](fields, "Native call completed");
+                ](
+                  fields,
+                  "Native call %s on %s/%s: %s%s",
+                  input.method,
+                  input.deviceId,
+                  input.instanceId,
+                  outcome.execution,
+                  outcome.error ? ` (${outcome.error.code})` : "",
+                );
                 return outcome;
               },
             });

@@ -736,9 +736,20 @@ test(
     assert.equal(failureLog.method, "warn");
     assert.equal(failureLog.args.length, 1);
     assert.equal(failureLog.args[0].level, "warn");
-    assert.equal(failureLog.args[0].message, "Native call completed");
+    assert.equal(
+      failureLog.args[0].message,
+      `Native call agent.read on ${deviceId}/work: rejected (native_error)`,
+    );
     assert.equal(failureLog.args[0].event, "runtime.call.completed");
     assert.equal(failureLog.args[0].deviceId, deviceId);
+    const acceptedLog = logs.find(
+      (entry) => entry.args[0]?.requestId === partialRequest.requestId,
+    );
+    assert.equal(acceptedLog?.method, "info");
+    assert.equal(
+      acceptedLog.args[0].message,
+      `Native call pane.run on ${deviceId}/work: accepted`,
+    );
     assert.ok(
       logs.some(
         (entry) =>

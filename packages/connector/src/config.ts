@@ -76,21 +76,24 @@ export async function atomicJson(path: string, value: unknown) {
       mode: 0o600,
       flag: "wx",
     });
-    // Windows can transiently reject replacing an existing file.
-    // Keep the old document intact and bound retries for persistent permission errors.
+    // Windows can deny replacement while a reader or scanner holds the target.
+    // Retry only publication of this complete snapshot; never unlink the old
+    // file, which would expose missing or partial credentials/configuration.
     const deadline = Date.now() + 1000;
-    for (;;) {
+    for (let attempt = 0; ; attempt++) {
       try {
         await rename(temp, path);
         break;
       } catch (error) {
         if (
           process.platform !== "win32" ||
-          (error as NodeJS.ErrnoException).code !== "EPERM" ||
+          !["EACCES", "EPERM", "EBUSY"].includes(
+            (error as NodeJS.ErrnoException).code ?? "",
+          ) ||
           Date.now() >= deadline
         )
           throw error;
-        await delay(20);
+        await delay(Math.min(10 * 2 ** attempt, 100, deadline - Date.now()));
       }
     }
   } finally {

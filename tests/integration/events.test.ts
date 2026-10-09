@@ -69,6 +69,10 @@ test(
     assert.equal(disconnects.length, 1);
     assert.equal(disconnects[0].level, "info");
     assert.equal(disconnects[0].closeCode, 1001);
+    assert.equal(
+      disconnects[0].message,
+      `Connector ${device} disconnected with code 1001`,
+    );
     await until(
       () => lab.received,
       (events) =>
