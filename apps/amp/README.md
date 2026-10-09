@@ -7,12 +7,12 @@ Experimental Agenvo connector for independently running Amp hosts through the pu
 <!-- x-release-please-start-version -->
 
 ```sh
-npm install --global @agenvo/amp@0.2.0-rc.1
+npm install --global @agenvo/amp@0.2.0
 ```
 
 <!-- x-release-please-end -->
 
-For AI agents: follow the [installation guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/installation.md), <!-- x-release-please-version -->
-then the [Amp connection guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/amp.md). <!-- x-release-please-version -->
+For AI agents: follow the [installation guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0/docs/installation.md), <!-- x-release-please-version -->
+then the [Amp connection guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0/docs/amp.md). <!-- x-release-please-version -->
 
 The Connector installs a local plugin, connects to its native host, and leaves task execution and history with Amp. Disconnecting does not stop tasks. Loading the plugin enables automatic tool approval in that host; remote access still requires Agenvo pairing and authorization.

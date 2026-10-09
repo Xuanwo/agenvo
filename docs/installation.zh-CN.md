@@ -6,7 +6,7 @@
 
 ## 安装命令
 
-当前 checkout 的说明对应 `0.2.0-rc.1`。 <!-- x-release-please-version -->
+当前 checkout 的说明对应 `0.2.0`。 <!-- x-release-please-version -->
 
 需要准备：
 
@@ -21,16 +21,16 @@ CI 固定使用 Herdr 0.9.3、Codex CLI 0.160.1 和 Paseo CLI 0.11.1，以便复
 <!-- x-release-please-start-version -->
 
 ```sh
-npm install --global @agenvo/herdr@0.2.0-rc.1
-npm install --global @agenvo/codex-app-server@0.2.0-rc.1
-npm install --global @agenvo/paseo@0.2.0-rc.1
-npm install --global @agenvo/amp@0.2.0-rc.1
-npm install --global @agenvo/lody@0.2.0-rc.1
+npm install --global @agenvo/herdr@0.2.0
+npm install --global @agenvo/codex-app-server@0.2.0
+npm install --global @agenvo/paseo@0.2.0
+npm install --global @agenvo/amp@0.2.0
+npm install --global @agenvo/lody@0.2.0
 ```
 
 <!-- x-release-please-end -->
 
-VPS 中继使用 `npm install --global @agenvo/server@0.2.0-rc.1` 安装。每个包提供对应的 `agenvo-<name>` 命令。安装包不会启动服务，也不会安装原生 Agent 运行时；请分别配置运行时及其凭据。 <!-- x-release-please-version -->
+VPS 中继使用 `npm install --global @agenvo/server@0.2.0` 安装。每个包提供对应的 `agenvo-<name>` 命令。安装包不会启动服务，也不会安装原生 Agent 运行时；请分别配置运行时及其凭据。 <!-- x-release-please-version -->
 
 ## 获取部署文件或从源码构建
 
@@ -39,7 +39,7 @@ Cloudflare 部署和 VPS Docker 部署使用对应版本 checkout 中的文件�
 <!-- x-release-please-start-version -->
 
 ```sh
-git clone --branch v0.2.0-rc.1 --depth 1 https://github.com/Xuanwo/agenvo.git
+git clone --branch v0.2.0 --depth 1 https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
 ```

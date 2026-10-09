@@ -1,6 +1,6 @@
 {
   "name": "@agenvo/amp",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "description": "Amp plugin connector for Agenvo",
@@ -30,8 +30,8 @@
     "prepack": "npm run build"
   },
   "devDependencies": {
-    "@agenvo/connector": "0.2.0-rc.1",
-    "@agenvo/protocol": "0.2.0-rc.1",
+    "@agenvo/connector": "0.2.0",
+    "@agenvo/protocol": "0.2.0",
     "@ampcode/plugin": "0.0.0-20261008001818-g5d841b4",
     "zod": "4.6.5"
   },

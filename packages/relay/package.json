@@ -1,6 +1,6 @@
 {
   "name": "@agenvo/relay",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -22,8 +22,8 @@
     "./releases": "./src/releases.ts"
   },
   "dependencies": {
-    "@agenvo/logging": "0.2.0-rc.1",
-    "@agenvo/protocol": "0.2.0-rc.1",
+    "@agenvo/logging": "0.2.0",
+    "@agenvo/protocol": "0.2.0",
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@modelcontextprotocol/server": "2.3.1",
     "quickjs-emscripten-core": "0.32.0",
