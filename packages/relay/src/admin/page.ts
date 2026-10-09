@@ -1,33 +1,58 @@
 import { language, messages, type Language } from "./language.js";
+import { BRAND_NAME, BRAND_ICON_PATH, BRAND_WEBSITE } from "../brand.js";
+import { styles } from "./styles.js";
+
 export const escapeHtml = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+export function guide(locale: Language, name = "usage") {
+  return `${BRAND_WEBSITE}/blob/main/docs/${name}${locale === "zh-CN" ? ".zh-CN" : ""}.md`;
+}
+
 export function html(
   locale: Language,
   title: string,
   body: string,
   headers = new Headers(),
+  options: {
+    layout?: "focus" | "admin" | "result";
+    navigation?: string;
+    toolbar?: string;
+  } = {},
 ) {
+  const text = messages(locale);
+  const layout = options.layout ?? "result";
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   headers.set("Content-Language", locale);
   headers.append("Vary", "Accept-Language");
   headers.set(
     "Content-Security-Policy",
-    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   );
-  // Native form POSTs need an Origin for CSRF validation. "no-referrer"
-  // can make browsers send Origin: null; same-origin still hides OAuth URLs
-  // from external callback hosts.
+  // Native form POSTs need an Origin for CSRF validation. Same-origin also keeps
+  // OAuth callback query strings out of cross-origin Referer headers.
   headers.set("Referrer-Policy", "same-origin");
+  const brand = `<a class="brand" href="/admin" aria-label="${BRAND_NAME}"><img src="${BRAND_ICON_PATH}" alt="" width="44" height="44"><span>${BRAND_NAME}</span></a>`;
+  const footer = `<footer class="site-footer"><span>${text.relayLabel}</span><div><a href="${guide(locale)}">${text.documentation}</a> &nbsp;·&nbsp; <a href="${BRAND_WEBSITE}">${text.sourceCode}</a></div></footer>`;
+  const content =
+    layout === "admin"
+      ? `<header class="topbar"><div class="topbar-inner"><div class="topbar-context">${brand}<span class="eyebrow">${text.privateInstance}</span></div>${options.toolbar ?? ""}</div></header>
+       <div class="shell"><aside class="sidebar">${options.navigation ?? ""}</aside><main id="main">${body}${footer}</main></div>`
+      : `<div class="focus-shell"><header>${brand}</header>
+       ${layout === "focus" ? `<main id="main" class="focus-layout"><section class="focus-intro"><p class="eyebrow">${text.relayLabel}</p><h1>${text.introTitle}</h1><p class="lead">${text.introDescription}</p><p class="intro-foot">${text.introFoot}</p></section>${body}</main>` : `<main id="main">${body}</main>`}
+       ${footer}</div>`;
   return new Response(
-    `<!doctype html><html lang="${locale}"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(title)} · Agenvo</title><style>body{font:16px/1.65 system-ui;margin:40px auto;max-width:900px;padding:0 24px;color:#263330;background:#f8faf8}h1,h2{line-height:1.3}article{background:white;border:1px solid #dbe3df;border-radius:12px;padding:20px;margin:20px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}button{padding:8px 14px;border:1px solid #93a69c;border-radius:6px;background:#e9f2ed;cursor:pointer}a{color:#236343}small{color:#52665e}</style><h1>${escapeHtml(title)}</h1>${body}</html>`,
+    `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · ${BRAND_NAME}</title><link rel="icon" type="image/png" href="${BRAND_ICON_PATH}"><style>${styles}</style></head><body><a class="skip" href="#main">${text.skipToContent}</a>${content}</body></html>`,
     { headers },
   );
 }
+
 export function form(
   action: string,
   values: Record<string, unknown>,
   label: string,
+  variant: "primary" | "secondary" | "danger" | "quiet" = "primary",
 ) {
   return `<form method="post" action="${escapeHtml(action)}">${Object.entries(
     values,
@@ -36,11 +61,13 @@ export function form(
       ([key, value]) =>
         `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`,
     )
-    .join("")}<button>${escapeHtml(label)}</button></form>`;
+    .join("")}<button class="${variant}">${escapeHtml(label)}</button></form>`;
 }
+
 export function scopeWarning(locale: Language) {
-  return `<p>${escapeHtml(messages(locale).scopeWarning)}</p>`;
+  return `<details class="policy"><summary>${messages(locale).accessPolicy}</summary><p>${messages(locale).scopeWarning}</p></details>`;
 }
+
 export function consentPage(
   request: Request,
   details: { clientName: string; redirectHost: string },
@@ -52,8 +79,16 @@ export function consentPage(
   return html(
     locale,
     text.authorizeTitle,
-    `<article><p>${text.client}: <strong>${escapeHtml(details.clientName)}</strong></p><p>${text.callback}: ${escapeHtml(details.redirectHost)}</p>${scopeWarning(locale)}<p>${text.grantLifetime}</p>${form("/authorize", { handle, decision: "approve" }, text.allow)}${form("/authorize", { handle, decision: "deny" }, text.deny)}</article>`,
+    `
+    <section class="focus-card" aria-labelledby="consent-title">
+      <h2 id="consent-title">${text.authorizeTitle}</h2><p class="lead">${text.consentIntro}</p>
+      <div class="consent-client"><p class="eyebrow">${text.requestedBy}</p><h3>${escapeHtml(details.clientName)}</h3><p class="muted">${text.callback} <code>${escapeHtml(details.redirectHost)}</code></p></div>
+      <ul class="permissions"><li>${text.consentPermission}</li><li>${text.consentExecution}</li><li>${text.consentRevocation}</li></ul>
+      <div class="actions">${form("/authorize", { handle, decision: "deny" }, text.deny, "secondary")}${form("/authorize", { handle, decision: "approve" }, text.allow)}</div>
+      <p class="form-foot">${text.grantLifetime}</p>
+    </section>`,
     headers,
+    { layout: "focus" },
   );
 }
 
@@ -65,14 +100,56 @@ export function consentRedirect(
 ) {
   const locale = language(request);
   const text = messages(locale);
-  // Finish the form submission before navigating. Chromium applies form-action
-  // to every HTTP redirect, including redirects owned by the OAuth client.
+  // Chromium applies form-action to HTTP redirects after a form POST, including
+  // the client's callback. Navigate after the response without broadening CSP.
   headers.delete("Location");
   headers.set("Refresh", "0;url=" + redirectTo);
   return html(
     locale,
     text.returnToClient,
-    `<p><a href="${escapeHtml(redirectTo)}" rel="noreferrer">${escapeHtml(text.continueToClient)}</a></p>`,
+    `
+    <section class="focus-card result-card"><p class="eyebrow">${BRAND_NAME}</p><h1>${text.returnToClient}</h1><p class="lead">${text.returnHelp}</p>
+    <div class="actions"><a class="button" href="${escapeHtml(redirectTo)}" rel="noreferrer">${text.continueToClient}</a></div></section>`,
     headers,
   );
+}
+
+/** Keep browser recovery pages separate from protocol/API error responses. */
+export function browserError(
+  request: Request,
+  status: number,
+): Response | undefined {
+  const path = new URL(request.url).pathname;
+  if (
+    !request.headers.get("Accept")?.includes("text/html") ||
+    ![
+      "/login",
+      "/logout",
+      "/authorize",
+      "/admin",
+      "/admin/pair",
+      "/admin/instances",
+      "/admin/revoke",
+    ].includes(path)
+  )
+    return;
+  const locale = language(request);
+  const text = messages(locale);
+  const login = path === "/login" || path === "/logout";
+  const help =
+    status === 429
+      ? text.rateLimitHelp
+      : status >= 500
+        ? text.serviceErrorHelp
+        : path === "/authorize"
+          ? text.authorizationErrorHelp
+          : text.errorHelp;
+  const page = html(
+    locale,
+    text.errorTitle,
+    `
+    <section class="focus-card result-card"><p class="result-code">${status}</p><h1>${text.errorTitle}</h1><p class="lead">${help}</p>
+    <div class="actions"><a class="button secondary" href="${login ? "/login" : "/admin"}">${login ? text.backToLogin : text.backToAdmin}</a></div></section>`,
+  );
+  return new Response(page.body, { status, headers: page.headers });
 }

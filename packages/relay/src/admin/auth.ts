@@ -105,7 +105,20 @@ export class OwnerAuth {
       html(
         locale,
         text.signInTitle,
-        `<article><p>${text.manageInstance}</p><p>${e(this.config.ORIGIN)}</p>${error ? `<p role="alert">${e(error)}</p>` : ""}<form method="post" action="/login"><label for="secret">${text.adminKey}</label><p><input id="secret" name="secret" type="password" autocomplete="current-password" required maxlength="256" style="width:100%;box-sizing:border-box;padding:12px"></p><input type="hidden" name="next" value="${e(next)}"><button>${text.signIn}</button></form></article><p>${text.keyHelp}</p>`,
+        `<section class="focus-card" aria-labelledby="login-title">
+          <h2 id="login-title">${text.signInTitle}</h2><p class="lead">${text.manageInstance}</p>
+          <code class="instance-origin">${e(this.config.ORIGIN)}</code>
+          ${error ? `<div class="notice error" role="alert" id="login-error">${e(error)}</div>` : ""}
+          <form method="post" action="/login">
+            <div class="field"><label for="secret">${text.adminKey}</label>
+              <input id="secret" name="secret" type="password" autocomplete="current-password" required maxlength="256" aria-describedby="key-help${error ? " login-error" : ""}"${error ? ' aria-invalid="true"' : ""}>
+              <small id="key-help">${text.keyHelp}</small>
+            </div>
+            <input type="hidden" name="next" value="${e(next)}"><button class="full">${text.signIn}</button>
+          </form>
+        </section>`,
+        new Headers(),
+        { layout: "focus" },
       );
     if (url.pathname === "/login" && request.method === "GET") {
       if (await this.authenticated(request))

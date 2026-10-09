@@ -11,6 +11,7 @@ import { z } from "zod";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { Relay, type RelaySocket } from "@agenvo/relay/core";
 import { mcp } from "@agenvo/relay/mcp";
+import { BRAND_NAME, brandAsset } from "@agenvo/relay/brand";
 import { admin } from "@agenvo/relay/admin";
 import {
   OwnerAuth,
@@ -19,6 +20,7 @@ import {
   sameOrigin,
 } from "@agenvo/relay/admin/auth";
 import { managementPage } from "@agenvo/relay/admin/management";
+import { browserError } from "@agenvo/relay/admin/page";
 import { LIMITS, PROTOCOL, VERSION, Fault, asOutcome } from "@agenvo/protocol";
 import { SqliteStore } from "./store.js";
 import { VpsOAuth } from "./oauth.js";
@@ -165,6 +167,7 @@ export async function startServer(
     provider: oauth,
     issuerUrl: new URL(config.origin),
     resourceServerUrl: new URL(config.origin + "/mcp"),
+    resourceName: BRAND_NAME,
     scopesSupported: ["runtime:approved"],
   });
   // Browser consent is shared with the owner session, rather than the SDK's
@@ -192,7 +195,9 @@ export async function startServer(
       const managed = await admin(request, relay, (request) =>
         owner.requireApi(request),
       );
-      if (managed) response = managed;
+      const asset = brandAsset(request);
+      if (asset) response = asset;
+      else if (managed) response = managed;
       else if (path === "/login" || path === "/logout")
         response = await owner.fetch(
           request,
@@ -299,16 +304,19 @@ export async function startServer(
           },
           "Server request failed",
         );
-      response = Response.json(
-        error instanceof Fault
-          ? asOutcome(error)
-          : { error: "invalid_request" },
-        { status },
-      );
+      response =
+        browserError(request, status) ??
+        Response.json(
+          error instanceof Fault
+            ? asOutcome(error)
+            : { error: "invalid_request" },
+          { status },
+        );
     }
     res.status(response.status);
     response.headers.forEach((v, k) => res.setHeader(k, v));
-    res.send(Buffer.from(await response.arrayBuffer()));
+    if (req.method === "HEAD") res.end();
+    else res.send(Buffer.from(await response.arrayBuffer()));
   });
   app.use(
     (
