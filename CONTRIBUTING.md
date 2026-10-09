@@ -17,6 +17,8 @@ npm audit
 
 Integration tests start local workerd and Node servers with temporary state and exercise real HTTP/WebSocket/MCP routes. They do not require a Cloudflare account. Unit tests use protocol fixtures to exercise failure paths.
 
+The Windows file-contention regression runs with `npm test`: a real shared handle blocks JSON replacement and is released through explicit coordination. Cross-platform fault injection covers transient contention, persistent failures, and preservation of the previous file; `npm run test:integration` covers status publication after the handshake and write-failure diagnostics. Connector startup timeouts include subprocess output. Investigate the original error; a passing rerun is not evidence of a fix.
+
 For changes to adapters, event delivery or the full user workflow, install the supported native binaries and run the system suites:
 
 ```sh

@@ -357,15 +357,22 @@ export async function eventsLab(t: TestContext) {
       child.stderr!.on("data", (c) => {
         logs += c;
       });
-      await until(
-        async () => {
-          if (child.exitCode !== null) throw new Error(logs);
-          return readFile(join(dir, "status.json"), "utf8")
-            .then(JSON.parse)
-            .catch(() => ({}));
-        },
-        (s) => s.state === "online",
-      );
+      try {
+        await until(
+          async () => {
+            if (child.exitCode !== null || child.signalCode !== null)
+              throw new Error("Connector exited before becoming online");
+            return readFile(join(dir, "status.json"), "utf8")
+              .then(JSON.parse)
+              .catch(() => ({}));
+          },
+          (s) => s.state === "online",
+        );
+      } catch (error) {
+        throw new Error(`${error}\nConnector output:\n${logs}`, {
+          cause: error,
+        });
+      }
     };
     const stopConnector = async () => {
       // Exercise the connector's normal shutdown path on every platform.
