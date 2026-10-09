@@ -91,7 +91,9 @@ agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agen
 
 agent.prompt 和 agent.send-keys 使用原生 name 寻址，pane 输入使用 paneId。调用者可以按需查看当前 Agent 或终端，再决定发送什么输入。
 
-使用 agent.read 或 pane.read 读取。Agent 忙碌导致历史不可读时，显式选择 source: visible。输出是有界终端快照；检查当前界面后，可用原生文本和按键回答问题。不要把终端输出当成结构化请求标识或持久历史。
+使用 agent.read 或 pane.read 读取；`lines` 默认为 `80`，`source` 默认为 `recent-unwrapped`。Agent 忙碌导致历史不可读时，显式选择 source: visible。输出是有界终端快照；检查当前界面后，可用原生文本和按键回答问题。不要把终端输出当成结构化请求标识或持久历史。
+
+Herdr 参数校验失败时返回 `invalid_params`，`error.message` 包含字段路径和原因。路径使用 JSON 数组，例如 `["lines"]`；`[]` 表示整个参数对象的错误，例如包含无法识别的字段。
 
 按变化触发观察时使用已有的[事件协议](events.zh-CN.md)，再通过 execute 读取当前状态和输出。
 

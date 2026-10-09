@@ -415,7 +415,10 @@ export class HerdrAdapter implements Adapter {
       name,
       description: method.description,
       readOnly: method.readOnly,
-      inputSchema: z.toJSONSchema(method.schema, { unrepresentable: "any" }),
+      inputSchema: z.toJSONSchema(method.schema, {
+        io: "input",
+        unrepresentable: "any",
+      }),
     }));
   }
 
@@ -517,7 +520,13 @@ export class HerdrAdapter implements Adapter {
       : undefined;
     if (!definition) throw new Fault("unsupported_method");
     const parsed = definition.schema.safeParse(input);
-    if (!parsed.success) throw new Fault("invalid_params");
+    if (!parsed.success)
+      throw new Fault(
+        "invalid_params",
+        parsed.error.issues
+          .map((issue) => `${JSON.stringify(issue.path)}: ${issue.message}`)
+          .join("; "),
+      );
     const p = parsed.data as Record<string, any>;
     if (method === "session.list") {
       const names = [
