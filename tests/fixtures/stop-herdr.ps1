@@ -33,16 +33,27 @@ $children = @(
     } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {}
   }
 )
+$failures = [System.Collections.Generic.List[System.Exception]]::new()
 try {
   & $HerdrBinary server stop
   if ($LASTEXITCODE -ne 0) { throw "Herdr stop exited with $LASTEXITCODE" }
   if (-not $root.WaitForExit(8000)) { throw 'Herdr did not finish saving its session' }
-} finally {
-  $root.Dispose()
-  foreach ($child in $children) {
+} catch { $failures.Add($_.Exception) }
+finally { $root.Dispose() }
+
+foreach ($child in $children) {
+  try {
+    # Each recorded handle identifies one owned process. Do not re-enumerate
+    # overlapping trees while their processes are concurrently terminating.
     try {
-      if (-not $child.HasExited) { $child.Kill($true) }
-      if (-not $child.WaitForExit(5000)) { throw "Test child $($child.Id) did not exit" }
-    } finally { $child.Dispose() }
-  }
+      if (-not $child.HasExited) { $child.Kill() }
+    } catch {
+      # Windows can report access denied when termination races with exit.
+      # Accept that outcome only after this same process handle signals exit.
+      if (-not $child.WaitForExit(5000)) { throw }
+    }
+    if (-not $child.WaitForExit(5000)) { throw "Test child $($child.Id) did not exit" }
+  } catch { $failures.Add($_.Exception) }
+  finally { $child.Dispose() }
 }
+if ($failures.Count) { throw [System.AggregateException]::new('Test-owned Herdr processes did not stop', $failures) }
