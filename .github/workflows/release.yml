@@ -21,25 +21,35 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-      actions: write
     outputs:
       ref: ${{ steps.target.outputs.ref }}
       tag: ${{ steps.target.outputs.tag }}
       publish: ${{ steps.target.outputs.publish }}
       build: ${{ steps.target.outputs.build }}
     steps:
-      - uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4, release-please 17.6.1
+      - name: Create the release tag and draft
+        uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4, release-please 17.6.1
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: release
         with:
           token: ${{ github.token }}
-      - name: Start CI for the release pull request
-        if: steps.release.outputs.pr != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_BRANCH: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
-        run: gh workflow run ci.yml --ref "$PR_BRANCH"
+          skip-github-pull-request: true
+      - name: Create the release app token
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Maintain the release pull request
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: googleapis/release-please-action@8b8fd2cc23b2e18957157a9d923d75aa0c6f6ad5 # v4, release-please 17.6.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          skip-github-release: true
       - name: Select the release checkout
         id: target
         env:
