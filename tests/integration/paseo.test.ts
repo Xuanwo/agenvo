@@ -215,6 +215,41 @@ test(
     await call("paseo.agents.archive", { agentId: external.id });
     assert.equal(external.status, "closed");
     assert.ok(external.archivedAt);
+    const [archiveEntry] = await search("archive workspace");
+    const archiveMethod = archiveEntry.methods.find(
+      (method: any) => method.name === "paseo.workspaces.archive",
+    );
+    assert.ok(archiveMethod);
+    assert.equal(archiveMethod.readOnly, false);
+    assert.deepEqual(archiveMethod.inputSchema.required, ["workspaceId"]);
+    const archived = await call(archiveMethod.name, {
+      workspaceId: "wks_fixture",
+    });
+    assert.equal(archived.workspaceId, "wks_fixture");
+    assert.ok(archived.archivedAt);
+    const missing = await outcome(archiveMethod.name, {
+      workspaceId: "wks_missing",
+    });
+    assert.equal(missing.error.code, "native_error");
+    assert.match(missing.error.message, /Workspace not found/);
+    daemon.dropNextArchive();
+    const uncertain = await outcome(archiveMethod.name, {
+      workspaceId: "wks_uncertain",
+    });
+    assert.equal(uncertain.execution, "unknown");
+    await until(
+      () => outcome("paseo.agents.list"),
+      (result) => result.execution === "accepted",
+      10000,
+    );
+    assert.equal(
+      daemon.requests.filter(
+        (request) =>
+          request.type === "archive_workspace_request" &&
+          request.workspaceId === "wks_uncertain",
+      ).length,
+      1,
+    );
     await lab.disconnect(device);
     const [offline] = await until(
       () => search(""),

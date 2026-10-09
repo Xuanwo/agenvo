@@ -40,7 +40,7 @@ Paseo 使用 `/ws` WebSocket。客户端先发送 `hello`，包含 `clientId`、
 
 实例目录提供 daemon 的 server ID、版本及连通状态。操作直接使用完整原生 Agent ID，Connector 不增加签名 Thread 引用、统一状态或观察日志。重连后重新订阅，原生 Agent ID 和历史仍由 Paseo 持有。
 
-原生方法只暴露 Agent 管理需要的能力：workspace 发现与创建、provider/model/mode 发现、下面的生命周期控制。每个方法有输入 schema、readOnly 标志和实际副作用说明。终端、文件、浏览器、schedule 和 daemon 管理不自动成为本 Connector 的能力。
+原生方法只暴露 Agent 管理需要的能力：workspace 发现、创建与归档、provider/model/mode 发现、下面的生命周期控制。每个方法有输入 schema、readOnly 标志和实际副作用说明。终端、文件、浏览器、schedule 和 daemon 管理不自动成为本 Connector 的能力。
 
 ## 需要保留的原生语义
 
@@ -61,6 +61,8 @@ Connector 保留可用的原生关联身份。确定派发前失败才返回 `no
 Paseo archive 对活跃 Agent 先请求取消，再归档并关闭 runtime。`paseo.agents.archive` 保留这些原生副作用，不将其描述为仅改变可见性。[生命周期实现](https://github.com/getpaseo/paseo/blob/ab10a6694ccf068959d1a6b67b6c915e21a9fe91/packages/server/src/server/agent/lifecycle-command.ts)
 
 `resume_agent_request` 使用 provider persistence handle，真实 daemon 会返回新的 Agent ID。该 Agent 可能没有 workspace，因而不出现在原生目录中；调用方保留响应中的 ID，使用原生 get/send 继续操作。`paseo.agents.resume` 直接返回实际恢复的原生 Agent。对已归档原 Agent 输入时，先调用原生 `refreshAgent` 按原 ID 取消归档并加载，再设置模式和发送；不以 resume 代替加载。
+
+`paseo.workspaces.archive` 直接调用同一 SDK 连接的 `archiveWorkspace`，归档整个 workspace 并停止其 Agent 和终端。原生服务决定 worktree 的清理：仍被其他活跃 workspace 引用的检出会保留，清理失败也可以返回成功归档。`archivedAt` 只确认归档，不证明目录已删除；分支保留。Connector 不额外删除目录、不补偿或重试清理，返回原生结果与错误供调用者判断。
 
 ### 观察与交互
 
@@ -89,6 +91,8 @@ Paseo 把 tool、plan、question、mode、other 都放在 permission request 家
 `tests/paseo.test.ts` 覆盖 modern creation 回执丢失后返回 unknown 与 idempotency key、重连不重复创建，以及 daemon 身份不匹配时拒绝订阅。SDK 自带的 creation reconnect 可以再次提交未找到回执的创建，因此 Connector 禁用该重连，连接丢失后重建客户端，仅恢复目录观察。
 
 `tests/system/paseo-events.test.ts` 使用独立 Paseo 0.11.1 daemon、Codex 0.160.1 和本地模型服务，经 MCP 验证外部会话发现、无 prompt 创建、设置 full-access、模型执行与历史读取、取消、归档后继续原 ID、恢复返回新 ID，以及关闭 Connector 后原生任务继续完成。测试使用临时 HOME、CODEX_HOME 和 Paseo 数据，清除继承凭据，不使用个人账号或部署。执行入口见[贡献指南](../CONTRIBUTING.zh-CN.md)。
+
+`tests/system/paseo-workspaces.test.ts` 通过真实 MCP 和隔离 Paseo daemon 验证归档独占 worktree 后检出删除、分支保留，以及共享检出仍被引用时归档成功但目录保留。集成 fixture 另覆盖能力发现、原生错误和回执丢失后不重发归档。
 
 ## 支持边界
 
