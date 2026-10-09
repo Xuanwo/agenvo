@@ -76,12 +76,18 @@ for (const existing of [true, false])
       paneId = created.result.root_pane.pane_id;
       if (existing) {
         const codex = await executable("codex", {});
+        // The pane runs PowerShell. Use npm's PowerShell shim so quoted model
+        // settings do not pass through cmd.exe's batch argument parsing.
+        const launcher =
+          process.platform === "win32"
+            ? codex.replace(/\.cmd$/i, ".ps1")
+            : codex;
         await setup.call("pane.run", {
           ...ref,
           paneId,
           command:
             (process.platform === "win32" ? "& " : "") +
-            [codex, ...args].map(quote).join(" "),
+            [launcher, ...args].map(quote).join(" "),
         });
       }
       const device = await lab.connect([config]);
