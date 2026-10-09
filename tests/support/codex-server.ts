@@ -1,11 +1,11 @@
 import { execa } from "execa";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { TestContext } from "node:test";
 import { isolatedEnvironment, until } from "./environment.js";
 import { stopProcess } from "./process.js";
 
 // The test owns this service independently of every connector/client.
+// Close it before deleting its working directory, which Windows keeps in use.
 export async function codexServer(
   home: string,
   binary?: string,
@@ -51,9 +51,4 @@ export async function codexServer(
     await close();
     throw error;
   }
-}
-export async function codexFixture(t: TestContext, home: string) {
-  const server = await codexServer(home);
-  t.after(server.close);
-  return server.endpoint;
 }

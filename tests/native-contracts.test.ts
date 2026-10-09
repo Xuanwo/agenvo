@@ -1,4 +1,4 @@
-import { codexFixture } from "./support/codex-server.js";
+import { codexServer } from "./support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -116,11 +116,12 @@ test("native registry rejects duplicates and Herdr input directly uses the suppl
 
 test("native Codex preserves notifications, questions, permissions, errors and explicit turn identity", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agenvo-native-contract-"));
+  const server = await codexServer(root);
   const config = instanceConfigSchema.parse({
     id: "test",
     label: "Test",
     kind: "codex",
-    endpoint: await codexFixture(t, root),
+    endpoint: server.endpoint,
     cwd: root,
     home: root,
   });
@@ -128,6 +129,7 @@ test("native Codex preserves notifications, questions, permissions, errors and e
   const a = new CodexAdapter(config);
   t.after(async () => {
     await a.close();
+    await server.close();
     await rm(root, { recursive: true, force: true });
   });
   await a.init();
