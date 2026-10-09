@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages ./packages
 COPY apps ./apps
-COPY scripts/build.mjs ./scripts/build.mjs
+COPY scripts/build.mjs scripts/release-packages.ts ./scripts/
 COPY LICENSE NOTICE ./
 RUN npm ci && npm pack --workspace @agenvo/server --pack-destination /tmp
 RUN mkdir /release && cd /release && npm init -y && npm install --omit=dev /tmp/agenvo-server-*.tgz

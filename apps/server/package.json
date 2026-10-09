@@ -1,6 +1,6 @@
 {
   "name": "@agenvo/server",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.0",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
@@ -12,9 +12,9 @@
     "node": ">=24.13.0"
   },
   "devDependencies": {
-    "@agenvo/protocol": "0.1.0",
-    "@agenvo/relay": "0.1.0",
-    "@agenvo/logging": "0.1.0"
+    "@agenvo/protocol": "0.2.0-rc.0",
+    "@agenvo/relay": "0.2.0-rc.0",
+    "@agenvo/logging": "0.2.0-rc.0"
   },
   "description": "Self-hosted Agenvo relay for Node.js",
   "bin": {

@@ -1,16 +1,34 @@
 import { build } from "esbuild";
-import { mkdir, rm, readFile, copyFile, chmod } from "node:fs/promises";
+import { mkdir, rm, copyFile, chmod } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { releasePackages } from "./release-packages.ts";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
-const apps = ["herdr", "codex-app-server", "paseo", "amp", "lody", "server"];
-const selected = process.argv[2] ? [process.argv[2]] : apps;
-for (const app of selected) {
-  if (!apps.includes(app)) throw new Error("Unknown release app: " + app);
-  const dir = join(root, "apps", app);
-  const manifest = JSON.parse(
-    await readFile(join(dir, "package.json"), "utf8"),
+const packages = releasePackages(root);
+if (!process.argv[2]) {
+  for (const { manifest } of packages) {
+    if (!manifest.scripts?.build)
+      throw new Error(`${manifest.name} needs a build script`);
+    const args = ["run", "build", "--workspace", manifest.name];
+    if (process.env.npm_execpath)
+      execFileSync(process.execPath, [process.env.npm_execpath, ...args], {
+        stdio: "inherit",
+      });
+    else
+      execFileSync("npm", args, {
+        stdio: "inherit",
+        shell: process.platform === "win32",
+      });
+  }
+} else {
+  const app = process.argv[2];
+  const pkg = packages.find(
+    ({ manifest }) => manifest.name === `@agenvo/${app}`,
   );
+  if (!pkg) throw new Error("Unknown release app: " + app);
+  const dir = join(root, pkg.directory);
+  const manifest = pkg.manifest;
   await rm(join(dir, "dist"), { recursive: true, force: true });
   await mkdir(join(dir, "dist"), { recursive: true });
   const result = await build({

@@ -1,6 +1,6 @@
 {
   "name": "@agenvo/herdr",
-  "version": "0.1.0",
+  "version": "0.2.0-rc.0",
   "type": "module",
   "license": "Apache-2.0",
   "repository": {
@@ -12,8 +12,8 @@
     "node": ">=24.13.0"
   },
   "devDependencies": {
-    "@agenvo/connector": "0.1.0",
-    "@agenvo/protocol": "0.1.0",
+    "@agenvo/connector": "0.2.0-rc.0",
+    "@agenvo/protocol": "0.2.0-rc.0",
     "zod": "4.6.5"
   },
   "description": "Herdr connector for Agenvo",

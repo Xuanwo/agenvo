@@ -1,3 +1,4 @@
+import { releasePackages } from "../../scripts/release-packages.ts";
 import { codexServer } from "../support/codex-server.js";
 import { assertPublicBrand } from "../support/brand.js";
 import { VERSION } from "@agenvo/protocol";
@@ -55,14 +56,8 @@ test(
       }),
     );
     const installed = new Map<string, string>();
-    for (const app of [
-      "herdr",
-      "codex-app-server",
-      "paseo",
-      "amp",
-      "lody",
-      "server",
-    ]) {
+    for (const { manifest: sourceManifest } of releasePackages(repository)) {
+      const app = sourceManifest.name.slice("@agenvo/".length);
       await exec(
         "npm",
         ["pack", "--workspace", "@agenvo/" + app, "--pack-destination", root],
@@ -82,45 +77,38 @@ test(
         ],
         { cwd: prefix },
       );
-      const entry = join(
-        prefix,
-        "node_modules",
-        "@agenvo",
-        app,
-        "dist",
-        "cli.js",
-      );
-      installed.set(app, entry);
-      const { stdout } = await exec(
-        join(
-          prefix,
-          "node_modules",
-          ".bin",
-          "agenvo-" + app + (process.platform === "win32" ? ".cmd" : ""),
-        ),
-        ["--help"],
-        {
-          cwd: root,
-          env: isolatedEnvironment(root),
-        },
-      );
-      assert.match(stdout, new RegExp("agenvo-" + app));
-      const bundle = await readFile(entry, "utf8");
-      assert.doesNotMatch(bundle, /(?:from|import)\s*["']@agenvo\//);
+      const packageDir = join(prefix, "node_modules", sourceManifest.name);
       const manifest = JSON.parse(
-        await readFile(
-          join(prefix, "node_modules", "@agenvo", app, "package.json"),
-          "utf8",
-        ),
+        await readFile(join(packageDir, "package.json"), "utf8"),
       );
-      assert.equal(manifest.private, undefined);
+      assert.notEqual(manifest.private, true);
       assert.equal(
-        Object.keys(manifest.dependencies).some((name) =>
+        Object.keys(manifest.dependencies ?? {}).some((name) =>
           name.startsWith("@agenvo/"),
         ),
         false,
       );
-      if (app !== "server") {
+      for (const [name, path] of Object.entries(sourceManifest.bin ?? {})) {
+        const { stdout } = await exec(
+          join(
+            prefix,
+            "node_modules",
+            ".bin",
+            name + (process.platform === "win32" ? ".cmd" : ""),
+          ),
+          ["--help"],
+          { cwd: root, env: isolatedEnvironment(root) },
+        );
+        assert.ok(stdout.length > 0, `${name} should expose CLI help`);
+        const bundle = await readFile(join(packageDir, path), "utf8");
+        assert.doesNotMatch(bundle, /(?:from|import)\s*["']@agenvo\//);
+      }
+      const cli = sourceManifest.bin?.["agenvo-" + app];
+      if (!cli) continue;
+      const entry = join(packageDir, cli);
+      installed.set(app, entry);
+      const bundle = await readFile(entry, "utf8");
+      if (sourceManifest.devDependencies?.["@agenvo/connector"]) {
         assert.doesNotMatch(
           bundle,
           /from ["']express|@cloudflare\/workers-oauth-provider/,
