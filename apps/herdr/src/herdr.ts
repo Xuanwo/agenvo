@@ -28,6 +28,38 @@ const target = {
   ),
 };
 const pane = { ...ref, paneId: id };
+const trustRepository = z
+  .boolean()
+  .default(false)
+  .describe(
+    "Trust this repository for this Git command even if owned by another user. Maps to native --trust-repository; does not change Git configuration.",
+  );
+const repository = {
+  workspaceId: id
+    .optional()
+    .describe("Select the repository by a workspace; omit cwd."),
+  cwd: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Select the repository by a directory inside it; omit workspaceId. If neither is given, use the configured instance directory.",
+    ),
+  trustRepository,
+};
+const source = (p: Record<string, any>, cwd: string) => [
+  ...(p.workspaceId ? ["--workspace", p.workspaceId] : ["--cwd", p.cwd ?? cwd]),
+  ...(p.trustRepository ? ["--trust-repository"] : []),
+];
+const oneSource = (p: { workspaceId?: string; cwd?: string }) =>
+  !(p.workspaceId && p.cwd);
+const sourceMessage = {
+  message: "Select the repository by workspaceId or cwd, not both",
+};
+const flags = (p: Record<string, any>, names: string[]) =>
+  names.flatMap((name) =>
+    p[name] === undefined ? [] : ["--" + name, String(p[name])],
+  );
 const lines = z.number().int().min(1).max(500).default(80);
 const readSource = z.enum([
   "visible",
@@ -98,6 +130,114 @@ const methods: Record<string, NativeMethod> = {
     description:
       "Close a workspace and its terminal panes, stopping the programs running in them.",
     argv: (p) => ["workspace", "close", p.workspaceId],
+  },
+  "worktree.list": {
+    schema: z
+      .strictObject({ ...ref, ...repository })
+      .refine(oneSource, sourceMessage),
+    readOnly: true,
+    description:
+      "List the Git worktrees of a repository, including ones created outside Herdr, with the workspace each is open in.",
+    argv: (p, cwd) => ["worktree", "list", ...source(p, cwd)],
+  },
+  "worktree.create": {
+    schema: z
+      .strictObject({
+        ...ref,
+        ...repository,
+        branch: z.string().min(1).max(256).optional(),
+        base: z.string().min(1).max(256).optional(),
+        path: z.string().min(1).max(4096).optional(),
+        label: z.string().max(128).optional(),
+      })
+      .refine(oneSource, sourceMessage),
+    readOnly: false,
+    description:
+      "Create a Git worktree and open it as a workspace without changing user focus. Retain returned native IDs; inspect worktree.list after unknown confirmation before retrying.",
+    argv: (p, cwd) => [
+      "worktree",
+      "create",
+      ...source(p, cwd),
+      ...flags(p, ["branch", "base", "path", "label"]),
+      "--no-focus",
+    ],
+  },
+  "worktree.open": {
+    schema: z
+      .strictObject({
+        ...ref,
+        ...repository,
+        path: z.string().min(1).max(4096).optional(),
+        branch: z.string().min(1).max(256).optional(),
+        label: z.string().max(128).optional(),
+      })
+      .refine(oneSource, sourceMessage)
+      .refine((p) => Boolean(p.path) !== Boolean(p.branch), {
+        message: "Select the worktree by exactly one of path or branch",
+      }),
+    readOnly: false,
+    description:
+      "Open an existing Git worktree as a workspace without changing user focus. Select exactly one of path or branch.",
+    argv: (p, cwd) => [
+      "worktree",
+      "open",
+      ...source(p, cwd),
+      ...flags(p, ["path", "branch", "label"]),
+      "--no-focus",
+    ],
+  },
+  "worktree.remove": {
+    schema: z.strictObject({
+      ...ref,
+      workspaceId: id,
+      force: z.boolean().default(false),
+      trustRepository,
+    }),
+    readOnly: false,
+    description:
+      "Remove the Git worktree checkout behind a linked worktree workspace and close the workspace. The branch remains. force discards uncommitted changes; preserve required work first.",
+    argv: (p) => [
+      "worktree",
+      "remove",
+      "--workspace",
+      p.workspaceId,
+      ...(p.force ? ["--force"] : []),
+      ...(p.trustRepository ? ["--trust-repository"] : []),
+    ],
+  },
+  "tab.create": {
+    schema: z.strictObject({
+      ...ref,
+      workspaceId: id,
+      cwd: z.string().optional(),
+      label: z.string().max(128).optional(),
+      env: z
+        .record(
+          z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/),
+          z.string().max(4096),
+        )
+        .refine((env) => Object.keys(env).length <= 32)
+        .default({}),
+    }),
+    readOnly: false,
+    description:
+      "Create a tab with a fresh shell pane in a workspace without changing user focus, for example to start an agent beside existing panes. Returns the tab and its root pane.",
+    argv: (p) => [
+      "tab",
+      "create",
+      "--workspace",
+      p.workspaceId,
+      ...flags(p, ["cwd", "label"]),
+      ...Object.entries(p.env).flatMap(([k, v]) => ["--env", `${k}=${v}`]),
+      "--no-focus",
+    ],
+  },
+  "tab.close": {
+    schema: z.strictObject({ ...ref, tabId: id }),
+    readOnly: false,
+    description:
+      "Close a tab and its terminals. Preserve required output and artifacts before cleanup.",
+    argv: (p) => ["tab", "close", p.tabId],
   },
   "pane.list": {
     schema: z.strictObject(ref),

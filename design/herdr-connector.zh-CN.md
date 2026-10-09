@@ -10,6 +10,10 @@ Herdr 的 work context 是 terminal pane 内运行的 agent；session 指原生�
 
 `agent.prompt`、`agent.send-keys` 使用原生 name，pane 输入使用 paneId。`agent.read`、`pane.read` 返回终端快照；历史不可读时，调用者可显式选择 visible。终端中的问题通过文本和按键回答，不模拟结构化请求 ID 或持久会话历史。Agenvo 启动 Agent 时采用 full-access；已有 Agent 的设置仍由原生服务持有。
 
+`worktree.list/create/open/remove` 直接映射 Herdr 的 Git worktree 操作，`tab.create/close` 管理 workspace 内的终端容器。它们为 `agent.start` 提供检出和 pane，不把这些资源等同为 work context。列表包括外部创建的 worktree，删除检出保留分支；`force` 保留原生丢弃未提交改动的语义。创建与打开固定使用 `--no-focus`，不抢占用户焦点。
+
+worktree 方法保留默认关闭的 `trustRepository`，映射原生 `--trust-repository`。Herdr 仅为本次 Git 命令设置解析后仓库的 `safe.directory`，不会修改 Git 配置；调用者决定是否信任仓库。Connector 不增加批准状态、重试或清理编排。参数 schema、原生结果、错误和已有 backendGeneration 检查沿用适配器契约。
+
 ## 原生接口依据
 
 接口基线为 Herdr 0.9.3，仅用于复现与追溯，不作为运行时版本白名单。
@@ -26,6 +30,7 @@ Herdr 的 work context 是 terminal pane 内运行的 agent；session 指原生�
 | `events.subscribe` | 没有公开 cursor/since 参数；内部 sequence 不构成断线重放契约 |
 | `agent.send-keys`、`pane.send-keys` | 效果取决于终端程序，不能保证 Thread 中断 |
 | `workspace.close` | 关闭资源，不等于归档会话 |
+| `worktree.list/create/open/remove`、`tab.create/close` | 原生工作目录与终端容器；Git 检出删除与 Agent 会话生命周期分别处理 |
 
 `interactive_ready` 表示 Herdr 受管启动已进入 Active 阶段；它不是所有原生 Agent 的发送能力开关。外部启动、或启动确认超时后仍存活的 Codex、Claude、Devin 可以通过 `agent.prompt` 接收输入。Agenvo 对这些已支持的 Agent 不以该字段为前提，仍在发送前检查身份，并保留 Herdr 对前台进程、启动中状态和交互阻塞的检查。
 
@@ -38,3 +43,5 @@ Herdr 的 [Agent 恢复逻辑](https://github.com/herdrdev/herdr/blob/7b116c05bf
 重构前的 `66aa871d17b1d912e709f4870fe75d9d09a84074` 使用隔离 Herdr 0.9.3 验证：禁用统一 management 方法后，服务发现、custom Agent 发现、问题读取、输入与结果读取仍能完成；服务重启后旧 generation 被拒绝。这支持直接暴露原生能力，同时保留原生身份与终端读取边界。
 
 更新适配器时，通过[适配器和系统测试](../CONTRIBUTING.zh-CN.md)验证真实原生行为；固定版本只用于复现。上述历史实验不能代替变更后的 MCP 入口验证。
+
+`tests/system/herdr-worktrees.test.ts` 经真实 MCP 的 search/execute 和隔离 Herdr 验证能力发现、外部 worktree 打开、tab 环境变量、删除时保留分支、脏检出的原生拒绝与显式 force。参数测试覆盖各 worktree 方法的 trustRepository 默认关闭和显式开启。

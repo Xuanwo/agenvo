@@ -114,6 +114,48 @@ test("native registry rejects duplicates and Herdr input directly uses the suppl
   );
 });
 
+test("Herdr worktree trust is explicit and scoped to each native command", async (t) => {
+  const adapter = new HerdrAdapter({
+    kind: "herdr",
+    id: "test",
+    label: "Test",
+    binary: "/unused",
+    cwd: "/repo",
+    configRoot: "/tmp/herdr",
+  });
+  const backendGeneration = "a".repeat(64);
+  t.mock.method(adapter, "generation", async () => backendGeneration);
+  const sent: string[][] = [];
+  t.mock.method(
+    adapter as any,
+    "execute",
+    async (_session: string, args: string[]) => {
+      sent.push(args);
+      return { result: {} };
+    },
+  );
+  for (const [method, params] of [
+    ["worktree.list", {}],
+    ["worktree.create", { branch: "feature" }],
+    ["worktree.open", { branch: "feature" }],
+    ["worktree.remove", { workspaceId: "workspace" }],
+  ] as const) {
+    for (const trustRepository of [undefined, false, true]) {
+      await adapter.call(method, {
+        session: "test",
+        backendGeneration,
+        ...params,
+        trustRepository,
+      });
+      assert.equal(
+        sent.at(-1)!.includes("--trust-repository"),
+        trustRepository === true,
+        method,
+      );
+    }
+  }
+});
+
 test("native Codex preserves notifications, questions, permissions, errors and explicit turn identity", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "agenvo-native-contract-"));
   const server = await codexServer(root);
