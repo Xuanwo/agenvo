@@ -76,6 +76,7 @@ test(
         name: "search",
         arguments: {
           query: name.replace(".", " "),
+          includeSchema: true,
           deviceId: device,
           instanceId: "work",
         },

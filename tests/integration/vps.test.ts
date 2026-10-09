@@ -466,7 +466,50 @@ test(
         query: "turn/start",
       },
     });
-    assert.match(JSON.stringify(info), /inputSchema/);
+    assert.equal(info.isError, false);
+    const summaries = JSON.parse((info.content as any[])[0].text).result.items;
+    assert.ok(summaries.length > 0);
+    const summary = summaries[0].methods.find(
+      (m: any) => m.name === "turn/start",
+    );
+    assert.deepEqual(Object.keys(summary).sort(), [
+      "description",
+      "name",
+      "readOnly",
+    ]);
+    assert.equal(summary.readOnly, false);
+    assert.match(summary.description, /Submit input/);
+    for (const includeSchema of [false, true]) {
+      const response = await mcp.callTool({
+        name: "search",
+        arguments: {
+          query: "turn/start",
+          deviceId: device.deviceId,
+          instanceId: "test",
+          includeSchema,
+        },
+      });
+      assert.equal(response.isError, false);
+      const entries = JSON.parse((response.content as any[])[0].text).result
+        .items;
+      if (!includeSchema) {
+        assert.deepEqual(entries, summaries);
+      } else {
+        assert.equal(entries.length, 1);
+        const method = entries[0].methods.find(
+          (m: any) => m.name === "turn/start",
+        );
+        const { inputSchema, ...fields } = method;
+        assert.deepEqual(fields, summary);
+        assert.ok(inputSchema.properties.threadId);
+        assert.ok(inputSchema.required.includes("threadId"));
+      }
+    }
+    const invalidSearch = await mcp.callTool({
+      name: "search",
+      arguments: { query: "turn/start", includeSchema: "true" },
+    });
+    assert.equal(invalidSearch.isError, true);
     const created = await call("thread/start");
     const threadId = created.thread.id;
     const sent = await call("turn/start", {

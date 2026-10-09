@@ -25,10 +25,15 @@ test(
         serverId: daemon.serverId,
       },
     ]);
-    const search = async (query: string) => {
+    const search = async (query: string, includeSchema = false) => {
       const response = await lab.rpc("tools/call", {
         name: "search",
-        arguments: { query, deviceId: device, instanceId: "paseo" },
+        arguments: {
+          query,
+          deviceId: device,
+          instanceId: "paseo",
+          includeSchema,
+        },
       });
       assert.equal(response.isError, false);
       return JSON.parse(response.content[0].text).result.items;
@@ -215,7 +220,7 @@ test(
     await call("paseo.agents.archive", { agentId: external.id });
     assert.equal(external.status, "closed");
     assert.ok(external.archivedAt);
-    const [archiveEntry] = await search("archive workspace");
+    const [archiveEntry] = await search("archive workspace", true);
     const archiveMethod = archiveEntry.methods.find(
       (method: any) => method.name === "paseo.workspaces.archive",
     );

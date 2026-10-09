@@ -12,17 +12,19 @@ Pass an empty query to search to list approved instances and online status witho
 {"query": ""}
 ```
 
-Search by operation, or select a target and an exact method name:
+Browse method summaries by operation, then select a target and method name to retrieve its full schema:
 
 ```json
 {"query": "submit input"}
 ```
 
 ```json
-{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding"}
+{"query": "thread/start", "deviceId": "DEVICE_ID", "instanceId": "coding", "includeSchema": true}
 ```
 
-The response's result.items contains instances and matching methods, each with name, description, readOnly and inputSchema. Queries are case-insensitive whitespace-separated keywords; all words must occur in the connector kind, method name or description. Search does not execute code, evaluate regular expressions or perform semantic search. Search for codex or herdr to list all methods of that kind; deviceId and instanceId narrow the target.
+The response's result.items contains instances and matching methods, each with only name, description and readOnly by default. To discover parameters, narrow the target and method name and pass includeSchema: true for the full inputSchema. Omitting includeSchema or passing false returns summaries; descriptions remain intact to preserve calling constraints. Empty queries still list only instances, even with true.
+
+Queries are case-insensitive whitespace-separated keywords; all words must occur in the connector kind, method name or description. Search does not execute code, evaluate regular expressions or perform semantic search. Search for codex or herdr to list all methods of that kind; deviceId and instanceId narrow the target.
 
 A deviceId identifies a Connector, not a physical machine. Offline or unavailable instances retain their status or error; a failed method lookup may leave partial results. Online instances without matching methods are omitted from nonempty searches. Names are unique within an instance; no Agenvo namespace is required.
 
