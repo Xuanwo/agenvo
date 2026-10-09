@@ -9,7 +9,7 @@
 先按[安装指南](installation.zh-CN.md)获取对应版本的 checkout 并安装 CLI。在所有者电脑上运行：
 
 ```sh
-agenvo-server init --origin https://relay.example.com \
+agenvo-server init --base-url https://relay.example.com \
   --data-dir /data --host 0.0.0.0 --port 8080 --trusted-proxy \
   --output deploy/vps/relay.local.json
 ```
@@ -30,6 +30,21 @@ curl --fail https://relay.example.com/health
 镜像中的 `node` 用户 UID 为 1000。Caddy 自动申请和续期公网证书。只有 Caddy 暴露端口，不应暴露 8080。代理必须保留原始 Host 请求头。后续 Compose 命令同样传入 `--env-file deploy/vps/.env`。
 
 随后[配对设备并授权 MCP 客户端](usage.zh-CN.md)。打开 `/admin` 使用管理员密钥登录。
+
+## 部署在已有域名的路径下
+
+设置 `--base-url https://example.com/tools/agents`（保存为 `baseUrl`）。前缀名称任意，可以包含多级路径。代理保留完整路径和 WebSocket Upgrade，并额外转发两个精确的 OAuth 发现路径。在已有 Caddy 站点块中加入：
+
+```caddyfile
+@agenvo path /tools/agents /tools/agents/* /.well-known/oauth-authorization-server/tools/agents /.well-known/oauth-protected-resource/tools/agents/mcp
+handle @agenvo {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+使用仓库的 Compose 网络时，上游改为 `relay:8080`。站点的其他应用保留各自的 handler。不要使用会剥离前缀的 `handle_path`。打开 `https://example.com/tools/agents/admin`，Connector 连接 `https://example.com/tools/agents`，MCP 客户端使用 `https://example.com/tools/agents/mcp`。
+
+两个 metadata 路径只属于该实例，无需转发整个 `/.well-known/*`；两者都必须能被客户端访问。根路径部署使用同一配置，只是不带前缀。同 origin 应用共享浏览器信任边界，subpath 不提供安全隔离。
 
 ## 不使用 Docker
 

@@ -1,3 +1,4 @@
+import { RelayAddress, baseUrlSchema } from "@agenvo/protocol/address";
 import { logger } from "@agenvo/logging";
 import { sendWebhook } from "@agenvo/relay/webhook";
 import type { WebhookTransport } from "@agenvo/relay/events";
@@ -8,10 +9,9 @@ import { readFile, mkdir, lstat, open } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { z } from "zod";
-import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { Relay, type RelaySocket } from "@agenvo/relay/core";
 import { mcp } from "@agenvo/relay/mcp";
-import { BRAND_NAME, brandAsset } from "@agenvo/relay/brand";
+import { brandAsset } from "@agenvo/relay/brand";
 import { admin } from "@agenvo/relay/admin";
 import {
   OwnerAuth,
@@ -23,18 +23,12 @@ import { managementPage } from "@agenvo/relay/admin/management";
 import { browserError } from "@agenvo/relay/admin/page";
 import { LIMITS, PROTOCOL, VERSION, Fault, asOutcome } from "@agenvo/protocol";
 import { SqliteStore } from "./store.js";
-import { VpsOAuth } from "./oauth.js";
+import { VpsOAuth, oauthRouter } from "./oauth.js";
 
 const log = logger.child({ component: "server" });
 
 export const serverConfig = z.strictObject({
-  origin: z
-    .string()
-    .url()
-    .refine((s) => {
-      const u = new URL(s);
-      return u.protocol === "https:" && u.origin === s;
-    }),
+  baseUrl: baseUrlSchema,
   dataDir: z.string().refine(isAbsolute, "An absolute path is required"),
   host: z.string().default("127.0.0.1"),
   port: z.number().int().min(0).max(65535).default(8080),
@@ -67,6 +61,7 @@ export async function startServer(
   webhook: WebhookTransport = sendWebhook,
 ) {
   const config = serverConfig.parse(input);
+  const address = new RelayAddress(config.baseUrl);
   validateAdminSecret(adminSecret);
   await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
   const info = await lstat(config.dataDir);
@@ -105,7 +100,7 @@ export async function startServer(
   let eventTimer: NodeJS.Timeout | undefined;
   let eventDue = Infinity;
   const relay = new Relay({
-    origin: config.origin,
+    baseUrl: config.baseUrl,
     store,
     sockets: (id) => [...(connections.get(id) ?? [])],
     accept: (ws, id) => {
@@ -136,10 +131,10 @@ export async function startServer(
     },
   });
   const owner = new OwnerAuth(store, {
-    ORIGIN: config.origin,
+    BASE_URL: config.baseUrl,
     ADMIN_SECRET: adminSecret,
   });
-  const oauth = new VpsOAuth(store, relay, config.origin);
+  const oauth = new VpsOAuth(store, relay, config.baseUrl);
   const cleanup = setInterval(() => {
     void relay
       .alarm()
@@ -153,9 +148,10 @@ export async function startServer(
   await relay.alarm();
   const app = express();
   app.disable("x-powered-by");
+  app.enable("case sensitive routing");
   if (config.trustedProxy) app.set("trust proxy", 1);
   app.use((req, res, next) => {
-    if (req.headers.host !== new URL(config.origin).host) {
+    if (req.headers.host !== new URL(config.baseUrl).host) {
       res.status(421).end();
       return;
     }
@@ -163,18 +159,7 @@ export async function startServer(
     res.setHeader("X-Content-Type-Options", "nosniff");
     next();
   });
-  const oauthRouter = mcpAuthRouter({
-    provider: oauth,
-    issuerUrl: new URL(config.origin),
-    resourceServerUrl: new URL(config.origin + "/mcp"),
-    resourceName: BRAND_NAME,
-    scopesSupported: ["runtime:approved"],
-  });
-  // Browser consent is shared with the owner session, rather than the SDK's
-  // authorization handler, which does not carry the original Request.
-  app.use((req, res, next) =>
-    req.path === "/authorize" ? next() : oauthRouter(req, res, next),
-  );
+  app.use(oauthRouter(oauth, address));
   // Bound request bodies before constructing the shared Fetch API request.
   app.use(express.raw({ type: () => true, limit: LIMITS.parse }));
   app.use(async (req, res) => {
@@ -183,19 +168,19 @@ export async function startServer(
     for (const [key, value] of Object.entries(req.headers))
       if (value)
         headers.set(key, Array.isArray(value) ? value.join(",") : value);
-    const request = new Request(config.origin + req.originalUrl, {
+    const request = new Request(address.origin + req.originalUrl, {
       method: req.method,
       headers,
       ...(body.length ? { body: new Uint8Array(body) } : {}),
     });
-    const path = new URL(request.url).pathname;
+    const path = address.route(request.url);
     const json = () => JSON.parse(body.toString("utf8"));
     let response: Response;
     try {
-      const managed = await admin(request, relay, (request) =>
+      const managed = await admin(request, config.baseUrl, relay, (request) =>
         owner.requireApi(request),
       );
-      const asset = brandAsset(request);
+      const asset = brandAsset(request, config.baseUrl);
       if (asset) response = asset;
       else if (managed) response = managed;
       else if (path === "/login" || path === "/logout")
@@ -206,23 +191,23 @@ export async function startServer(
       else if (path === "/")
         response = new Response(null, {
           status: 303,
-          headers: { Location: "/admin" },
+          headers: { Location: address.path("/admin") },
         });
       else if (
         path === "/authorize" ||
         path === "/admin" ||
-        path.startsWith("/admin/")
+        path?.startsWith("/admin/")
       ) {
         if (!(await owner.authenticated(request))) {
           if (request.method !== "GET") throw new Fault("permission_denied");
-          response = loginRedirect(request);
+          response = loginRedirect(request, config.baseUrl);
         } else {
           if (request.method !== "GET")
-            sameOrigin(request, { ORIGIN: config.origin });
+            sameOrigin(request, { BASE_URL: config.baseUrl });
           response =
             path === "/authorize"
               ? await oauth.consent(request)
-              : await managementPage(request, relay, config.origin);
+              : await managementPage(request, relay, config.baseUrl);
         }
       } else if (path === "/health" && req.method === "GET")
         response = Response.json({
@@ -243,11 +228,11 @@ export async function startServer(
           /* Invalid or revoked tokens receive the OAuth challenge below. */
         }
         response = grantId
-          ? await mcp(request, relay, grantId)
+          ? await mcp(request, relay, grantId, config.baseUrl)
           : new Response(null, {
               status: 401,
               headers: {
-                "WWW-Authenticate": `Bearer resource_metadata="${config.origin}/.well-known/oauth-protected-resource/mcp"`,
+                "WWW-Authenticate": `Bearer resource_metadata="${address.resourceMetadataUrl}"`,
               },
             });
       } else if (path === "/pairings" && req.method === "POST")
@@ -259,14 +244,14 @@ export async function startServer(
           { status: 201 },
         );
       else if (
-        ["/pairings/poll", "/pairings/cancel"].includes(path) &&
+        ["/pairings/poll", "/pairings/cancel"].includes(path ?? "") &&
         req.method === "POST"
       ) {
         const p = z.strictObject({ code: z.string().uuid() }).parse(json());
         const secret =
           headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
         response = Response.json(
-          await (path.endsWith("poll")
+          await (path === "/pairings/poll"
             ? relay.pollPairing(p.code, secret)
             : relay.cancelPairing(p.code, secret)),
         );
@@ -305,7 +290,7 @@ export async function startServer(
           "Server request failed",
         );
       response =
-        browserError(request, status) ??
+        browserError(request, config.baseUrl, status) ??
         Response.json(
           error instanceof Fault
             ? asOutcome(error)
@@ -351,8 +336,8 @@ export async function startServer(
     };
     void (async () => {
       if (
-        req.headers.host !== new URL(config.origin).host ||
-        req.url !== "/connect" ||
+        req.headers.host !== new URL(config.baseUrl).host ||
+        req.url !== address.path("/connect") ||
         req.headers["agenvo-protocol"] !== String(PROTOCOL)
       ) {
         reject();

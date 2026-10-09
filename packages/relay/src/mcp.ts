@@ -30,7 +30,12 @@ export interface McpRelay {
   eventsSubscribe(grant: string, input: unknown): Promise<unknown>;
   eventsUnsubscribe(grant: string, input: unknown): Promise<unknown>;
 }
-export async function mcp(request: Request, relay: McpRelay, grantId: string) {
+export async function mcp(
+  request: Request,
+  relay: McpRelay,
+  grantId: string,
+  baseUrl: string,
+) {
   if (request.method !== "POST")
     return new Response(null, { status: 405, headers: { Allow: "POST" } });
   const wrap = async (
@@ -69,7 +74,7 @@ export async function mcp(request: Request, relay: McpRelay, grantId: string) {
   };
   const handler = createMcpHandler(
     () => {
-      const server = new McpServer(serverInfo(new URL(request.url).origin));
+      const server = new McpServer(serverInfo(baseUrl));
       server.registerTool(
         "search",
         {

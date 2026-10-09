@@ -19,7 +19,7 @@ export function isolatedEnvironment(root: string): NodeJS.ProcessEnv {
           TMP: root,
         }
       : {}),
-    ORIGIN: "",
+    BASE_URL: "",
     ADMIN_SECRET: "",
     HOME: root,
     TMPDIR: root,

@@ -37,7 +37,7 @@ test(
     await new Promise<void>((resolve) => probe.close(() => resolve()));
     const origin = "https://127.0.0.1:" + port;
     const config = {
-      origin,
+      baseUrl: origin,
       dataDir,
       host: "127.0.0.1",
       port,
@@ -561,7 +561,7 @@ test("forwarded client addresses are trusted only with an explicit single-proxy 
     await new Promise<void>((resolve) => probe.close(() => resolve()));
     const runtime = await startServer(
       {
-        origin: "https://127.0.0.1:" + port,
+        baseUrl: "https://127.0.0.1:" + port,
         dataDir,
         host: "127.0.0.1",
         port,

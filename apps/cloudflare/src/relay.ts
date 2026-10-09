@@ -1,3 +1,4 @@
+import { RelayAddress } from "@agenvo/protocol/address";
 import { logger } from "@agenvo/logging";
 import { sendWebhook } from "@agenvo/relay/webhook";
 import { OwnerAuth } from "@agenvo/relay/admin/auth";
@@ -52,9 +53,12 @@ export class AgenvoRelay extends DurableObject<Env> {
         );
       },
     };
-    this.owner = new OwnerAuth(store, env);
+    this.owner = new OwnerAuth(store, {
+      ...env,
+      BASE_URL: new RelayAddress(env.BASE_URL).baseUrl,
+    });
     this.relay = new Relay({
-      origin: env.ORIGIN,
+      baseUrl: new RelayAddress(env.BASE_URL).baseUrl,
       store,
       sockets: (id) => ctx.getWebSockets(id),
       accept: (ws, id) => ctx.acceptWebSocket(ws as WebSocket, [id]),
@@ -96,7 +100,7 @@ export class AgenvoRelay extends DurableObject<Env> {
       request.headers.get("authorization")?.replace(/^Bearer /, "") ?? "";
     if (!(await this.relay.authenticateDevice(id, secret)))
       return Response.json({ error: "unauthorized" }, { status: 401 });
-    const path = new URL(request.url).pathname;
+    const path = new RelayAddress(this.env.BASE_URL).route(request.url);
     if (path === "/disconnect" && request.method === "POST")
       return Response.json(this.relay.revoke("device", id));
     if (path !== "/connect") return new Response(null, { status: 404 });

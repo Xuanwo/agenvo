@@ -1,13 +1,15 @@
+import { baseUrlSchema } from "@agenvo/protocol/address";
 import { Fault } from "@agenvo/protocol";
-export function ownerOrigin(value: string) {
-  if (!value) throw new Fault("origin_required", "Pass --origin https://RELAY");
-  const url = new URL(value);
-  if (url.protocol !== "https:" || url.origin !== value)
-    throw new Fault("https_origin_required");
-  return url.origin;
+export function ownerBaseUrl(value: string) {
+  if (!value)
+    throw new Fault(
+      "base_url_required",
+      "Pass --base-url https://RELAY[/PREFIX]",
+    );
+  return baseUrlSchema.parse(value);
 }
 export async function adminRequest(
-  origin: string,
+  baseUrl: string,
   method: string,
   path: string,
   body = "",
@@ -18,7 +20,7 @@ export async function adminRequest(
       "admin_secret_required",
       "Set AGENVO_ADMIN_SECRET for explicit administrator automation, or use the management page.",
     );
-  const response = await fetch(origin + path, {
+  const response = await fetch(baseUrl + path, {
     method,
     redirect: "error",
     signal: AbortSignal.timeout(15000),

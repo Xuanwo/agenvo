@@ -76,6 +76,7 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
       }),
       relay,
       "grant",
+      "https://relay.test",
     );
     assert.equal(response.status, 200, await response.clone().text());
     const body = (await response.json()) as any;

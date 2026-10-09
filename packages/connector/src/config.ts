@@ -1,3 +1,4 @@
+import { baseUrlSchema } from "@agenvo/protocol/address";
 import { z } from "zod";
 import { homedir } from "node:os";
 import { join, resolve, dirname, isAbsolute } from "node:path";
@@ -40,14 +41,7 @@ export const configSchema = <T extends InstanceConfig>(
   z
     .strictObject({
       schema: z.literal(1),
-      relay: z
-        .string()
-        .url()
-        .refine((value) => {
-          const url = new URL(value);
-          return url.protocol === "https:" && url.origin === value;
-        }, "Relay must be a canonical HTTPS origin")
-        .optional(),
+      relay: baseUrlSchema.optional(),
       deviceId: z.string().uuid().optional(),
       name: z.string().max(128),
       instances: z.array(instanceSchema).max(128),

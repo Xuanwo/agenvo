@@ -1,3 +1,4 @@
+import { RelayAddress } from "@agenvo/protocol/address";
 import { language, messages, type Language } from "./language.js";
 import { z } from "zod";
 import { type AdminRelay } from "../admin.js";
@@ -42,7 +43,11 @@ function requestId(deviceId: string, instanceId: string) {
   return `request-${encodeURIComponent(deviceId)}-${encodeURIComponent(instanceId)}`;
 }
 
-function pairingCard(pairing: State["pairings"][number], locale: Language) {
+function pairingCard(
+  pairing: State["pairings"][number],
+  locale: Language,
+  address: RelayAddress,
+) {
   const text = messages(locale);
   return `<article class="card pairing">
     <header class="card-header"><div><div class="card-title"><h3>${e(pairing.label)}</h3>${badge(text.pending, "warn")}</div><small>${text.devicePairing} · ${text.expires} ${date(pairing.expires, locale)}</small></div></header>
@@ -50,7 +55,7 @@ function pairingCard(pairing: State["pairings"][number], locale: Language) {
       <details class="disclosure"><summary>${text.code}</summary><code>${e(pairing.code)}</code></details>
       ${pairing.instances.map((instance) => `<section class="instance">${instanceSummary(instance)}<div class="pending-scope"><p class="eyebrow">${text.accessScope}</p>${scope(instance, locale)}</div><details class="disclosure"><summary>${text.instanceDetails}</summary>${instanceIdentity(instance, locale)}</details></section>`).join("") || `<p class="muted">${text.noInstances}</p>`}
     </div>
-    <footer class="card-footer"><small>${text.pairingAccess}</small>${form("/admin/pair", { code: pairing.code, digest: pairing.digest }, text.approveDevice)}</footer>
+    <footer class="card-footer"><small>${text.pairingAccess}</small>${form(address.path("/admin/pair"), { code: pairing.code, digest: pairing.digest }, text.approveDevice)}</footer>
   </article>`;
 }
 
@@ -58,19 +63,24 @@ function instanceRequest(
   device: Device,
   instance: Device["instances"][number],
   locale: Language,
+  address: RelayAddress,
 ) {
   const text = messages(locale);
   return `<article class="card" id="${e(requestId(device.id, instance.instanceId))}">
     <header class="card-header"><div>${instanceSummary(instance, "h3")}<small>${e(device.label)}</small></div>${badge(text.pending, "warn")}</header>
     <div class="card-body"><p class="pairing-intro">${text.instanceApprovalHelp}</p><div class="pending-scope">${scope(instance, locale)}</div><details class="disclosure"><summary>${text.instanceDetails}</summary>${instanceIdentity(instance, locale)}</details></div>
-    <footer class="card-footer"><small>${text.approveInstance}</small>${form("/admin/instances", { deviceId: device.id, instanceId: instance.instanceId, fingerprint: instance.fingerprint }, text.approveShort)}</footer>
+    <footer class="card-footer"><small>${text.approveInstance}</small>${form(address.path("/admin/instances"), { deviceId: device.id, instanceId: instance.instanceId, fingerprint: instance.fingerprint }, text.approveShort)}</footer>
   </article>`;
 }
 
-function connectorCard(device: Device, locale: Language) {
+function connectorCard(
+  device: Device,
+  locale: Language,
+  address: RelayAddress,
+) {
   const text = messages(locale);
   return `<article class="card">
-    <header class="card-header"><div><div class="card-title"><h3>${e(device.label)}</h3>${badge(device.revoked ? text.revoked : device.online ? text.online : text.offline, device.revoked ? "off" : device.online ? "good" : "off")}</div><small>${device.instances.length} ${text.instances}</small></div>${device.revoked ? "" : form("/admin/revoke", { kind: "device", id: device.id }, text.revokeDevice, "danger")}</header>
+    <header class="card-header"><div><div class="card-title"><h3>${e(device.label)}</h3>${badge(device.revoked ? text.revoked : device.online ? text.online : text.offline, device.revoked ? "off" : device.online ? "good" : "off")}</div><small>${device.instances.length} ${text.instances}</small></div>${device.revoked ? "" : form(address.path("/admin/revoke"), { kind: "device", id: device.id }, text.revokeDevice, "danger")}</header>
     <div class="card-body"><details class="disclosure"><summary>${text.connectorDetails}</summary><dl class="data"><dt>${text.identifier}</dt><dd><code>${e(device.id)}</code></dd><dt>${text.fingerprint}</dt><dd><code>${e(device.fingerprint)}</code></dd></dl></details></div>
     ${
       device.instances
@@ -78,7 +88,7 @@ function connectorCard(device: Device, locale: Language) {
           (
             instance,
           ) => `<section class="instance"><div class="instance-heading"><div>${instanceSummary(instance)}<div class="instance-meta">${badge(device.revoked ? text.blocked : instance.approved ? text.approved : text.pending, device.revoked ? "off" : instance.approved ? "good" : "warn")}${!device.revoked && device.online ? badge(instance.available ? text.available : text.unavailable, instance.available ? "off" : "warn") : ""}</div></div>
-      ${device.revoked ? "" : instance.approved ? form("/admin/revoke", { kind: "instance", id: device.id, instanceId: instance.instanceId }, text.revokeShort, "quiet") : `<a class="button secondary" href="#${e(requestId(device.id, instance.instanceId))}">${text.reviewRequest}</a>`}</div>
+      ${device.revoked ? "" : instance.approved ? form(address.path("/admin/revoke"), { kind: "instance", id: device.id, instanceId: instance.instanceId }, text.revokeShort, "quiet") : `<a class="button secondary" href="#${e(requestId(device.id, instance.instanceId))}">${text.reviewRequest}</a>`}</div>
       <details class="disclosure"><summary>${text.instanceDetails}</summary>${instanceIdentity(instance, locale)}<div class="pending-scope"><p class="eyebrow">${text.accessScope}</p>${scope(instance, locale)}</div></details></section>`,
         )
         .join("") ||
@@ -87,23 +97,29 @@ function connectorCard(device: Device, locale: Language) {
   </article>`;
 }
 
-function grantsCard(grants: State["grants"], locale: Language, now: number) {
+function grantsCard(
+  grants: State["grants"],
+  locale: Language,
+  now: number,
+  address: RelayAddress,
+) {
   const text = messages(locale);
-  return `<div class="card">${grants.map((grant) => `<article class="grant-row"><div class="grant-info"><div class="grant-meta"><span class="eyebrow">${text.client}</span>${badge(grant.revoked ? text.revoked : grant.expires <= now ? text.expired : text.active, !grant.revoked && grant.expires > now ? "good" : "off")}</div><code>${e(grant.clientId)}</code><small>${text.expires} ${date(grant.expires, locale)}</small></div>${form("/admin/revoke", { kind: "grant", id: grant.id }, grant.revoked ? text.retryCleanup : text.revokeClient, grant.revoked ? "quiet" : "danger")}</article>`).join("")}</div>`;
+  return `<div class="card">${grants.map((grant) => `<article class="grant-row"><div class="grant-info"><div class="grant-meta"><span class="eyebrow">${text.client}</span>${badge(grant.revoked ? text.revoked : grant.expires <= now ? text.expired : text.active, !grant.revoked && grant.expires > now ? "good" : "off")}</div><code>${e(grant.clientId)}</code><small>${text.expires} ${date(grant.expires, locale)}</small></div>${form(address.path("/admin/revoke"), { kind: "grant", id: grant.id }, grant.revoked ? text.retryCleanup : text.revokeClient, grant.revoked ? "quiet" : "danger")}</article>`).join("")}</div>`;
 }
 
 export async function managementPage(
   request: Request,
   relay: AdminRelay,
-  origin: string,
+  baseUrl: string,
   revokeOAuth?: (id: string) => Promise<void>,
 ) {
   const locale = language(request);
   const text = messages(locale);
   const url = new URL(request.url);
-  const path = url.pathname;
+  const address = new RelayAddress(baseUrl);
+  const path = address.route(request.url);
   if (request.method === "POST") {
-    sameOrigin(request, { ORIGIN: origin });
+    sameOrigin(request, { BASE_URL: baseUrl });
     const data = Object.fromEntries(await request.formData());
     let notice: string;
     if (path === "/admin/pair") {
@@ -142,7 +158,9 @@ export async function managementPage(
           return html(
             locale,
             text.accessRevoked,
-            `<section class="focus-card result-card"><p class="eyebrow">${text.grants}</p><h1>${text.accessRevoked}</h1><div class="notice" role="status">${text.cleanupHelp}</div><div class="actions"><a class="button secondary" href="/admin#clients">${text.backToAdmin}</a></div></section>`,
+            `<section class="focus-card result-card"><p class="eyebrow">${text.grants}</p><h1>${text.accessRevoked}</h1><div class="notice" role="status">${text.cleanupHelp}</div><div class="actions"><a class="button secondary" href="${e(address.path("/admin"))}#clients">${text.backToAdmin}</a></div></section>`,
+            new Headers(),
+            { prefix: address.prefix },
           );
         }
       }
@@ -150,7 +168,7 @@ export async function managementPage(
     return new Response(null, {
       status: 303,
       headers: {
-        Location: `/admin?notice=${notice}#${notice === "client-revoked" ? "clients" : "connectors"}`,
+        Location: `${address.path("/admin")}?notice=${notice}#${notice === "client-revoked" ? "clients" : "connectors"}`,
       },
     });
   }
@@ -188,32 +206,33 @@ export async function managementPage(
     locale,
     text.adminTitle,
     `
-    <header class="page-heading"><div><p class="eyebrow">${text.adminTitle}</p><h1>${text.overview}</h1><p class="lead">${text.overviewHelp}</p></div><a class="button secondary" href="/admin">${text.refresh}</a></header>
+    <header class="page-heading"><div><p class="eyebrow">${text.adminTitle}</p><h1>${text.overview}</h1><p class="lead">${text.overviewHelp}</p></div><a class="button secondary" href="${e(address.path("/admin"))}">${text.refresh}</a></header>
     <div class="metrics">
       <a class="metric${requests ? " attention" : ""}" href="#requests"><span class="metric-label">${text.pendingRequests}</span><span class="metric-value">${requests}</span><span class="metric-note">${text.pendingRequestsHelp}</span></a>
       <a class="metric" href="#connectors"><span class="metric-label">${text.onlineConnectors}</span><span class="metric-value">${devices.filter((d) => d.online).length}</span><span class="metric-note">${text.onlineConnectorsHelp}</span></a>
       <a class="metric" href="#clients"><span class="metric-label">${text.activeClients}</span><span class="metric-value">${active.length}</span><span class="metric-note">${text.activeClientsHelp}</span></a>
     </div>
-    <div class="endpoint"><label for="mcp-endpoint">${text.mcpEndpoint}</label><input id="mcp-endpoint" readonly value="${e(origin)}/mcp" spellcheck="false"></div>
+    <div class="endpoint"><label for="mcp-endpoint">${text.mcpEndpoint}</label><input id="mcp-endpoint" readonly value="${e(baseUrl)}/mcp" spellcheck="false"></div>
     <section class="section" id="requests" aria-labelledby="requests-heading"><div class="section-heading"><div><p class="section-number">01</p><h2 id="requests-heading">${text.requests}</h2><p>${text.pairingHelp}</p></div>${badge(String(requests), requests ? "warn" : "off")}</div>
-      ${requests ? `<p class="muted approval-policy">${text.scopeWarning}</p>` : ""}${pairings.map((p) => pairingCard(p, locale)).join("")}${pending.map(({ device, instance }) => instanceRequest(device, instance, locale)).join("")}${!requests ? empty(text.noRequests, text.pairingEmptyHelp) : ""}
+      ${requests ? `<p class="muted approval-policy">${text.scopeWarning}</p>` : ""}${pairings.map((p) => pairingCard(p, locale, address)).join("")}${pending.map(({ device, instance }) => instanceRequest(device, instance, locale, address)).join("")}${!requests ? empty(text.noRequests, text.pairingEmptyHelp) : ""}
     </section>
     <section class="section" id="connectors" aria-labelledby="connectors-heading"><div class="section-heading"><div><p class="section-number">02</p><h2 id="connectors-heading">${text.devices}</h2><p>${text.connectorHelp}</p></div>${badge(String(devices.length))}</div>
       ${notice && noticeKey !== "client-revoked" ? `<div class="notice success flash" role="status">${notice}</div>` : ""}
-      ${devices.map((d) => connectorCard(d, locale)).join("") || empty(text.noConnectors, text.noConnectorsHelp, { href: guide(locale, "installation"), label: text.setupGuide })}
-      ${revoked.length ? `<details class="history"><summary>${text.revoked} (${revoked.length})</summary>${revoked.map((d) => connectorCard(d, locale)).join("")}</details>` : ""}
+      ${devices.map((d) => connectorCard(d, locale, address)).join("") || empty(text.noConnectors, text.noConnectorsHelp, { href: guide(locale, "installation"), label: text.setupGuide })}
+      ${revoked.length ? `<details class="history"><summary>${text.revoked} (${revoked.length})</summary>${revoked.map((d) => connectorCard(d, locale, address)).join("")}</details>` : ""}
     </section>
     <section class="section" id="clients" aria-labelledby="clients-heading"><div class="section-heading"><div><p class="section-number">03</p><h2 id="clients-heading">${text.grants}</h2><p>${text.clientHelp}</p></div>${badge(String(active.length))}</div>
       ${noticeKey === "client-revoked" ? `<div class="notice success flash" role="status">${notice}</div>` : ""}
-      ${active.length ? grantsCard(active, locale, now) : empty(text.noClients, text.noClientsHelp, { href: guide(locale), label: text.connectClient })}
-      ${inactive.length ? `<details class="history"><summary>${text.history} (${inactive.length})</summary>${grantsCard(inactive, locale, now)}</details>` : ""}
+      ${active.length ? grantsCard(active, locale, now, address) : empty(text.noClients, text.noClientsHelp, { href: guide(locale), label: text.connectClient })}
+      ${inactive.length ? `<details class="history"><summary>${text.history} (${inactive.length})</summary>${grantsCard(inactive, locale, now, address)}</details>` : ""}
     </section>${scopeWarning(locale)}
   `,
     new Headers(),
     {
       layout: "admin",
-      toolbar: form("/logout", {}, text.signOut, "quiet"),
-      navigation: `<p class="eyebrow">${text.overview}</p><nav aria-label="${text.navigation}"><a href="#requests">${text.requests}<span class="nav-count">${requests}</span></a><a href="#connectors">${text.connectors}<span class="nav-count">${devices.length}</span></a><a href="#clients">${text.clients}<span class="nav-count">${active.length}</span></a></nav><p class="sidebar-note">${e(new URL(origin).host)}</p>`,
+      prefix: address.prefix,
+      toolbar: form(address.path("/logout"), {}, text.signOut, "quiet"),
+      navigation: `<p class="eyebrow">${text.overview}</p><nav aria-label="${text.navigation}"><a href="#requests">${text.requests}<span class="nav-count">${requests}</span></a><a href="#connectors">${text.connectors}<span class="nav-count">${devices.length}</span></a><a href="#clients">${text.clients}<span class="nav-count">${active.length}</span></a></nav><p class="sidebar-note">${e(new URL(baseUrl).host)}</p>`,
     },
   );
 }

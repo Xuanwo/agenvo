@@ -69,7 +69,7 @@ export interface RelaySocket {
   deserializeAttachment(): Attachment;
 }
 export interface RelayHost {
-  origin: string;
+  baseUrl: string;
   store: RecordStore;
   sockets(deviceId: string): RelaySocket[];
   accept(socket: RelaySocket, deviceId: string): void;
@@ -167,7 +167,7 @@ export class Relay {
       pollSecret,
       fingerprint: p.digest,
       expiresIn: 600,
-      approvalUrl: this.host.origin + "/admin/pair?code=" + code,
+      approvalUrl: this.host.baseUrl + "/admin/pair?code=" + code,
     };
   }
   approvePairing(code: string, expectedDigest: string) {

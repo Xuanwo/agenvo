@@ -1,13 +1,20 @@
+import { RelayAddress } from "@agenvo/protocol/address";
 import { language, messages } from "./language.js";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { type RecordStore } from "../core.js";
 import { digest, Fault } from "@agenvo/protocol";
 import { html, escapeHtml as e } from "./page.js";
 
-export type OwnerConfig = { ORIGIN: string; ADMIN_SECRET: string };
-const cookieName = "__Host-agenvo-owner";
+export type OwnerConfig = { BASE_URL: string; ADMIN_SECRET: string };
+export function cookiePrefix(baseUrl: string) {
+  return (
+    "__Host-agenvo-" +
+    createHash("sha256").update(baseUrl).digest("hex").slice(0, 16) +
+    "-"
+  );
+}
 const lifetime = 7 * 86400;
-type Session = { expires: number; keyTag: string; origin: string };
+type Session = { expires: number; keyTag: string; baseUrl: string };
 export function validateAdminSecret(secret: string) {
   if (!/^[\x21-\x7e]{43,256}$/.test(secret ?? ""))
     throw new Fault(
@@ -22,34 +29,41 @@ export async function matchesSecret(value: string, secret: string) {
 }
 export function sameOrigin(
   request: Request,
-  config: Pick<OwnerConfig, "ORIGIN">,
+  config: Pick<OwnerConfig, "BASE_URL">,
 ) {
-  if (request.headers.get("Origin") !== config.ORIGIN)
+  if (request.headers.get("Origin") !== new URL(config.BASE_URL).origin)
     throw new Fault("csrf_rejected");
 }
-export function localReturn(value: string | null, origin: string) {
+export function localReturn(value: string | null, baseUrl: string) {
+  const address = new RelayAddress(baseUrl);
+  const fallback = address.path("/admin");
   if (!value || !value.startsWith("/") || value.startsWith("//"))
-    return "/admin";
-  const url = new URL(value, origin);
-  return url.origin === origin &&
-    ["/admin", "/admin/pair", "/authorize"].includes(url.pathname)
+    return fallback;
+  const url = new URL(value, address.origin);
+  return ["/admin", "/admin/pair", "/authorize"].includes(
+    address.route(url.href) ?? "",
+  )
     ? url.pathname + url.search
-    : "/admin";
+    : fallback;
 }
-export function loginRedirect(request: Request) {
+export function loginRedirect(request: Request, baseUrl: string) {
   const url = new URL(request.url);
   return new Response(null, {
     status: 303,
     headers: {
-      Location: "/login?next=" + encodeURIComponent(url.pathname + url.search),
+      Location:
+        new RelayAddress(baseUrl).path("/login") +
+        "?next=" +
+        encodeURIComponent(url.pathname + url.search),
       "Cache-Control": "no-store",
     },
   });
 }
-function cookie(value: string, seconds: number) {
-  return `${cookieName}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`;
+function cookie(value: string, seconds: number, baseUrl: string) {
+  return `${cookiePrefix(baseUrl)}owner=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${seconds}`;
 }
-export function ownerSessionToken(request: Request) {
+export function ownerSessionToken(request: Request, baseUrl: string) {
+  const cookieName = cookiePrefix(baseUrl) + "owner";
   const values = (request.headers.get("Cookie") ?? "")
     .split(";")
     .map((v) => v.trim())
@@ -64,13 +78,14 @@ export class OwnerAuth {
     private config: OwnerConfig,
   ) {}
   async authenticated(request: Request) {
-    if (!ownerSessionToken(request)) return false;
+    if (!ownerSessionToken(request, this.config.BASE_URL)) return false;
     const record = this.store.get<Session>(
-      "owner:session:" + (await digest(ownerSessionToken(request))),
+      "owner:session:" +
+        (await digest(ownerSessionToken(request, this.config.BASE_URL))),
     );
     return Boolean(
       record &&
-      record.origin === this.config.ORIGIN &&
+      record.baseUrl === this.config.BASE_URL &&
       record.expires > Date.now() &&
       record.keyTag === (await digest(this.config.ADMIN_SECRET)),
     );
@@ -94,22 +109,24 @@ export class OwnerAuth {
     this.store.expire("owner:session:", Date.now());
     this.store.expire("owner:rate:", Date.now());
   }
-  async fetch(request: Request, address: string) {
+  async fetch(request: Request, clientAddress: string) {
     validateAdminSecret(this.config.ADMIN_SECRET);
     this.cleanup();
     const locale = language(request);
     const text = messages(locale);
     const url = new URL(request.url);
-    let next = localReturn(url.searchParams.get("next"), this.config.ORIGIN);
+    const address = new RelayAddress(this.config.BASE_URL);
+    const path = address.route(request.url);
+    let next = localReturn(url.searchParams.get("next"), this.config.BASE_URL);
     const page = (error = "") =>
       html(
         locale,
         text.signInTitle,
         `<section class="focus-card" aria-labelledby="login-title">
           <h2 id="login-title">${text.signInTitle}</h2><p class="lead">${text.manageInstance}</p>
-          <code class="instance-origin">${e(this.config.ORIGIN)}</code>
+          <code class="instance-origin">${e(this.config.BASE_URL)}</code>
           ${error ? `<div class="notice error" role="alert" id="login-error">${e(error)}</div>` : ""}
-          <form method="post" action="/login">
+          <form method="post" action="${e(address.path("/login"))}">
             <div class="field"><label for="secret">${text.adminKey}</label>
               <input id="secret" name="secret" type="password" autocomplete="current-password" required maxlength="256" aria-describedby="key-help${error ? " login-error" : ""}"${error ? ' aria-invalid="true"' : ""}>
               <small id="key-help">${text.keyHelp}</small>
@@ -118,9 +135,9 @@ export class OwnerAuth {
           </form>
         </section>`,
         new Headers(),
-        { layout: "focus" },
+        { layout: "focus", prefix: address.prefix },
       );
-    if (url.pathname === "/login" && request.method === "GET") {
+    if (path === "/login" && request.method === "GET") {
       if (await this.authenticated(request))
         return new Response(null, {
           status: 303,
@@ -130,21 +147,22 @@ export class OwnerAuth {
     }
     if (request.method !== "POST") return new Response(null, { status: 405 });
     sameOrigin(request, this.config);
-    if (url.pathname === "/logout") {
+    if (path === "/logout") {
       this.store.remove(
-        "owner:session:" + (await digest(ownerSessionToken(request))),
+        "owner:session:" +
+          (await digest(ownerSessionToken(request, this.config.BASE_URL))),
       );
       return new Response(null, {
         status: 303,
         headers: {
-          Location: "/login",
-          "Set-Cookie": cookie("", 0),
+          Location: address.path("/login"),
+          "Set-Cookie": cookie("", 0, this.config.BASE_URL),
           "Cache-Control": "no-store",
         },
       });
     }
-    if (url.pathname !== "/login") return new Response(null, { status: 404 });
-    const rateKey = "owner:rate:" + (await digest(address));
+    if (path !== "/login") return new Response(null, { status: 404 });
+    const rateKey = "owner:rate:" + (await digest(clientAddress));
     this.store.transaction(() => {
       const rate = this.store.get<{ count: number; expires: number }>(
         rateKey,
@@ -154,7 +172,7 @@ export class OwnerAuth {
       this.store.put(rateKey, { ...rate, count: rate.count + 1 });
     });
     const data = await request.formData();
-    next = localReturn(String(data.get("next") ?? ""), this.config.ORIGIN);
+    next = localReturn(String(data.get("next") ?? ""), this.config.BASE_URL);
     const secret = String(data.get("secret") ?? "");
     if (
       secret.length > 256 ||
@@ -168,23 +186,24 @@ export class OwnerAuth {
     }
     this.store.remove(rateKey);
     this.store.remove(
-      "owner:session:" + (await digest(ownerSessionToken(request))),
+      "owner:session:" +
+        (await digest(ownerSessionToken(request, this.config.BASE_URL))),
     );
     const value = crypto.randomUUID() + crypto.randomUUID();
     const keyTag = await digest(this.config.ADMIN_SECRET);
     this.store.put("owner:session:" + (await digest(value)), {
       expires: Date.now() + lifetime * 1000,
       keyTag,
-      origin: this.config.ORIGIN,
+      baseUrl: this.config.BASE_URL,
     } satisfies Session);
     return new Response(null, {
       status: 303,
       headers: {
         Location: localReturn(
           String(data.get("next") ?? ""),
-          this.config.ORIGIN,
+          this.config.BASE_URL,
         ),
-        "Set-Cookie": cookie(value, lifetime),
+        "Set-Cookie": cookie(value, lifetime, this.config.BASE_URL),
         "Cache-Control": "no-store",
       },
     });

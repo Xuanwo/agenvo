@@ -30,9 +30,9 @@ VPS 只有一个进程持有数据库排他锁。状态目录属于运行用户�
 
 设备以本地产生的秘密进行配对。Relay 只保存摘要；所有者根据设备终端指纹批准设备及其初始实例。设备主动建立 WSS，认证成功后获得新的 epoch，同设备旧连接失效。实例 hello 包含范围指纹；新增或变更范围在再次批准前不能调用。
 
-管理员在部署平台配置一项高熵登录密钥：Cloudflare secret `ADMIN_SECRET`，VPS 进程环境 `AGENVO_ADMIN_SECRET`。`packages/relay/src/admin/auth.ts` 共用登录、持久会话、限流、退出和 Origin 校验。网页登录生成随机的七天会话，存储只保留 token 摘要、origin、到期时间和管理员密钥摘要；浏览器收到 Secure、HttpOnly、SameSite=Lax 的 `__Host-` cookie。退出删除当前会话，更换密钥使旧会话失效。密钥轮换不撤销设备或客户端授权，三种凭据生命周期独立。每个来源地址十分钟内最多十次登录尝试；错误不会回显密钥，成功登录清除该来源计数。CF 使用可信连接地址，VPS 只按显式代理配置读取来源。
+管理员在部署平台配置一项高熵登录密钥：Cloudflare secret `ADMIN_SECRET`，VPS 进程环境 `AGENVO_ADMIN_SECRET`。`packages/relay/src/admin/auth.ts` 共用登录、持久会话、限流、退出和 Origin 校验。网页登录生成随机的七天会话，存储只保留 token 摘要、baseUrl、到期时间和管理员密钥摘要；浏览器收到 Secure、HttpOnly、SameSite=Lax 的 `__Host-` cookie。退出删除当前会话，更换密钥使旧会话失效。密钥轮换不撤销设备或客户端授权，三种凭据生命周期独立。每个来源地址十分钟内最多十次登录尝试；错误不会回显密钥，成功登录清除该来源计数。CF 使用可信连接地址，VPS 只按显式代理配置读取来源。
 
-管理员登录密钥至少使用 32 随机字节，编码为 hex 或 base64url；它不是用户自选的低熵口令，因此摘要比较不使用密码拉伸。比较使用定长摘要与恒时比较。ORIGIN 来自部署配置。部署由 Wrangler/Compose/systemd 负责，CLI 不接管平台凭据与资源生命周期。
+管理员登录密钥至少使用 32 随机字节，编码为 hex 或 base64url；它不是用户自选的低熵口令，因此摘要比较不使用密码拉伸。比较使用定长摘要与恒时比较。BASE_URL 来自部署配置，支持任意路径前缀；地址、发现与会话契约见[任意路径前缀部署](subpath.zh-CN.md)。部署由 Wrangler/Compose/systemd 负责，CLI 不接管平台凭据与资源生命周期。
 
 浏览器登录与 OAuth 同意分开：未登录的 `/authorize` 保留本地请求地址并跳转 `/login`；登录返回原授权页，明确同意后自动回到注册的客户端回调。返回地址只允许同 origin 的管理与授权路径。所有 cookie 授权的写操作校验准确 Origin。CF 使用 OAuth Provider 的一次性 consent handle 和浏览器绑定；VPS 将 consent handle 摘要、登录会话摘要、原授权请求与十分钟到期时间存入 SQLite，并在使用时消费。批准/拒绝都返回原 state 与匹配元数据的 issuer。OAuth token 不等同管理员会话。
 

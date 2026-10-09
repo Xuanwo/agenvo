@@ -54,7 +54,7 @@ test("unapproved OAuth registrations expire instead of permanently exhausting ca
     });
   });
   const relay = new Relay({
-    origin: "https://relay.test",
+    baseUrl: "https://relay.test",
     store,
     sockets: () => [],
     accept: () => {},

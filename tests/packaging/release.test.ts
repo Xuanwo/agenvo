@@ -278,7 +278,7 @@ test(
     assert.match(lodyDoctor.stdout, /Lody cloud workspace synchronized/);
 
     // Exercise CLI configuration and pairing against an isolated HTTPS Relay.
-    const lab = await eventsLab(t);
+    const lab = await eventsLab(t, "/packaging/team/agent");
     const native = await codexServer(root);
     cleanups.push(native.close);
     const cli = installed.get("codex-app-server")!;
@@ -354,7 +354,7 @@ test(
       [
         server,
         "init",
-        "--origin",
+        "--base-url",
         "https://relay.example",
         "--data-dir",
         join(root, "data"),

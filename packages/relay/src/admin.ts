@@ -1,3 +1,4 @@
+import { RelayAddress } from "@agenvo/protocol/address";
 import { z } from "zod";
 import { readBody, transportedFault, asOutcome } from "@agenvo/protocol";
 import { type Relay } from "./core.js";
@@ -25,10 +26,11 @@ export interface AdminRelay {
 /** Shared owner endpoints keep validation and revocation semantics identical. */
 export async function admin(
   request: Request,
+  baseUrl: string,
   relay: AdminRelay,
   authorize: (request: Request) => Promise<void>,
 ): Promise<Response | undefined> {
-  const path = new URL(request.url).pathname;
+  const path = new RelayAddress(baseUrl).route(request.url);
   if (
     ![
       "/api/admin/state",
@@ -36,7 +38,7 @@ export async function admin(
       "/api/admin/pairings/approve",
       "/api/admin/instances/approve",
       "/api/admin/revoke",
-    ].includes(path)
+    ].includes(path ?? "")
   )
     return;
   await authorize(request);

@@ -1,4 +1,4 @@
-import { ownerOrigin, adminRequest } from "./admin-client.js";
+import { ownerBaseUrl, adminRequest } from "./admin-client.js";
 import { Fault } from "@agenvo/protocol";
 type Options = Record<string, string | boolean>;
 export async function adminCommand(
@@ -6,7 +6,7 @@ export async function adminCommand(
   kind: string | undefined,
   options: Options,
 ) {
-  const origin = ownerOrigin(String(options.origin ?? ""));
+  const baseUrl = ownerBaseUrl(String(options["base-url"] ?? ""));
   let path: string,
     body = "",
     method = "POST";
@@ -40,5 +40,5 @@ export async function adminCommand(
       ...(options["instance-id"] ? { instanceId: options["instance-id"] } : {}),
     });
   } else throw new Fault("invalid_arguments");
-  return adminRequest(origin, method, path, body);
+  return adminRequest(baseUrl, method, path, body);
 }

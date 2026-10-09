@@ -167,7 +167,7 @@ export async function run<T extends InstanceConfig>(
   }
   const connect = () => {
     if (stopped || terminal) return;
-    const url = new URL("/connect", target);
+    const url = new URL(target + "/connect");
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const current = (socket = new WebSocket(url, {
       headers: {
