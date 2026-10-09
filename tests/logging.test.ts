@@ -31,6 +31,7 @@ test("MCP logs readable, correlated outcomes on stderr without request or native
   ] as const;
   for (const [id, scenario] of cases.entries()) {
     const relay: McpRelay = {
+      release: () => null,
       instances: () => ({ execution: "accepted", result: { items: [] } }),
       describe: async () => ({ execution: "accepted", result: { items: [] } }),
       call: async () => {

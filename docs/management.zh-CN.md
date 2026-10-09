@@ -30,6 +30,8 @@ deviceId 标识一个 Connector，不是一台物理机器。离线或无法查�
 
 发现结果还会原样携带配置者提供的可选 `context` 自由文本。选择和使用实例时先阅读它；空查询、匹配方法的查询和离线实例均可包含最近通告。上下文不参与方法关键词匹配，不是实时能力或权限保证，也不会自动传入原生调用。配置方式见[实例上下文](usage.zh-CN.md#补充实例上下文)。
 
+搜索也可能在 `result.updates` 提示所选获准范围内 server 和 Connector 的更新正式版本。这是 Agenvo 发行信息，不是原生运行时更新或兼容性保证。按[更新指南](updating.zh-CN.md)判断并使用已有工具执行；没有提示不证明安装版本已经是最新。
+
 ## 执行
 
 把下面的函数体传给 `execute`，将目标替换为发现的 ID：
@@ -81,11 +83,11 @@ return await call(target, "pane.read", {
 
 ## Herdr
 
-通过 session.list 获取 session 和 backendGeneration，再调用原生 workspace、pane、agent 方法。服务独立运行，Agenvo 不启动或停止它。agent.list 包含外部启动的 Agent。原生 idle、done、unknown 都不代表业务成功，也不妨碍调用者继续检查终端。
+已知 session 时可以直接调用原生 workspace、pane、agent 方法；需要发现服务时使用 session.list。调用始终操作该 session 当前的原生目标，名称和 ID 可能在服务重启后复用；需要确认目标身份时，重新查询原生状态。服务独立运行，Agenvo 不启动或停止它。agent.list 包含外部启动的 Agent。原生 idle、done、unknown 都不代表业务成功，也不妨碍调用者继续检查终端。
 
 通过 `workspace.create` 创建终端容器，或用 `tab.create` 在已有 pane 旁增加 shell pane；`tab.close` 关闭该 tab 及其中的终端。这些资源操作不启动 Agent。通过 `worktree.list`、`worktree.create`、`worktree.open` 和 `worktree.remove` 管理 Git worktree 工作区，包括 Herdr 之外创建的 worktree。删除保留分支，`force: true` 会丢弃未提交改动。worktree 方法接受默认 `false` 的 `trustRepository`，只为本次 Git 命令信任选定仓库，不修改 Git 配置。创建与打开不改变用户焦点。
 
-agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agent.get。启动确认超时不停止子进程；考虑再次启动前，先按 pane ID 重新发现。全权限启动支持 Codex、Claude、Devin。
+agent.start 需要已有 pane，返回 starting 与原生查询键。轮询 agent.get。启动确认超时不停止子进程；考虑再次启动前，先按 pane ID 重新发现。`kind` 由 Herdr 校验；Agenvo 原样转发 `args`，不注入或拒绝执行权限设置。配置者可以在实例 `context` 中声明启动约定，调用者据此选择原生参数。
 
 agent.prompt 和 agent.send-keys 使用原生 name 寻址，pane 输入使用 paneId。调用者可以按需查看当前 Agent 或终端，再决定发送什么输入。
 

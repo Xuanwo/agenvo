@@ -1,4 +1,5 @@
 // This fixture is built only by the local Workers integration suite.
+import { formalRelease, noReleases } from "../support/releases.js";
 import { logs } from "../support/worker-logs.js";
 import { logger } from "@agenvo/logging";
 import worker, {
@@ -7,6 +8,13 @@ import worker, {
 import { sendWebhook } from "@agenvo/relay/webhook";
 import { mcp } from "@agenvo/relay/mcp";
 export class AgenvoRelay extends ProductionRelay {
+  private formalReleases = false;
+  enableReleaseFixture() {
+    this.formalReleases = true;
+  }
+  protected override fetchRelease(url: string, init: RequestInit) {
+    return (this.formalReleases ? formalRelease : noReleases)(url, init);
+  }
   async eventDiagnostics() {
     return {
       alarm: await this.ctx.storage.getAlarm(),

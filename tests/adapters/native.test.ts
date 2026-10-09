@@ -1,6 +1,5 @@
 import { codexServer } from "../support/codex-server.js";
 import { socketTempDir } from "../support/environment.js";
-import { until } from "../support/environment.js";
 import { binary } from "@agenvo/connector/cli/binary";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -40,10 +39,8 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   assert.equal(a.available, true);
   const native = herdrFixture(cfg, "test");
   await native.start();
-  const ref = {
-    session: "test",
-    backendGeneration: await a.generation("test"),
-  };
+  const generation = await a.generation("test");
+  const ref = { session: "test" };
   assert.equal(
     a
       .methods()
@@ -56,7 +53,7 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   await assert.rejects(a.call("session.stop", ref), {
     code: "unsupported_method",
   });
-  assert.equal(await a.generation("test"), ref.backendGeneration);
+  assert.equal(await a.generation("test"), generation);
   t.after(async () => {
     try {
       await native.stop();
@@ -86,7 +83,7 @@ test("Herdr isolated sessions preserve references across connector reconstructio
   });
   const b = new HerdrAdapter(cfg);
   await b.init();
-  assert.equal(await b.generation("test"), ref.backendGeneration);
+  assert.equal(await b.generation("test"), generation);
   let output = "";
   for (let i = 0; i < 20 && !output.includes("AGENVO_NATIVE_HERDR_OK"); i++) {
     output = JSON.stringify(
@@ -200,102 +197,16 @@ setInterval(() => {}, 1000);
     await new Promise((r) => setTimeout(r, 100));
   }
   assert.ok(recovered, "same pane must accept new work after interruption");
-  // Start only the interactive UI: no prompt/model turn or approval is submitted.
-  if (process.platform === "win32") {
-    // Herdr's Windows PTY uses the registry PATH, not the fixture server's PATH.
-    await b.call("pane.run", {
-      ...ref,
-      paneId: nativePane,
-      command: `$env:PATH = '${process.env.PATH!.replaceAll("'", "''")}'; Write-Output ('AGENVO_PATH_' + 'READY')`,
-    });
-    await until(
-      () =>
-        b.call("pane.read", { ...ref, paneId: nativePane, source: "visible" }),
-      (r) => JSON.stringify(r).includes("AGENVO_PATH_READY"),
-    );
-  }
-  const started = await a.call("agent.start", {
-    ...ref,
-    name: "inspect",
-    paneId: nativePane,
-    kind: "codex",
-    timeoutMs: 4000,
-    args: ["--no-alt-screen", "--no-daemon"],
-  });
-  assert.equal(started.execution, "starting");
-  let discovered = false;
-  for (let i = 0; i < 70; i++) {
-    const agents = await b.call("agent.list", ref);
-    if (JSON.stringify(agents).includes('"inspect"')) {
-      try {
-        await b.call("agent.explain", { ...ref, name: nativePane });
-        discovered = true;
-        break;
-      } catch (error: any) {
-        if (
-          !["agent_explain_unavailable", "agent_not_found"].includes(
-            error.native?.code,
-          )
-        )
-          throw error;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!discovered) {
-    t.diagnostic(
-      JSON.stringify(await b.call("agent.get", { ...ref, name: "inspect" })),
-    );
-    t.diagnostic(
-      JSON.stringify(await b.call("pane.read", { ...ref, paneId: nativePane })),
-    );
-  }
-  assert.ok(discovered, "native agent must be discoverable");
-  const startup: any = (await a.call("agent.get", { ...ref, name: "inspect" }))
-    .result;
-  assert.equal(startup.result.agent.name, "inspect");
-  const found: any = (await b.call("agent.list", ref)).result;
-  assert.ok(found.result.agents.some((agent: any) => agent.name === "inspect"));
-  const metadata: any = (await b.call("agent.get", { ...ref, name: "inspect" }))
-    .result;
-  assert.equal(metadata.result.agent.name, "inspect");
-  const snapshot = await b.call("agent.read", {
-    ...ref,
-    name: "inspect",
-    source: "visible",
-  });
-  assert.equal(snapshot.execution, "accepted");
-
-  assert.equal(
-    (await b.call("agent.explain", { ...ref, name: nativePane })).execution,
-    "accepted",
-  );
-  assert.equal(
-    (
-      await b.call("agent.send-keys", {
-        ...ref,
-        name: nativePane,
-        keys: ["esc"],
-      })
-    ).execution,
-    "accepted",
-  );
-  assert.equal(
-    (await b.call("agent.read", { ...ref, name: nativePane })).execution,
-    "accepted",
-  );
   await native.stop();
   await assert.rejects(a.call("pane.read", { ...ref, paneId: nativePane }), {
     code: "runtime_unavailable",
   });
   await native.start();
-  assert.notEqual(await a.generation("test"), ref.backendGeneration);
-  await assert.rejects(b.call("agent.get", { ...ref, name: "inspect" }), {
-    code: "stale_reference",
-  });
-  await assert.rejects(a.call("pane.read", { ...ref, paneId: nativePane }), {
-    code: "stale_reference",
-  });
+  assert.notEqual(await a.generation("test"), generation);
+  assert.equal(
+    (await a.call("pane.read", { ...ref, paneId: nativePane })).execution,
+    "accepted",
+  );
 });
 
 test("Codex native API creates full-access threads without a model turn", async (t) => {

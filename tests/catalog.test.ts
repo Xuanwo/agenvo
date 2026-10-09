@@ -6,6 +6,7 @@ import type { McpRelay } from "@agenvo/relay/mcp";
 test("directory collects instance and method pages once and preserves unavailable entries", async () => {
   let reads = 0;
   const relay: McpRelay = {
+    release: () => null,
     instances: (_grant, { cursor }) => {
       reads++;
       return {
@@ -58,7 +59,7 @@ test("directory collects instance and method pages once and preserves unavailabl
     eventsSubscribe: async () => ({}),
     eventsUnsubscribe: async () => ({}),
   };
-  const result = await search(relay, "grant", { query: "read" });
+  const { items: result } = await search(relay, "grant", { query: "read" });
   assert.equal(reads, 2);
   assert.equal(result.length, 3);
   assert.deepEqual(result[0].methods, [{ name: "first" }, { name: "second" }]);
@@ -69,6 +70,7 @@ test("directory collects instance and method pages once and preserves unavailabl
 test("instance discovery and target filters avoid unrelated connector requests", async () => {
   const requested: unknown[] = [];
   const relay = {
+    release: () => null,
     instances: (_grant: string, input: unknown) => {
       requested.push(input);
       return {
@@ -88,11 +90,17 @@ test("instance discovery and target filters avoid unrelated connector requests",
         result: { items: [{ name: "thread/start" }] },
       };
     },
-  } as McpRelay;
-  assert.equal((await search(relay, "grant", { query: "  " })).length, 2);
+    call: async () => {
+      throw new Error("Search must not execute operations");
+    },
+    eventsList: () => ({}),
+    eventsSubscribe: async () => ({}),
+    eventsUnsubscribe: async () => ({}),
+  } satisfies McpRelay;
+  assert.equal((await search(relay, "grant", { query: "  " })).items.length, 2);
   assert.equal(requested.length, 1);
   requested.length = 0;
-  const result = await search(relay, "grant", {
+  const { items: result } = await search(relay, "grant", {
     query: " create ",
     deviceId: "d",
     instanceId: "two",

@@ -1,5 +1,6 @@
 import { runCode } from "./code.js";
 import { serverInfo } from "./brand.js";
+import type { Release } from "./releases.js";
 import { search } from "./catalog.js";
 import { logger } from "@agenvo/logging";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
@@ -12,6 +13,7 @@ import { asOutcome, type Outcome, type Call } from "@agenvo/protocol";
 const log = logger.child({ component: "relay.mcp" });
 
 export interface McpRelay {
+  release(grant: string): Release | null | Promise<Release | null>;
   instances(
     grant: string,
     options: { deviceId?: string; cursor?: string; limit?: number },
@@ -80,7 +82,7 @@ export async function mcp(
         {
           annotations: { readOnlyHint: true },
           description:
-            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances, their optional owner-supplied context, and matching methods with inputSchema. Read context when choosing and using an instance; it is free-form guidance, not a live capability or permission guarantee. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start'}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
+            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances, their optional owner-supplied context, and matching methods with inputSchema. Read context when choosing and using an instance; it is free-form guidance, not a live capability or permission guarantee. Optional updates report newer formal Agenvo server or connector releases, not native runtime updates or compatibility guarantees. Read the release notes and update guide, then decide whether to update using your existing deployment tools. Missing updates does not prove versions are current. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start'}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
           inputSchema: z.strictObject({
             query: z.string(),
             deviceId: z.string().optional(),
@@ -90,7 +92,7 @@ export async function mcp(
         (input) =>
           wrap("search", async () => ({
             execution: "accepted",
-            result: { items: await search(relay, grantId, input) },
+            result: await search(relay, grantId, input),
           })),
       );
       server.registerTool(

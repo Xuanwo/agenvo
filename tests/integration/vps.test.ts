@@ -1,3 +1,4 @@
+import { noReleases } from "../support/releases.js";
 import { codexServer } from "../support/codex-server.js";
 import { assertPublicBrand, assertServerBrand } from "../support/brand.js";
 import { callCode, nativeOutcome } from "../support/code.js";
@@ -42,7 +43,12 @@ test(
       host: "127.0.0.1",
       port,
     };
-    let runtime = await startServer(config, ADMIN_SECRET);
+    let runtime = await startServer(
+      config,
+      ADMIN_SECRET,
+      undefined,
+      noReleases,
+    );
     let base = () =>
       "http://127.0.0.1:" + (runtime.server.address() as { port: number }).port;
     cleanups.push(async () => {
@@ -355,7 +361,7 @@ test(
     });
     assert.equal(((await poll.json()) as any).deviceId, device.deviceId);
     await runtime.close();
-    runtime = await startServer(config, ADMIN_SECRET);
+    runtime = await startServer(config, ADMIN_SECRET, undefined, noReleases);
     const state = await admin("/api/admin/state");
     assert.equal(state.devices[0].id, device.deviceId);
     const ws = new WebSocket(base().replace("http:", "ws:") + "/connect", {

@@ -30,6 +30,8 @@ Both Connectors use common operation terms: list, create, read, submit input, in
 
 Discovery results also carry the optional owner-supplied `context` text unchanged. Read it when choosing and using an instance. Empty queries, matching method queries, and offline instances can all include the last announcement. Context does not participate in method keyword matching, guarantee live capabilities or permissions, or automatically enter native calls. See [instance context configuration](usage.md#add-instance-context).
 
+Search may also return optional `result.updates` for newer formal Agenvo server and Connector versions within the selected approved scope. These are release notices, not native runtime updates or compatibility guarantees. See [Updating](updating.md) to assess and apply them with existing tools. Missing notices do not prove the installed versions are current.
+
 ## Execute
 
 Pass this body to `execute`, replacing the target with discovered IDs:
@@ -81,11 +83,11 @@ Use `thread/list`, `thread/start`, `thread/read`, `thread/resume`, `thread/archi
 
 ## Herdr
 
-Use `session.list` to obtain session and backendGeneration, then native workspace, pane and agent methods. The service runs independently; Agenvo does not start or stop it. `agent.list` includes externally launched Agents. Native idle, done or unknown state does not prove business success or prevent the caller from inspecting the terminal.
+Call native workspace, pane and agent methods directly when the session is known; use `session.list` to discover services when needed. Calls address the session's current native targets, whose names and IDs may be reused after a service restart; query native state again when target identity matters. The service runs independently; Agenvo does not start or stop it. `agent.list` includes externally launched Agents. Native idle, done or unknown state does not prove business success or prevent the caller from inspecting the terminal.
 
 Create a terminal container with `workspace.create`, or add a shell pane beside existing panes with `tab.create`. `tab.close` closes that tab and its terminals. These resources do not start an agent. Use `worktree.list`, `worktree.create`, `worktree.open` and `worktree.remove` to manage Git worktree workspaces, including worktrees created outside Herdr. Removal keeps the branch; `force: true` discards uncommitted changes. Worktree methods accept `trustRepository` (default `false`) to trust the selected repository for that Git command without changing Git configuration. Creation and opening preserve user focus.
 
-`agent.start` requires an existing pane and returns starting with native query keys. Poll `agent.get`. A startup timeout does not stop the child; rediscover by pane ID before considering another launch. Full-access startup supports Codex, Claude and Devin.
+`agent.start` requires an existing pane and returns starting with native query keys. Poll `agent.get`. A startup timeout does not stop the child; rediscover by pane ID before considering another launch. Herdr validates `kind`; Agenvo forwards `args` unchanged without injecting or rejecting execution permission settings. Owners can declare launch conventions in instance `context`, and callers choose the corresponding native arguments.
 
 `agent.prompt` and `agent.send-keys` address the native `name`; pane input addresses `paneId`. Callers can inspect the current agent or terminal when deciding what input to send.
 

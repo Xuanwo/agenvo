@@ -1,3 +1,4 @@
+import { noReleases } from "./support/releases.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Webhook } from "standardwebhooks";
@@ -232,6 +233,7 @@ test("MCP 2 discovery and events use the authenticated production handler", asyn
   t.after(() => store.close());
   const relay = new Relay({
     baseUrl: "https://relay.test",
+    fetchRelease: noReleases,
     store,
     sockets: () => [],
     accept: () => {},

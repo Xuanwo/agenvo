@@ -1,7 +1,9 @@
 import { createServer, type ServerResponse } from "node:http";
 import { once } from "node:events";
 
-export async function modelServer() {
+export async function modelServer(
+  reply: (request: unknown) => string = () => "ISOLATED_MODEL_RESULT",
+) {
   const requests: unknown[] = [];
   const active = new Set<ServerResponse>();
   let hold = false;
@@ -9,7 +11,9 @@ export async function modelServer() {
   const server = createServer(async (req, res) => {
     let body = "";
     for await (const chunk of req) body += chunk;
-    requests.push(JSON.parse(body));
+    const request: unknown = JSON.parse(body);
+    requests.push(request);
+    const text = reply(request);
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const send = (event: Record<string, unknown>) =>
       res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
@@ -34,9 +38,7 @@ export async function modelServer() {
       type: "message",
       role: "assistant",
       status: "completed",
-      content: [
-        { type: "output_text", text: "ISOLATED_MODEL_RESULT", annotations: [] },
-      ],
+      content: [{ type: "output_text", text, annotations: [] }],
     };
     send({
       type: "response.output_item.added",
@@ -48,14 +50,14 @@ export async function modelServer() {
       output_index: 0,
       content_index: 0,
       item_id: item.id,
-      delta: "ISOLATED_MODEL_RESULT",
+      delta: text,
     });
     send({
       type: "response.output_text.done",
       output_index: 0,
       content_index: 0,
       item_id: item.id,
-      text: "ISOLATED_MODEL_RESULT",
+      text,
     });
     send({ type: "response.output_item.done", output_index: 0, item });
     send({
