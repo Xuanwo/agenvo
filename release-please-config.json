@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "include-component-in-tag": false,
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "draft": true,
+      "force-tag-creation": true,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "{apps,packages}/*/package.json",
+          "glob": true,
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "{apps,packages}/*/package.json",
+          "glob": true,
+          "jsonpath": "$[dependencies,devDependencies,peerDependencies,optionalDependencies][?(@property.startsWith('@agenvo/'))]"
+        },
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages[?(@property.startsWith('apps/') || @property.startsWith('packages/'))].version"
+        },
+        {
+          "type": "json",
+          "path": "package-lock.json",
+          "jsonpath": "$.packages.*[dependencies,devDependencies,peerDependencies,optionalDependencies][?(@property.startsWith('@agenvo/'))]"
+        },
+        "packages/protocol/src/index.ts",
+        {
+          "type": "generic",
+          "path": "apps/*/README*.md",
+          "glob": true
+        },
+        {
+          "type": "generic",
+          "path": "docs/installation*.md",
+          "glob": true
+        }
+      ]
+    }
+  }
+}

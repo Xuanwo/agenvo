@@ -3,7 +3,13 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: "Commit or tag to validate"
+        required: false
+        type: string
 permissions:
   contents: read
 jobs:
@@ -16,6 +22,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -38,6 +46,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -57,5 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - run: docker build -f deploy/vps/Dockerfile -t agenvo:test .
       - run: docker run --rm agenvo:test --help

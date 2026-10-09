@@ -59,21 +59,30 @@ export function releaseVersion(version: string, tag = `v${version}`) {
   return { tag, version, distTag: version.includes("-") ? "next" : "latest" };
 }
 export function releaseNotes(changelog: string, version: string) {
-  const heading = `## ${version} - `;
-  const section = changelog
-    .split(/^## /m)
-    .slice(1)
-    .find((part) => `## ${part}`.startsWith(heading));
-  if (!section || !/^\S+ - \d{4}-\d{2}-\d{2}\n/.test(section))
+  // Accept both existing release headings and release-please's linked headings.
+  const headings = [
+    ...changelog.matchAll(
+      /^#{2,3} (?:\[v?([^\]]+)\]\([^\n)]+\)|v?(\S+)) (?:- \d{4}-\d{2}-\d{2}|\(\d{4}-\d{2}-\d{2}\))\r?$/gm,
+    ),
+  ];
+  const index = headings.findIndex(
+    (match) => (match[1] ?? match[2]) === version,
+  );
+  if (index === -1)
     throw new Error(`CHANGELOG.md needs dated release notes for ${version}`);
+  const heading = headings[index];
+  const section = changelog.slice(
+    heading.index! + heading[0].length,
+    headings[index + 1]?.index,
+  );
   return (
     section
-      .slice(section.indexOf("\n") + 1)
       .trim()
       .replaceAll(
         "(docs/",
         `(https://github.com/${repository}/blob/v${version}/docs/`,
-      ) + "\n"
+      ) +
+    `\n\nSee the [release validation boundaries](https://github.com/${repository}/blob/v${version}/RELEASING.md#validation-boundaries) for the scope of automated and actual-client verification.\n`
   );
 }
 function checkVersions(root: string, version: string) {
@@ -303,6 +312,16 @@ function githubRelease(output: string) {
     existing = findRelease();
   }
   if (!existing) throw new Error(`GitHub release not found: ${release.tag}`);
+  if (existing.draft)
+    command("gh", [
+      "release",
+      "edit",
+      release.tag,
+      "--title",
+      `Agenvo ${release.version}`,
+      "--notes-file",
+      join(output, "release-notes.md"),
+    ]);
   const missing: string[] = [];
   for (const file of [
     ...release.packages.map((pkg) => pkg.filename),
