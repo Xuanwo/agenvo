@@ -96,7 +96,18 @@ export async function run<T extends InstanceConfig>(
     const snapshot = structuredClone(status);
     saving = saving
       .then(() => atomicJson(join(dir, "status.json"), snapshot))
-      .catch(() => {});
+      .catch((err: NodeJS.ErrnoException) => {
+        connectionLog.error(
+          {
+            event: "connector.status.write_failed",
+            state: snapshot.state,
+            code: err.code,
+            syscall: err.syscall,
+            err,
+          },
+          "Failed to publish connector status",
+        );
+      });
   };
   const send = (current: WebSocket, packet: unknown) => {
     const text = JSON.stringify(packet);

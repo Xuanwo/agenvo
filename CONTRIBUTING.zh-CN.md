@@ -17,6 +17,8 @@ npm audit
 
 集成测试使用临时状态启动本地 workerd 和 Node 服务，经过真实 HTTP/WebSocket/MCP 入口，不需要 Cloudflare 账号。单元测试使用协议 fixture 验证故障路径。
 
+Windows 文件占用回归随 `npm test` 运行，使用真实共享句柄阻止 JSON 文件替换，再协调释放，不靠重复运行触发。跨平台故障注入覆盖短暂占用、持续失败和旧文件完整性；`npm run test:integration` 覆盖握手后的状态落盘与写入错误诊断。Connector 启动超时时保留子进程输出，先检查原始错误，不将重试通过视为修复。
+
 修改适配器、事件投递或完整用户流程时，安装支持的原生二进制并运行系统测试：
 
 ```sh
