@@ -57,7 +57,7 @@ Each native call uses the existing access authorization. If a later call is deni
 
 `execute` does not provide timers such as `setTimeout` or `sleep`, or blocking waits for task completion or future output. Return after submitting input. The calling Agent decides when to read again and waits outside `execute`, using its own waiting mechanism or the [events protocol](events.md). Do not busy-wait or poll for completion inside a script. The 30-second deadline protects script execution; it is not a task-waiting budget.
 
-For example, submit a Herdr command in one `execute`, using the discovered target, session, backendGeneration and paneId:
+For example, submit a Herdr command in one `execute`, using the discovered target, session and paneId:
 
 ```js
 return await call(target, "pane.run", {...base, command: "echo hi"});

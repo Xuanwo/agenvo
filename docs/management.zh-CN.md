@@ -57,7 +57,7 @@ call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中�
 
 `execute` 不提供 `setTimeout`、`sleep` 等计时器，也不提供阻塞等待任务完成或未来输出的能力。提交输入后返回，由调用方 Agent 决定何时再次读取，并通过自身的等待机制或[事件协议](events.zh-CN.md)在 `execute` 之外等待。不要在脚本内忙等或轮询任务完成。30 秒时限用于保护脚本执行，不是等待任务的预算。
 
-例如，在一次 `execute` 中提交 Herdr 命令，使用发现的目标、session、backendGeneration 和 paneId：
+例如，在一次 `execute` 中提交 Herdr 命令，使用发现的目标、session 和 paneId：
 
 ```js
 return await call(target, "pane.run", {...base, command: "echo hi"});
