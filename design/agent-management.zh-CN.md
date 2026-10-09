@@ -4,7 +4,7 @@ Agenvo 为有自主判断能力的 Agent 提供可发现、可组合的原生能
 
 ## 按需发现，组合调用
 
-MCP 只提供 `search({query, deviceId?, instanceId?})` 和 `execute({code})`。新增 Connector 或原生操作扩展方法目录，不增加 MCP 工具。这样调用者无需预先加载完整目录，可以在脚本内处理分页、条件判断和结果筛选，减少无关 schema 和中间结果进入 context。代价是调用者需要理解原生参数和行为边界，因此这些信息必须随能力描述一起被发现。设计不承诺固定的 token 节省比例。
+MCP 只提供 `search({query, deviceId?, instanceId?, includeSchema?})` 和 `execute({code})`。新增 Connector 或原生操作扩展方法目录，不增加 MCP 工具。这样调用者无需预先加载完整目录，可以在脚本内处理分页、条件判断和结果筛选，减少无关 schema 和中间结果进入 context。代价是调用者需要理解原生参数和行为边界，因此这些信息必须随能力描述一起被发现。设计不承诺固定的 token 节省比例。
 
 `search` 接受关键词，不执行代码或原生业务操作。空查询列出获准实例及状态，不加载方法目录；非空查询按空白分词、不区分大小写，所有词均需出现在 Connector 类型、方法名或描述中。Relay 按 deviceId、instanceId 限定目标，Connector 先筛选方法再分页。结果保留离线状态和查询错误，在线且无匹配方法的实例不进入非空结果。
 
@@ -26,7 +26,9 @@ MCP 只提供 `search({query, deviceId?, instanceId?})` 和 `execute({code})`。
 
 ## 描述能力，保留原生语义
 
-每个方法提供 `name`、`description`、`readOnly` 和 `inputSchema`。描述应让调用者知道操作什么资源、需要什么前置条件、会产生什么副作用，以及结果能证明什么。支持范围依据实际原生能力；各 Connector 不必实现相同的方法集合。
+Connector 的每个方法提供 `name`、`description`、`readOnly` 和 `inputSchema`。MCP search 默认只返回前三项；调用者选定方法后，限定目标和查询词并传入 `includeSchema: true` 获取完整参数 schema。省略或传入 false 均返回摘要，空查询始终只列实例。Relay 在汇总结果时选择字段，不修改 Connector 目录和分页协议；这减少客户端 context 中的 schema，但不减少 Connector 到 Relay 的传输量。描述原样保留，避免截断前置条件和结果边界。代价是初次调用前可能需要额外查询一次 schema。
+
+描述应让调用者知道操作什么资源、需要什么前置条件、会产生什么副作用，以及结果能证明什么。支持范围依据实际原生能力；各 Connector 不必实现相同的方法集合。
 
 方法名在目标实例内唯一，注册时检查重名，调用时按准确名称派发。保留原生方法名、字段和标识，不添加 Agenvo 的全局前缀或统一别名。原生协议无法直接表达为调用时，可以提供必要桥接，但必须说明它的来源、状态范围和结果边界。
 

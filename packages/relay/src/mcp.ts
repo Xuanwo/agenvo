@@ -82,11 +82,12 @@ export async function mcp(
         {
           annotations: { readOnlyHint: true },
           description:
-            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances, their optional owner-supplied context, and matching methods with inputSchema. Read context when choosing and using an instance; it is free-form guidance, not a live capability or permission guarantee. Optional updates report newer formal Agenvo server or connector releases, not native runtime updates or compatibility guarantees. Read the release notes and update guide, then decide whether to update using your existing deployment tools. Missing updates does not prove versions are current. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start'}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
+            "Search native methods by case-insensitive keywords in connector kind, method name and description; all words must match. Returns instances, their optional owner-supplied context, and matching method summaries (name, description, readOnly) by default. Set includeSchema:true to retrieve full inputSchema for matching methods; narrow query and target to the methods you will call. Read context when choosing and using an instance; it is free-form guidance, not a live capability or permission guarantee. Optional updates report newer formal Agenvo server or connector releases, not native runtime updates or compatibility guarantees. Read the release notes and update guide, then decide whether to update using your existing deployment tools. Missing updates does not prove versions are current. Empty query lists instances without loading methods. Optionally filter deviceId and instanceId. Examples: {query:'submit input'}, {query:'thread/start',includeSchema:true}, {query:'herdr',deviceId:'device',instanceId:'local'}.",
           inputSchema: z.strictObject({
             query: z.string(),
             deviceId: z.string().optional(),
             instanceId: z.string().optional(),
+            includeSchema: z.boolean().optional(),
           }),
         },
         (input) =>
@@ -99,7 +100,7 @@ export async function mcp(
         "execute",
         {
           description:
-            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover exact methods with search; use native IDs. Return a compact result. Calls are independent, never a transaction; all dispatched calls have receipts even on script failure. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports or timers (setTimeout/sleep). Return after submitting input; wait in the calling agent, then use a separate execute to read status or output. Do not busy-wait or poll for completion inside a script. The 30s script deadline bounds execution, not task waiting. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
+            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover methods with search and request includeSchema:true for their parameters; use native IDs. Return a compact result. Calls are independent, never a transaction; all dispatched calls have receipts even on script failure. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports or timers (setTimeout/sleep). Return after submitting input; wait in the calling agent, then use a separate execute to read status or output. Do not busy-wait or poll for completion inside a script. The 30s script deadline bounds execution, not task waiting. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
           inputSchema: z.strictObject({ code: z.string() }),
         },
         ({ code }) =>

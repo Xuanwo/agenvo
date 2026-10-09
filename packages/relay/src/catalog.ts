@@ -2,15 +2,27 @@ import { updateNotices, type Update } from "./releases.js";
 import { VERSION, Fault, type Outcome, type Instance } from "@agenvo/protocol";
 import type { McpRelay } from "./mcp.js";
 
+type Method = {
+  name: string;
+  description: string;
+  readOnly: boolean;
+  inputSchema?: Record<string, unknown>;
+};
+
 type Entry = Instance & {
   deviceId: string;
   deviceLabel: string;
   connectorVersion?: string;
   online: boolean;
-  methods: unknown[];
+  methods: Method[];
   error?: Outcome["error"];
 };
-export type Search = { query: string; deviceId?: string; instanceId?: string };
+export type Search = {
+  query: string;
+  deviceId?: string;
+  instanceId?: string;
+  includeSchema?: boolean;
+};
 export async function search(
   relay: McpRelay,
   grant: string,
@@ -57,10 +69,18 @@ export async function search(
           break;
         }
         const page = response.result as {
-          items: unknown[];
+          items: Method[];
           nextCursor?: string;
         };
-        entry.methods.push(...page.items);
+        entry.methods.push(
+          ...(input.includeSchema
+            ? page.items
+            : page.items.map(({ name, description, readOnly }) => ({
+                name,
+                description,
+                readOnly,
+              }))),
+        );
         cursor = page.nextCursor;
       } while (cursor);
     }),

@@ -5,6 +5,17 @@ import type { McpRelay } from "@agenvo/relay/mcp";
 
 test("directory collects instance and method pages once and preserves unavailable entries", async () => {
   let reads = 0;
+  const methods = ["first", "second"].map((name) => ({
+    name,
+    description:
+      "Read output. Requires a loaded thread; history may be incomplete.",
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      properties: { threadId: { type: "string" } },
+      required: ["threadId"],
+    },
+  }));
   const relay: McpRelay = {
     release: () => null,
     instances: (_grant, { cursor }) => {
@@ -48,7 +59,7 @@ test("directory collects instance and method pages once and preserves unavailabl
         : {
             execution: "accepted",
             result: {
-              items: [{ name: target.cursor ? "second" : "first" }],
+              items: [methods[target.cursor ? 1 : 0]],
               ...(target.cursor ? {} : { nextCursor: "1" }),
             },
           },
@@ -59,12 +70,28 @@ test("directory collects instance and method pages once and preserves unavailabl
     eventsSubscribe: async () => ({}),
     eventsUnsubscribe: async () => ({}),
   };
-  const { items: result } = await search(relay, "grant", { query: "read" });
-  assert.equal(reads, 2);
-  assert.equal(result.length, 3);
-  assert.deepEqual(result[0].methods, [{ name: "first" }, { name: "second" }]);
-  assert.equal(result[1].error?.code, "device_offline");
-  assert.equal(result[2].error?.code, "device_offline");
+  for (const includeSchema of [undefined, false, true]) {
+    reads = 0;
+    const { items: result } = await search(relay, "grant", {
+      query: "read",
+      includeSchema,
+    });
+    assert.equal(reads, 2);
+    assert.equal(result.length, 3);
+    assert.deepEqual(
+      result[0].methods,
+      includeSchema
+        ? methods
+        : methods.map(({ name, description, readOnly }) => ({
+            name,
+            description,
+            readOnly,
+          })),
+    );
+    assert.equal(result[1].error?.code, "device_offline");
+    assert.equal(result[2].error?.code, "device_offline");
+  }
+  assert.ok(methods.every((method) => method.inputSchema));
 });
 
 test("instance discovery and target filters avoid unrelated connector requests", async () => {
@@ -87,7 +114,16 @@ test("instance discovery and target filters avoid unrelated connector requests",
       requested.push(target);
       return {
         execution: "accepted",
-        result: { items: [{ name: "thread/start" }] },
+        result: {
+          items: [
+            {
+              name: "thread/start",
+              description: "Create a work context.",
+              readOnly: false,
+              inputSchema: { type: "object" },
+            },
+          ],
+        },
       };
     },
     call: async () => {
@@ -97,8 +133,13 @@ test("instance discovery and target filters avoid unrelated connector requests",
     eventsSubscribe: async () => ({}),
     eventsUnsubscribe: async () => ({}),
   } satisfies McpRelay;
-  assert.equal((await search(relay, "grant", { query: "  " })).items.length, 2);
-  assert.equal(requested.length, 1);
+  for (const includeSchema of [undefined, false, true]) {
+    requested.length = 0;
+    const result = await search(relay, "grant", { query: "  ", includeSchema });
+    assert.equal(result.items.length, 2);
+    assert.ok(result.items.every((entry) => entry.methods.length === 0));
+    assert.equal(requested.length, 1);
+  }
   requested.length = 0;
   const { items: result } = await search(relay, "grant", {
     query: " create ",
