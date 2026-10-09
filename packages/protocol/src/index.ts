@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const VERSION = "0.2.0-rc.1"; // x-release-please-version
+export const VERSION = "0.2.0"; // x-release-please-version
 export const PROTOCOL = 1;
 export const LIMITS = {
   frame: 64 * 1024,
