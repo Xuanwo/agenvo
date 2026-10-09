@@ -1,4 +1,4 @@
-import { codexFixture } from "../support/codex-server.js";
+import { codexServer } from "../support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { eventsLab } from "../support/events-lab.js";
@@ -14,12 +14,14 @@ test(
       return true;
     });
     const lab = await eventsLab(t);
+    const codex = await codexServer(lab.root);
+    lab.cleanup(codex.close);
     const device = await lab.connect([
       {
         id: "codex",
         label: "Isolated Codex protocol fixture",
         kind: "codex",
-        endpoint: await codexFixture(t, lab.root),
+        endpoint: codex.endpoint,
         cwd: lab.root,
         home: lab.root,
       },

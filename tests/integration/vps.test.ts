@@ -1,4 +1,4 @@
-import { codexFixture } from "../support/codex-server.js";
+import { codexServer } from "../support/codex-server.js";
 import { callCode, nativeOutcome } from "../support/code.js";
 const ADMIN_SECRET = "test-admin-secret-not-for-production-1234567890";
 import test from "node:test";
@@ -335,11 +335,13 @@ test(
     const welcome = once(ws, "message");
     ws.send(JSON.stringify({ v: 1, type: "hello", instances: [instance] }));
     assert.equal(JSON.parse((await welcome)[0].toString()).type, "welcome");
+    const codex = await codexServer(dataDir);
+    cleanups.push(codex.close);
     const adapterConfig = instanceConfigSchema.parse({
       id: "test",
       label: "Test runtime",
       kind: "codex",
-      endpoint: await codexFixture(t, dataDir),
+      endpoint: codex.endpoint,
       cwd: dataDir,
       home: dataDir,
     });

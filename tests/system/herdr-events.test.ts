@@ -1,4 +1,4 @@
-import { codexFixture } from "../support/codex-server.js";
+import { codexServer } from "../support/codex-server.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -31,12 +31,14 @@ test(
     lab.cleanup(() => native.stop());
     const device = await lab.connect([config]);
     // Two separately installed backends on one host have independent connection identities.
+    const codex = await codexServer(lab.root);
+    lab.cleanup(codex.close);
     const codexDevice = await lab.connect([
       {
         kind: "codex",
         id: "herdr",
         label: "Codex on the same host",
-        endpoint: await codexFixture(t, lab.root),
+        endpoint: codex.endpoint,
         cwd: lab.root,
         home: lab.root,
       },
