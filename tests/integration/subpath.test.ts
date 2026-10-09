@@ -1,3 +1,4 @@
+import { noReleases } from "../support/releases.js";
 import { request as httpRequest } from "node:http";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -46,6 +47,8 @@ async function host(
     const runtime = await startServer(
       { baseUrl: address.baseUrl + "/", dataDir: dir, port: 0 },
       secret,
+      undefined,
+      noReleases,
     );
     stop = runtime.close;
     base =

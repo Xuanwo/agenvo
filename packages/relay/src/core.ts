@@ -1,3 +1,4 @@
+import { Releases, releaseVersion, type ReleaseFetch } from "./releases.js";
 import { logger } from "@agenvo/logging";
 import { Events, type WebhookTransport } from "./events.js";
 import { runtimeEvent } from "@agenvo/protocol/events";
@@ -27,6 +28,8 @@ type Device = {
   instances: Instance[];
   approved: Record<string, string>;
   epoch?: string;
+  connectorVersion?: string;
+  versionObservedAt?: number;
 };
 type Pairing = {
   code: string;
@@ -75,11 +78,19 @@ export interface RelayHost {
   accept(socket: RelaySocket, deviceId: string): void;
   scheduleCleanup(at?: number): Promise<void>;
   sendWebhook?: WebhookTransport;
+  fetchRelease?: ReleaseFetch;
+  background?: (task: Promise<void>) => void;
 }
 export class Relay {
   private events: Events;
+  private releases: Releases;
   private pending = new Map<string, Pending>();
   constructor(private host: RelayHost) {
+    this.releases = new Releases({
+      store: host.store,
+      fetch: host.fetchRelease,
+      background: host.background,
+    });
     this.events = new Events({
       store: host.store,
       allowed: (grant, args, fingerprint) =>
@@ -97,6 +108,10 @@ export class Relay {
     if (schema !== undefined && schema !== 1)
       throw new Error("unsupported_schema");
     if (schema === undefined) this.put("schema", 1);
+  }
+  release(grant: string) {
+    if (!this.allowed(grant)) throw new Fault("permission_denied");
+    return this.releases.read();
   }
   eventsList(grant: string) {
     return this.events.list(grant);
@@ -351,6 +366,8 @@ export class Relay {
     const d = this.device(id)!;
     const epoch = crypto.randomUUID();
     d.epoch = epoch;
+    delete d.connectorVersion;
+    delete d.versionObservedAt;
     this.put("device:" + id, d);
     for (const ws of this.host.sockets(id)) {
       this.failConnection(ws);
@@ -381,6 +398,9 @@ export class Relay {
             deviceLabel: d.label,
             ...i,
             online: Boolean(this.socket(d)),
+            ...(this.socket(d) && d.connectorVersion
+              ? { connectorVersion: d.connectorVersion }
+              : {}),
           })),
       );
     return {
@@ -506,6 +526,10 @@ export class Relay {
         this.failConnection(ws);
         ws.close(1008, "invalid_instances");
         return;
+      }
+      if (p.type === "hello") {
+        d.connectorVersion = releaseVersion(p.version);
+        d.versionObservedAt = Date.now();
       }
       d.instances = parsed.data;
       this.put("device:" + d.id, d);
@@ -640,6 +664,7 @@ export class Relay {
     this.host.store.expire("rate:", Date.now());
   }
   async settled() {
+    await this.releases.close();
     await this.events.settled();
   }
   async alarm() {

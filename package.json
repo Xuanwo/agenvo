@@ -41,7 +41,8 @@
     "standardwebhooks": "1.1.1",
     "ws": "8.22.0",
     "zod": "4.6.5",
-    "@loro-dev/loro-cli": "0.6.0"
+    "@loro-dev/loro-cli": "0.6.0",
+    "@types/semver": "^7.8.0"
   },
   "engines": {
     "node": ">=24.13.0"

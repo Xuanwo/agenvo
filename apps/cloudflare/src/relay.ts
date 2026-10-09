@@ -60,6 +60,8 @@ export class AgenvoRelay extends DurableObject<Env> {
     this.relay = new Relay({
       baseUrl: new RelayAddress(env.BASE_URL).baseUrl,
       store,
+      fetchRelease: (url, init) => this.fetchRelease(url, init),
+      background: (task) => this.ctx.waitUntil(task),
       sockets: (id) => ctx.getWebSockets(id),
       accept: (ws, id) => ctx.acceptWebSocket(ws as WebSocket, [id]),
       sendWebhook: (url, body, headers) =>
@@ -72,6 +74,12 @@ export class AgenvoRelay extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair("agenvo:ping", "agenvo:pong"),
     );
+  }
+  protected fetchRelease(url: string, init: RequestInit): Promise<Response> {
+    return fetch(url, init);
+  }
+  release(grant: string) {
+    return this.relay.release(grant);
   }
   protected deliverWebhook(
     url: string,
