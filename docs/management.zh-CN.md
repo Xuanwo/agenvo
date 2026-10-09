@@ -53,6 +53,26 @@ call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中�
 
 每次原生调用沿用现有访问授权。后续调用被拒绝时，先前调用已返回的结果仍可用于判断进展；已发生的工作不会撤销。
 
+### 在调用之间等待
+
+`execute` 不提供 `setTimeout`、`sleep` 等计时器，也不提供阻塞等待任务完成或未来输出的能力。提交输入后返回，由调用方 Agent 决定何时再次读取，并通过自身的等待机制或[事件协议](events.zh-CN.md)在 `execute` 之外等待。不要在脚本内忙等或轮询任务完成。30 秒时限用于保护脚本执行，不是等待任务的预算。
+
+例如，在一次 `execute` 中提交 Herdr 命令，使用发现的目标、session 和 paneId：
+
+```js
+return await call(target, "pane.run", {...base, command: "echo hi"});
+```
+
+检查确认结果并在 Agent 一侧等待后，在另一次 `execute` 中读取输出。脚本变量不会跨调用保留，需要重新定义 `target` 和 `base`：
+
+```js
+return await call(target, "pane.read", {
+  ...base, lines: 20, source: "recent-unwrapped"
+});
+```
+
+根据输出判断命令是否完成。输出尚未就绪时，在 `execute` 之外等待后再读取。如果脚本在提交输入后失败，先检查 `result.calls` 和原生状态，再决定是否重复提交。
+
 ## Codex
 
 按 schema 使用 thread/list、thread/start、thread/read、thread/resume、thread/archive 和 thread/unarchive。原生列表的 provider/source 过滤决定发现范围，查找其他客户端的会话时应检查这些参数。通过 turn/start 输入，turn/steer 携带 expectedTurnId，turn/interrupt 携带已知 turnId。未加载会话可能需要先 resume。Agenvo 工作入口使用全权限并自动回答权限审批。

@@ -99,7 +99,7 @@ export async function mcp(
         "execute",
         {
           description:
-            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover exact methods with search; use native IDs. Return a compact result. Calls are independent, never a transaction; all dispatched calls have receipts even on script failure. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports. 30s script deadline. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
+            "Run an async JavaScript function body with await call({deviceId, instanceId}, method, params). call returns {execution, requestId, result, nativeIds?, error?}. Discover exact methods with search; use native IDs. Return a compact result. Calls are independent, never a transaction; all dispatched calls have receipts even on script failure. accepted confirms input, not task completion. After unknown, inspect native state before repeating writes. No host network/files/imports or timers (setTimeout/sleep). Return after submitting input; wait in the calling agent, then use a separate execute to read status or output. Do not busy-wait or poll for completion inside a script. The 30s script deadline bounds execution, not task waiting. Example: return await call({deviceId:'device',instanceId:'local'}, 'thread/list', {});",
           inputSchema: z.strictObject({ code: z.string() }),
         },
         ({ code }) =>
