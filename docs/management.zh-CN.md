@@ -61,7 +61,7 @@ call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中�
 
 ## Herdr
 
-通过 session.list 获取 session 和 backendGeneration，再调用原生 workspace、pane、agent 方法。服务独立运行，Agenvo 不启动或停止它。agent.list 包含外部启动的 Agent。原生 idle、done、unknown 都不代表业务成功，也不妨碍调用者继续检查终端。
+已知 session 时可以直接调用原生 workspace、pane、agent 方法；需要发现服务时使用 session.list。调用始终操作该 session 当前的原生目标，名称和 ID 可能在服务重启后复用；需要确认目标身份时，重新查询原生状态。服务独立运行，Agenvo 不启动或停止它。agent.list 包含外部启动的 Agent。原生 idle、done、unknown 都不代表业务成功，也不妨碍调用者继续检查终端。
 
 通过 `workspace.create` 创建终端容器，或用 `tab.create` 在已有 pane 旁增加 shell pane；`tab.close` 关闭该 tab 及其中的终端。这些资源操作不启动 Agent。通过 `worktree.list`、`worktree.create`、`worktree.open` 和 `worktree.remove` 管理 Git worktree 工作区，包括 Herdr 之外创建的 worktree。删除保留分支，`force: true` 会丢弃未提交改动。worktree 方法接受默认 `false` 的 `trustRepository`，只为本次 Git 命令信任选定仓库，不修改 Git 配置。创建与打开不改变用户焦点。
 

@@ -95,8 +95,9 @@ test(
       await new Promise((r) => setTimeout(r, 100));
     }
     assert.ok(running);
+    const generation = await adapter.generation("test");
     await exec("systemctl", ["--user", "stop", unit]);
-    assert.equal(await adapter.generation("test"), ref.backendGeneration);
+    assert.equal(await adapter.generation("test"), generation);
     assert.match(
       JSON.stringify(await adapter.call("pane.process-info", ref)),
       /sleep/,

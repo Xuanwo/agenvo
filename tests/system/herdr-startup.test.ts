@@ -68,12 +68,8 @@ exit $LASTEXITCODE
       "execute",
       "search",
     ]);
-    const service = (await call("session.list")).result.items.find(
-      (s: any) => s.session === "test",
-    );
     const ref = {
       session: "test",
-      backendGeneration: service.backendGeneration,
     };
     const paneId = (await call("workspace.create", ref)).result.result.root_pane
       .pane_id;

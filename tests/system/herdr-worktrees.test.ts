@@ -49,12 +49,7 @@ test(
     await native.start();
     lab.cleanup(() => native.stop());
     const device = await lab.connect([cfg]);
-    const sessions = await lab.call(device, "work", "session.list");
-    const ref = {
-      session: "test",
-      backendGeneration: sessions.items.find((s: any) => s.session === "test")
-        .backendGeneration,
-    };
+    const ref = { session: "test" };
     const call = async (method: string, params = {}) =>
       (await lab.call(device, "work", method, { ...ref, ...params })).result;
     const outcome = async (method: string, params = {}) =>
@@ -88,7 +83,7 @@ test(
       const entry = JSON.parse(response.content[0].text).result.items[0];
       const method = entry.methods.find((m: any) => m.name === name);
       assert.ok(method, name);
-      assert.ok(method.inputSchema.properties.backendGeneration);
+      assert.equal(method.inputSchema.properties.backendGeneration, undefined);
       assert.equal(method.readOnly, name === "worktree.list");
       if (name.startsWith("worktree."))
         assert.equal(

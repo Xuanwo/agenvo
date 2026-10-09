@@ -350,8 +350,8 @@ if (!process.env.AGENVO_E2E_DIR) {
     const existing = discovered.items.find(
       (item: any) => item.session === "e2e",
     );
-    assert.ok(existing?.backendGeneration);
-    ref = { session: "e2e", backendGeneration: existing.backendGeneration };
+    assert.ok(existing?.endpointPresent);
+    ref = { session: "e2e" };
     for (const method of ["session.start", "session.stop"]) {
       const removed = await invoke({
         deviceId: target.deviceId,

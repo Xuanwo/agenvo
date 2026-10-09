@@ -61,7 +61,7 @@ Use `thread/list`, `thread/start`, `thread/read`, `thread/resume`, `thread/archi
 
 ## Herdr
 
-Use `session.list` to obtain session and backendGeneration, then native workspace, pane and agent methods. The service runs independently; Agenvo does not start or stop it. `agent.list` includes externally launched Agents. Native idle, done or unknown state does not prove business success or prevent the caller from inspecting the terminal.
+Call native workspace, pane and agent methods directly when the session is known; use `session.list` to discover services when needed. Calls address the session's current native targets, whose names and IDs may be reused after a service restart; query native state again when target identity matters. The service runs independently; Agenvo does not start or stop it. `agent.list` includes externally launched Agents. Native idle, done or unknown state does not prove business success or prevent the caller from inspecting the terminal.
 
 Create a terminal container with `workspace.create`, or add a shell pane beside existing panes with `tab.create`. `tab.close` closes that tab and its terminals. These resources do not start an agent. Use `worktree.list`, `worktree.create`, `worktree.open` and `worktree.remove` to manage Git worktree workspaces, including worktrees created outside Herdr. Removal keeps the branch; `force: true` discards uncommitted changes. Worktree methods accept `trustRepository` (default `false`) to trust the selected repository for that Git command without changing Git configuration. Creation and opening preserve user focus.
 

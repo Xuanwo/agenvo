@@ -6,7 +6,9 @@ Herdr Connector 附着独立运行的原生服务，暴露整个获准实例中�
 
 Herdr 的 work context 是 terminal pane 内运行的 agent；session 指原生服务进程，workspace 指终端容器。保留这些资源及其原生方法名，不把它们统一改称 thread。
 
-通过 `session.list` 获取 session 和 backendGeneration，以识别服务重启。创建工作上下文对应 `agent.start`，需要已有 pane，可能只返回 starting 与后续查询键。输入直接使用调用者选择的原生目标，由调用者按需查看当前状态。
+已知 session 时直接调用原生方法，`session.list` 只用于服务发现。调用按 session 和原生名称或 ID 操作当前目标；服务重启后标识可能复用，调用者按需重新查询原生状态。创建工作上下文对应 `agent.start`，需要已有 pane，可能只返回 starting 与包含 session、name 的后续查询键。
+
+调用参数和结果不暴露 `backendGeneration`。调用前的服务代际比较只能发现此前的服务重启，不能阻止检查与执行之间重启，也不能识别同一服务内名称所指目标的变化。统一沿用原生当前目标语义，避免所有操作都依赖额外查询或传递代际。Connector 内部仍按 endpoint 代际隔离启动记录、重建事件订阅，并在事件中携带 generation；这些连接状态不构成调用前置条件。
 
 `agent.prompt`、`agent.send-keys` 使用原生 name，pane 输入使用 paneId。`agent.read`、`pane.read` 返回终端快照；历史不可读时，调用者可显式选择 visible。终端中的问题通过文本和按键回答，不模拟结构化请求 ID 或持久会话历史。
 
@@ -14,7 +16,7 @@ Herdr 的 work context 是 terminal pane 内运行的 agent；session 指原生�
 
 `worktree.list/create/open/remove` 直接映射 Herdr 的 Git worktree 操作，`tab.create/close` 管理 workspace 内的终端容器。它们为 `agent.start` 提供检出和 pane，不把这些资源等同为 work context。列表包括外部创建的 worktree，删除检出保留分支；`force` 保留原生丢弃未提交改动的语义。创建与打开固定使用 `--no-focus`，不抢占用户焦点。
 
-worktree 方法保留默认关闭的 `trustRepository`，映射原生 `--trust-repository`。Herdr 仅为本次 Git 命令设置解析后仓库的 `safe.directory`，不会修改 Git 配置；调用者决定是否信任仓库。Connector 不增加批准状态、重试或清理编排。参数 schema、原生结果、错误和已有 backendGeneration 检查沿用适配器契约。
+worktree 方法保留默认关闭的 `trustRepository`，映射原生 `--trust-repository`。Herdr 仅为本次 Git 命令设置解析后仓库的 `safe.directory`，不会修改 Git 配置；调用者决定是否信任仓库。Connector 不增加批准状态、重试或清理编排。参数 schema、原生结果和错误沿用适配器契约。
 
 ## 原生接口依据
 
@@ -42,8 +44,8 @@ Herdr 的 [Agent 恢复逻辑](https://github.com/herdrdev/herdr/blob/7b116c05bf
 
 ## 验证依据
 
-重构前的 `66aa871d17b1d912e709f4870fe75d9d09a84074` 使用隔离 Herdr 0.9.3 验证：禁用统一 management 方法后，服务发现、custom Agent 发现、问题读取、输入与结果读取仍能完成；服务重启后旧 generation 被拒绝。这支持直接暴露原生能力，同时保留原生身份与终端读取边界。
+`tests/system/herdr-events.test.ts` 通过真实 MCP 和隔离 Herdr 验证服务发现、custom Agent 发现、问题读取、输入与结果读取，以及服务重启后的事件订阅更新和当前 pane 的读写。`tests/system/herdr-worktrees.test.ts` 验证已知 session 时无需预先调用 `session.list` 即可操作工作区。
 
-更新适配器时，通过[适配器和系统测试](../CONTRIBUTING.zh-CN.md)验证真实原生行为；固定版本只用于复现。上述历史实验不能代替变更后的 MCP 入口验证。
+更新适配器时，通过[适配器和系统测试](../CONTRIBUTING.zh-CN.md)验证真实原生行为；固定版本只用于复现。
 
 `tests/system/herdr-worktrees.test.ts` 经真实 MCP 的 search/execute 和隔离 Herdr 验证能力发现、外部 worktree 打开、tab 环境变量、删除时保留分支、脏检出的原生拒绝与显式 force。参数测试覆盖各 worktree 方法的 trustRepository 默认关闭和显式开启。
