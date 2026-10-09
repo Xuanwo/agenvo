@@ -1,53 +1,77 @@
 # Releasing Agenvo
 
-Publish `@agenvo/herdr`, `@agenvo/codex-app-server`, `@agenvo/paseo`, `@agenvo/amp`, `@agenvo/lody`, and `@agenvo/server` with one version. Internal packages and `@agenvo/cloudflare` remain private. Cloudflare and Docker deployments use the GitHub source tag; this process does not deploy existing installations or publish a container image.
+Push a version tag to publish every public npm workspace through GitHub Actions and npm Trusted Publishing. The workflow discovers packages from the root `workspaces`; packages marked `private: true` are excluded. No npm token is stored in GitHub.
 
-## Prepare the release
+Cloudflare and Docker deployments use the source tag. Releasing does not deploy existing installations or publish a container image.
 
-1. Select a clean commit on `main`. Check that its CI passed on Linux, macOS, and Windows, including native runtime tests and the container job. A workflow still running is not a passed check.
-2. Keep the root manifest, workspace versions and internal dependency references, `package-lock.json`, and `packages/protocol/src/index.ts` aligned. Update versioned installation commands and links in the installation guides and package READMEs.
-3. Review the release notes in `CHANGELOG.md` and replace the unreleased marker with the release date before packing. Record any client acceptance gaps explicitly: isolated tests do not prove ChatGPT discovery or real dot wakeups.
-4. With Node.js 24.13+, run `npm ci`, `npm run build`, and `npm run test:packages`. These tests install real tarballs outside the repository and exercise the installed applications. If executable code or dependencies changed since the selected CI run, run the relevant checks again on the release commit.
+## Release a version
 
-For the first release, establish access to the npm `@agenvo` scope. `npm whoami` checks the active account; `npm org ls agenvo` checks organization membership. If login is needed, use `npm login` and complete the browser authentication without copying credentials into task logs. Do not change the package scope as an authentication workaround.
+1. Prepare the release on `main`. Align the root and workspace versions, internal dependency references, `package-lock.json`, and `packages/protocol/src/index.ts`. Update versioned installation commands and links. Add a dated `## VERSION - YYYY-MM-DD` section to `CHANGELOG.md`, retaining any actual-client acceptance gaps.
+2. Ensure any new public package has completed the one-time setup below.
+3. Push an annotated tag matching the package version:
 
-## Pack and publish
+   ```sh
+   git tag -a v0.2.0 -m 'Agenvo 0.2.0'
+   git push origin v0.2.0
+   ```
 
-Build all six packages before publishing any of them. From the clean release checkout:
+`.github/workflows/release.yml` runs the existing Linux, macOS, Windows, native-runtime, and container checks. It requires the tagged commit to belong to `main`, builds all public workspaces, validates versions and release notes, and packs immutable tarballs. The publishing job downloads these artifacts, publishes through OIDC, waits for registry availability, checks archive integrity, installs every exact version in a fresh directory, and runs its CLI entry points. Only then does it publish the GitHub Release with the tarballs and `SHA256SUMS`.
 
-```sh
-release_dir=$(mktemp -d)
-npm pack --workspace @agenvo/herdr --pack-destination "$release_dir"
-npm pack --workspace @agenvo/codex-app-server --pack-destination "$release_dir"
-npm pack --workspace @agenvo/paseo --pack-destination "$release_dir"
-npm pack --workspace @agenvo/amp --pack-destination "$release_dir"
-npm pack --workspace @agenvo/lody --pack-destination "$release_dir"
-npm pack --workspace @agenvo/server --pack-destination "$release_dir"
-```
+Stable tags such as `v0.2.0` use npm's `latest` dist-tag. Prerelease tags such as `v0.2.0-rc.0` use `next` and create a GitHub prerelease. The workflow rejects a stable release that would replace a newer `latest` version.
 
-Inspect each archive's file list with `tar -tzf`. It should contain only the manifest, bundled CLI (and Amp plugin), READMEs, license and notice. Save the commit SHA and checksums with the release evidence. Keep these exact tarballs for publication and GitHub assets; publishing the tarballs avoids rebuilding between those steps.
+A manual run of the Release workflow performs checks and packing only. It never publishes, and it does not validate OIDC authentication. A successful real publish is required to validate npm trust.
 
-For 0.1.0:
+## Configure existing packages once
+
+Use npm 11.15+ with an authenticated account that can publish the packages. From this repository:
 
 ```sh
-npm publish "$release_dir/agenvo-herdr-0.1.0.tgz" --access public --tag latest
-npm publish "$release_dir/agenvo-codex-app-server-0.1.0.tgz" --access public --tag latest
-npm publish "$release_dir/agenvo-paseo-0.1.0.tgz" --access public --tag latest
-npm publish "$release_dir/agenvo-amp-0.1.0.tgz" --access public --tag latest
-npm publish "$release_dir/agenvo-lody-0.1.0.tgz" --access public --tag latest
-npm publish "$release_dir/agenvo-server-0.1.0.tgz" --access public --tag latest
+npm run release:trust
+# Or select only packages that do not already have this configuration:
+npm run release:trust -- @agenvo/example
 ```
 
-npm may require browser or second-factor authorization. Never embed an OTP or token in a saved script. Publication of six packages is not atomic: if one fails, inspect registry state before continuing. Never overwrite or unpublish a successful package to retry the set. Verify its registry `dist.integrity` against the local tarball, then publish only the missing packages; if the published contents are wrong, prepare a new patch version.
+The command configures GitHub repository `Xuanwo/agenvo`, workflow filename `release.yml`, and permission to `npm publish`, then reads back each configuration. It does not grant package governance permissions or install a long-lived token. npm requires browser 2FA; credentials stay in npm's normal login flow. The browser offers a five-minute window to avoid repeated verification for a batch.
 
-## Verify and announce
+Run this after the workflow is on `main` and shortly before its first real release. npm requires a new trusted publisher to successfully publish within **two days**. That publish binds the configuration to the repository's immutable identity. An unused configuration expires; inspect it with `npm trust list PACKAGE`, revoke its specific expired ID, and recreate it before retrying. The script does not silently replace existing trust configurations.
 
-Read each package's `version`, `dist-tags`, and `dist.integrity` with `npm view`. In a fresh directory outside the checkout, install all six packages at the exact release version and invoke their installed `--help` commands. Registry availability and installed entry points must be verified before reporting publication complete.
+Sources: [npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust/) and [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/).
 
-Create and push an annotated `v0.1.0` tag at the verified release commit, then create the GitHub Release with reviewed notes and the six tarballs. Do not move an existing release tag. Read back the tag SHA, release status, asset names, and npm versions. Keep any actual-client acceptance limitations in the release notes. Published 0.1.0 contracts become a compatibility baseline under `AGENTS.md`.
+## Add a new public package
 
-## Subsequent automation
+Add the package under a root workspace pattern. Give it an `@agenvo/` name, the shared release version, the repository URL, an explicit `publishConfig.access: "public"`, a build script, and an appropriate `files` allowlist. Internal packages must retain `private: true`.
 
-For the first release, publish the real packages using the authenticated npm account. [npm trust requires an existing package](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites). For subsequent releases, prefer [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) from GitHub-hosted Actions runners. Configure each package for the exact repository and publishing workflow, allow `npm publish`, and grant that job `id-token: write`. Use npm 11.5.1 or newer. Trusted publishing generates provenance for public packages from public repositories. Configure it when the workflow is ready to run: a new configuration expires if it has not successfully published within two days.
+The root build invokes each public workspace's build script. A Connector following the existing `src/cli.ts` convention can use `node ../../scripts/build.mjs NAME`; packages with another layout own their build script. The release workflow needs no package-name edit. Extend package-specific behavioral tests when adding a new runtime; automatic discovery and installation checks do not establish that runtime's behavior.
 
-The repository currently has CI only; pushing a tag does not publish packages. Until a publishing workflow is implemented and verified, use the explicit package publication steps above.
+npm requires a package to exist before configuring its Trusted Publisher. Complete first publication immediately before the planned release:
+
+1. Prepare a real prerelease version, such as `0.2.0-rc.0`, using the same version and changelog rules as a release. Build and validate its actual contents.
+2. Run the bootstrap command with explicit **new** package names:
+
+   ```sh
+   npm run release:bootstrap -- @agenvo/example @agenvo/another
+   ```
+
+   It refuses existing packages and stable versions, builds and packs the repository, publishes only the selected new packages to `next`, waits for their exact archives to appear, then configures trust. It uses interactive npm authentication, not a GitHub secret. npm processing can outlast the five-minute authorization window; trust setup may then require another browser verification.
+3. Prepare the stable version, for example `0.2.0`, and push its tag within two days. This first OIDC publication activates the new packages' trust alongside the existing packages.
+
+If bootstrap stops partway, inspect registry state. Run it only for still-missing packages, then use `release:trust -- PACKAGE` for packages already published but not configured. Never overwrite or unpublish a successful version as a retry mechanism.
+
+## Recover a failed release
+
+Rerun the failed Release workflow at the same tag. Publication is not atomic across packages. Before writing, the script inspects the complete package set: an unregistered package stops the release with bootstrap instructions; an already-published version must have exactly the same integrity as the packed artifact. Matching versions are skipped and only missing versions are published. Authentication failures never fall back to a stored token.
+
+The registry may take several minutes to expose a newly accepted package. The workflow waits up to ten minutes per package; if npm takes longer, inspect registry state and rerun after processing finishes. Do not move the tag or republish different contents under the same version. A content mismatch requires investigation and, if the published content is wrong, a new version.
+
+GitHub Release creation is also resumable: existing matching assets are retained, missing assets are uploaded, and conflicting assets cause an explicit failure. The release remains a draft until all assets have uploaded.
+
+For local packing without publication:
+
+```sh
+npm ci
+npm run build
+npm run test:packages
+npm run release:pack -- /tmp/agenvo-release v0.2.0
+```
+
+The output contains `manifest.json` with the source commit and archive digests, `SHA256SUMS`, release notes, and all public-package tarballs. Keep the exact artifacts when diagnosing a publication failure.

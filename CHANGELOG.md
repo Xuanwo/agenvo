@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0-rc.0 - 2026-10-09
+
+This prerelease validates tag-triggered npm Trusted Publishing. It is published under `next`; `latest` remains on 0.1.0.
+
+- Publish all public workspaces through GitHub Actions OIDC, with archive integrity checks and clean registry installation verification. New packages use a one-time interactive bootstrap before joining automated releases.
+- Add Herdr worktree and tab management.
+- Add Paseo workspace archival.
+
+Install a preview package explicitly, for example `npm install --global @agenvo/herdr@0.2.0-rc.0`. See the [installation guide](docs/installation.md) for the complete package set.
+
+The native runtime, cloud execution, and actual-client acceptance boundaries documented for 0.1.0 still apply. This prerelease does not establish authenticated Amp or Lody cloud execution, ChatGPT UI discovery, or actual dot wakeups.
+
 ## 0.1.0 - 2026-10-09
 
 Initial release of Agenvo, a self-hosted MCP relay that lets an AI assistant coordinate coding agents on your computers and servers.

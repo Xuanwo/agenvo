@@ -20,7 +20,14 @@ import {
   validateAnswers,
 } from "./codex-execution.js";
 import { Observations } from "@agenvo/connector/adapters/observations";
-import { bytes, Fault, LIMITS, page, type Outcome } from "@agenvo/protocol";
+import {
+  bytes,
+  Fault,
+  LIMITS,
+  page,
+  VERSION,
+  type Outcome,
+} from "@agenvo/protocol";
 
 const descriptions: Record<keyof typeof schemas.methods, string> = {
   "model/list": "List available models.",
@@ -171,7 +178,7 @@ export class CodexAdapter implements Adapter {
       ws.once("close", () => reject(new Fault("runtime_unavailable")));
     });
     const init: any = await this.rpc("initialize", {
-      clientInfo: { name: "agenvo", version: "0.1.0" },
+      clientInfo: { name: "agenvo", version: VERSION },
       capabilities: { experimentalApi: true },
     });
     if ((await realpath(init.codexHome)) !== (await realpath(this.config.home)))

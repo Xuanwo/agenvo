@@ -6,6 +6,8 @@ Use this guide when your task is to set up Agenvo. It links command installation
 
 ## Install the commands
 
+This checkout documents the `0.2.0-rc.0` preview. For the stable release, use the [0.1.0 installation guide](https://github.com/Xuanwo/agenvo/blob/v0.1.0/docs/installation.md).
+
 Requirements:
 
 - Node.js 24.13+ and npm.
@@ -17,21 +19,21 @@ CI pins Herdr 0.9.3, Codex CLI 0.160.1 and Paseo CLI 0.11.1 for reproducible tes
 Install only the packages needed on this machine. Connectors can coexist:
 
 ```sh
-npm install --global @agenvo/herdr@0.1.0
-npm install --global @agenvo/codex-app-server@0.1.0
-npm install --global @agenvo/paseo@0.1.0
-npm install --global @agenvo/amp@0.1.0
-npm install --global @agenvo/lody@0.1.0
+npm install --global @agenvo/herdr@0.2.0-rc.0
+npm install --global @agenvo/codex-app-server@0.2.0-rc.0
+npm install --global @agenvo/paseo@0.2.0-rc.0
+npm install --global @agenvo/amp@0.2.0-rc.0
+npm install --global @agenvo/lody@0.2.0-rc.0
 ```
 
-For a VPS relay, install `npm install --global @agenvo/server@0.1.0`. Each package provides its corresponding `agenvo-<name>` command. Installation does not start services or install native agent runtimes. Configure each runtime and its credentials separately.
+For a VPS relay, install `npm install --global @agenvo/server@0.2.0-rc.0`. Each package provides its corresponding `agenvo-<name>` command. Installation does not start services or install native agent runtimes. Configure each runtime and its credentials separately.
 
 ## Get deployment files or build from source
 
 Cloudflare deployment and the VPS Docker setup use files from the release checkout:
 
 ```sh
-git clone --branch v0.1.0 --depth 1 https://github.com/Xuanwo/agenvo.git
+git clone --branch v0.2.0-rc.0 --depth 1 https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
 ```
