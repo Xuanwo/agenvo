@@ -365,7 +365,11 @@ export async function eventsLab(t: TestContext) {
             .catch(() => ({}));
         },
         (s) => s.state === "online",
-      );
+      ).catch((cause) => {
+        throw new Error(`Connector did not become online; output: ${logs}`, {
+          cause,
+        });
+      });
     };
     const stopConnector = async () => {
       // Exercise the connector's normal shutdown path on every platform.

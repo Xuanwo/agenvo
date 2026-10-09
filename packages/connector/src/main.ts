@@ -96,7 +96,12 @@ export async function run<T extends InstanceConfig>(
     const snapshot = structuredClone(status);
     saving = saving
       .then(() => atomicJson(join(dir, "status.json"), snapshot))
-      .catch(() => {});
+      .catch((err) => {
+        connectionLog.error(
+          { event: "connector.status.failed", state: snapshot.state, err },
+          "Could not persist Connector status",
+        );
+      });
   };
   const send = (current: WebSocket, packet: unknown) => {
     const text = JSON.stringify(packet);
