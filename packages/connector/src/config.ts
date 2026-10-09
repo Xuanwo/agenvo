@@ -13,6 +13,7 @@ import {
   unlink,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   canonical,
   digest,
@@ -75,7 +76,23 @@ export async function atomicJson(path: string, value: unknown) {
       mode: 0o600,
       flag: "wx",
     });
-    await rename(temp, path);
+    // Windows can transiently reject replacing an existing file.
+    // Keep the old document intact and bound retries for persistent permission errors.
+    const deadline = Date.now() + 1000;
+    for (;;) {
+      try {
+        await rename(temp, path);
+        break;
+      } catch (error) {
+        if (
+          process.platform !== "win32" ||
+          (error as NodeJS.ErrnoException).code !== "EPERM" ||
+          Date.now() >= deadline
+        )
+          throw error;
+        await delay(20);
+      }
+    }
   } finally {
     await unlink(temp).catch(() => {});
   }
