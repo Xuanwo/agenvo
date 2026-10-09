@@ -7,6 +7,7 @@ This prerelease validates tag-triggered npm Trusted Publishing. It is published 
 - Publish all public workspaces through GitHub Actions OIDC, with archive integrity checks and clean registry installation verification. New packages use a one-time interactive bootstrap before joining automated releases.
 - Add Herdr worktree and tab management.
 - Add Paseo workspace archival.
+- Unify Agenvo branding and redesign browser administration.
 
 Install a preview package explicitly, for example `npm install --global @agenvo/herdr@0.2.0-rc.0`. See the [installation guide](docs/installation.md) for the complete package set.
 
