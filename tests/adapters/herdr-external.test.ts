@@ -45,12 +45,8 @@ test(
     await adapter.init();
     const call = async (method: string, params = {}) =>
       (await adapter.call(method, params)).result as any;
-    const service = (await call("session.list")).items.find(
-      (s: any) => s.session === "test",
-    );
     const ref = {
       session: "test",
-      backendGeneration: service.backendGeneration,
     };
     const paneId = (await call("workspace.create", ref)).result.root_pane
       .pane_id;

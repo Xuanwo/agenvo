@@ -11,7 +11,7 @@ import { until } from "../support/environment.js";
 const quote = (s: string) =>
   "'" + s.replaceAll("'", process.platform === "win32" ? "''" : "'\\''") + "'";
 test(
-  "external Herdr agent is discovered, prompts produce events, blocked input is readable and restart invalidates state",
+  "external Herdr agent is discovered, prompts produce events, blocked input is readable and restart renews subscriptions",
   { timeout: 45000 },
   async (t) => {
     const lab = await eventsLab(t);
@@ -56,9 +56,10 @@ test(
       lab.call(device, "herdr", method, params);
     const services = await call("session.list");
     const service = services.items.find((s: any) => s.session === "test");
+    assert.equal(service.endpointPresent, true);
+    assert.equal(service.backendGeneration, undefined);
     const ref = {
       session: "test",
-      backendGeneration: service.backendGeneration,
     };
     const created = await call("workspace.create", ref),
       paneId = created.result.root_pane.pane_id;
@@ -92,13 +93,22 @@ test(
       () => call("pane.read", { ...ref, paneId }),
       (value) => JSON.stringify(value).includes("Fixture result: alpha"),
     );
+    const generation = lab.received.find(
+      (e) => e.data.nativeType === "pane.agent_status_changed",
+    ).data.generation;
+    assert.ok(generation);
     const before = lab.received.length;
     await native.stop();
     await native.start();
     await until(
       () => lab.received.slice(before),
       (events) =>
-        events.some((e) => e.data.nativeType === "agenvo.resync_required"),
+        events.some(
+          (e) =>
+            e.data.nativeType === "agenvo.resync_required" &&
+            e.data.generation &&
+            e.data.generation !== generation,
+        ),
     );
     const current = await call("session.list");
     assert.ok(
@@ -107,9 +117,23 @@ test(
     await lab.admin("/api/admin/revoke", { kind: "device", id: codexDevice });
     assert.ok((await call("session.list")).items.length);
 
-    assert.notEqual(
-      current.items.find((s: any) => s.session === "test").backendGeneration,
-      ref.backendGeneration,
+    assert.equal(
+      current.items.find((s: any) => s.session === "test").endpointPresent,
+      true,
+    );
+    const restarted = await call("pane.read", { ...ref, paneId });
+    assert.equal(restarted.backendGeneration, undefined);
+    await call("pane.run", {
+      ...ref,
+      paneId,
+      command:
+        process.platform === "win32"
+          ? "Write-Output ('RESTART_' + 'ACCEPTED')"
+          : "printf 'RESTART_%s\\n' ACCEPTED",
+    });
+    await until(
+      () => call("pane.read", { ...ref, paneId }),
+      (value) => JSON.stringify(value).includes("RESTART_ACCEPTED"),
     );
   },
 );

@@ -56,8 +56,8 @@ test("Herdr delegates agent kinds and execution arguments to the native launcher
     cwd: "/tmp",
     configRoot: "/tmp/herdr",
   });
-  const ref = { session: "test", backendGeneration: "a".repeat(64) };
-  t.mock.method(adapter, "generation", async () => ref.backendGeneration);
+  const ref = { session: "test" };
+  t.mock.method(adapter, "generation", async () => "a".repeat(64));
   const launches: string[][] = [];
   const agents = new Set<string>();
   t.mock.method(
@@ -156,10 +156,17 @@ test("native registry rejects duplicates and Herdr input directly uses the suppl
   );
   const params = {
     session: "test",
-    backendGeneration: generation,
     name: "agent",
   };
-  await a.call("agent.prompt", { ...params, text: "Work" });
+  for (const method of a.methods()) {
+    assert.equal(
+      (method.inputSchema as any).properties.backendGeneration,
+      undefined,
+      method.name,
+    );
+  }
+  const prompted = await a.call("agent.prompt", { ...params, text: "Work" });
+  assert.deepEqual(prompted.result, { result: {}, session: "test" });
   await a.call("agent.send-keys", { ...params, keys: ["esc"] });
   assert.deepEqual(
     sent.map((args) => args.slice(0, 3)),
@@ -179,8 +186,8 @@ test("Herdr worktree trust is explicit and scoped to each native command", async
     cwd: "/repo",
     configRoot: "/tmp/herdr",
   });
-  const backendGeneration = "a".repeat(64);
-  t.mock.method(adapter, "generation", async () => backendGeneration);
+  const generation = "a".repeat(64);
+  t.mock.method(adapter, "generation", async () => generation);
   const sent: string[][] = [];
   t.mock.method(
     adapter as any,
@@ -199,7 +206,6 @@ test("Herdr worktree trust is explicit and scoped to each native command", async
     for (const trustRepository of [undefined, false, true]) {
       await adapter.call(method, {
         session: "test",
-        backendGeneration,
         ...params,
         trustRepository,
       });
