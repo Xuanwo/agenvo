@@ -5,6 +5,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { type HerdrConfig } from "../support/config.js";
 const exec = promisify(execFile);
 export function herdrFixture(
@@ -121,11 +122,34 @@ export function herdrFixture(
     async stop() {
       if (!owned) return;
       if (process.platform === "win32") {
-        // Herdr 0.9.3 can exit without terminating pane descendants on Windows.
-        // Kill the test-owned tree while its root still exists for taskkill /T.
-        await stopProcess(server!);
-        await rm(socket, { force: true });
-        owned = false;
+        // Herdr 0.9.3 may leave descendants alive, but force-killing the server
+        // skips session persistence. Hold child handles before graceful shutdown
+        // so survivors remain identifiable even after their parent has exited.
+        try {
+          await exec(
+            "pwsh.exe",
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-File",
+              fileURLToPath(new URL("./stop-herdr.ps1", import.meta.url)),
+              "-ServerPid",
+              String(server!.pid),
+              "-HerdrBinary",
+              config.binary,
+            ],
+            { env, cwd: config.cwd, timeout: 20000 },
+          );
+          await until(
+            () => server!.exitCode !== null || server!.signalCode !== null,
+            (exited) => exited,
+            8000,
+          );
+        } finally {
+          await stopProcess(server!);
+          await rm(socket, { force: true });
+          owned = false;
+        }
         return;
       }
       if (!(await exists())) return;

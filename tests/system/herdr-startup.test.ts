@@ -107,7 +107,7 @@ exit $LASTEXITCODE
         "-c",
         'model_provider="fixture"',
         "-c",
-        'tui.status_line=["model"]',
+        "tui.status_line=['model']",
         ...Object.entries(model.config).flatMap(([key, value]) => [
           "-c",
           `${key}=${JSON.stringify(value)}`,
