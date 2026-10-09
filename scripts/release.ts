@@ -271,18 +271,22 @@ async function publish(output: string) {
 }
 function githubRelease(output: string) {
   const release = readRelease(output);
-  let existing: any;
-  try {
-    existing = JSON.parse(
-      command(
-        "gh",
-        ["api", `repos/${repository}/releases/tags/${release.tag}`],
-        true,
-      ),
-    );
-  } catch (error: any) {
-    if (!String(error.stderr).includes("HTTP 404")) throw error;
-  }
+  // The by-tag endpoint only returns published releases; list includes drafts.
+  const findRelease = () => {
+    const result = command(
+      "gh",
+      [
+        "api",
+        `repos/${repository}/releases`,
+        "--paginate",
+        "--jq",
+        `.[] | select(.tag_name == ${JSON.stringify(release.tag)})`,
+      ],
+      true,
+    ).trim();
+    return result ? JSON.parse(result) : undefined;
+  };
+  let existing = findRelease();
   if (!existing) {
     command("gh", [
       "release",
@@ -296,14 +300,9 @@ function githubRelease(output: string) {
       join(output, "release-notes.md"),
       ...(release.distTag === "next" ? ["--prerelease"] : []),
     ]);
-    existing = JSON.parse(
-      command(
-        "gh",
-        ["api", `repos/${repository}/releases/tags/${release.tag}`],
-        true,
-      ),
-    );
+    existing = findRelease();
   }
+  if (!existing) throw new Error(`GitHub release not found: ${release.tag}`);
   const missing: string[] = [];
   for (const file of [
     ...release.packages.map((pkg) => pkg.filename),
