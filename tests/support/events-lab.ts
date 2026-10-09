@@ -53,7 +53,7 @@ export async function eventsLab(
       await rm(root, {
         recursive: true,
         force: true,
-        maxRetries: 10,
+        maxRetries: process.platform === "win32" ? 0 : 10,
         retryDelay: 100,
       });
     } catch (error) {
