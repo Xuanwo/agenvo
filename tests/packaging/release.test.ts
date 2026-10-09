@@ -1,3 +1,4 @@
+import { codexServer } from "../support/codex-server.js";
 import { VERSION } from "@agenvo/protocol";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -289,6 +290,8 @@ test(
 
     // Exercise CLI configuration and pairing against an isolated HTTPS Relay.
     const lab = await eventsLab(t);
+    const native = await codexServer(root);
+    cleanups.push(native.close);
     const cli = installed.get("codex-app-server")!;
     const env = {
       ...isolatedEnvironment(root),
@@ -303,8 +306,10 @@ test(
         "add",
         "--id",
         "test",
-        "--binary",
-        resolve("tests/fixtures/codex-backend.mjs"),
+        "--endpoint",
+        native.endpoint,
+        "--home",
+        root,
         "--cwd",
         root,
       ],

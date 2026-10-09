@@ -1,8 +1,9 @@
+import { codexFixture } from "./support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { AmpAdapter } from "../apps/amp/src/amp.js";
 import { LodyAdapter } from "../apps/lody/src/lody.js";
 import { PaseoAdapter } from "../apps/paseo/src/paseo.js";
@@ -119,10 +120,9 @@ test("native Codex preserves notifications, questions, permissions, errors and e
     id: "test",
     label: "Test",
     kind: "codex",
-    binary: resolve("tests/fixtures/codex-backend.mjs"),
+    endpoint: await codexFixture(t, root),
     cwd: root,
     home: root,
-    mode: "managed-stdio",
   });
   if (config.kind !== "codex") throw Error();
   const a = new CodexAdapter(config);
@@ -228,10 +228,9 @@ test("large native notifications retain identity and completion status", async (
     kind: "codex",
     id: "test",
     label: "Test",
-    binary: "/bin/codex",
     cwd: "/tmp",
     home: "/tmp/codex",
-    mode: "managed-stdio",
+    endpoint: "ws://127.0.0.1:4500",
   });
   a.available = true;
   (a as any).receive({
@@ -253,10 +252,9 @@ test("connectors use shared discovery terms while preserving native method names
     kind: "codex",
     id: "c",
     label: "Codex",
-    binary: "/unused",
     cwd: "/tmp",
     home: "/tmp",
-    mode: "managed-stdio",
+    endpoint: "ws://127.0.0.1:4500",
   });
   const herdr = new HerdrAdapter({
     kind: "herdr",

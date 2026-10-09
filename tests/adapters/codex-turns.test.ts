@@ -1,3 +1,4 @@
+import { codexServer } from "../support/codex-server.js";
 import { socketTempDir, until } from "../support/environment.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
 import { join } from "node:path";
@@ -5,20 +6,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, realpath, rm, stat } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { CodexAdapter } from "../../apps/codex-app-server/src/codex.js";
 import { instanceConfigSchema } from "../support/config.js";
 
 // Exercise real app-server turn control with a local model endpoint held open.
 // No account, external model, tool execution or everyday thread is involved.
-for (const mode of ["managed-stdio", "attach-unix"] as const)
+for (const mode of ["websocket", "unix"] as const)
   test(
-    `native Codex ${mode} accepts steering and reports interruption through native notifications`,
+    `native Codex ${mode} preserves an active turn after client replacement and accepts steering and interruption`,
     {
       timeout: 30000,
       skip:
-        process.platform === "win32" && mode === "attach-unix"
+        process.platform === "win32" && mode === "unix"
           ? "Codex Unix socket attachment is Unix-only"
           : false,
     },
@@ -26,6 +26,7 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       const home = await realpath(
         await mkdtemp(join(socketTempDir(), "agenvo-native-turn-")),
       );
+      let modelRequests = 0;
       let connected!: () => void;
       const requestStarted = new Promise<void>((resolve) => {
         connected = resolve;
@@ -38,43 +39,34 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
         response.write(
           'event: response.created\ndata: {"type":"response.created","response":{"id":"fixture-response"}}\n\n',
         );
+        modelRequests++;
         connected();
       });
       server.listen(0, "127.0.0.1");
       await once(server, "listening");
       const address = server.address() as { port: number };
       const binary = await executable("codex", {});
+      const native = await codexServer(
+        home,
+        binary,
+        mode === "unix" ? home + "/native.sock" : undefined,
+      );
       const config = instanceConfigSchema.parse({
         id: "local",
         label: "Local",
         kind: "codex",
-        binary,
         cwd: home,
         home,
-        mode,
-        ...(mode === "attach-unix"
-          ? { socketPath: home + "/native.sock" }
-          : {}),
+        endpoint: native.endpoint,
       });
       if (config.kind !== "codex") throw Error();
-      let child: ChildProcess | undefined;
       let peer: CodexAdapter | undefined;
-      let peerThreadId: string | undefined;
-      const adapter = new CodexAdapter(config);
+      let adapter = new CodexAdapter(config);
       t.after(async () => {
         server.closeAllConnections();
         await peer?.close();
         await adapter.close();
-        if (child && child.exitCode === null && child.signalCode === null) {
-          const stopped = once(child, "exit");
-          const timer = setTimeout(() => child?.kill("SIGKILL"), 2000);
-          child.kill("SIGTERM");
-          try {
-            await stopped;
-          } finally {
-            clearTimeout(timer);
-          }
-        }
+        await native.close();
         await new Promise<void>((resolve) => server.close(() => resolve()));
         await rm(home, {
           recursive: true,
@@ -83,23 +75,6 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
           retryDelay: 100,
         });
       });
-      if (mode === "attach-unix") {
-        child = spawn(
-          binary,
-          ["app-server", "--listen", "unix://" + home + "/native.sock"],
-          { env: { ...process.env, CODEX_HOME: home }, stdio: "ignore" },
-        );
-        for (let i = 0; i < 100; i++) {
-          if (
-            await stat(home + "/native.sock").then(
-              () => true,
-              () => false,
-            )
-          )
-            break;
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
-      }
       await adapter.init();
       assert.equal(adapter.available, true);
       const call = async (name: string, params = {}) =>
@@ -140,17 +115,17 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       } finally {
         clearTimeout(timeout);
       }
-      if (mode === "attach-unix") {
-        peer = new CodexAdapter({ ...config, id: "peer" });
-        await peer.init();
-        const agents: any = (
-          await peer.call("thread/list", { modelProviders: ["fixture"] })
-        ).result;
-        const external = agents.data.find((a: any) => a.id === threadId);
-        assert.ok(external, "A second client discovers a materialized thread");
-        peerThreadId = external.id;
-        await peer.call("thread/resume", { threadId: external.id });
-      }
+      await adapter.close();
+      assert.equal(native.child.exitCode, null);
+      assert.equal(native.child.signalCode, null);
+      adapter = new CodexAdapter(config);
+      await adapter.init();
+      const agents = await call("thread/list", { modelProviders: ["fixture"] });
+      assert.ok(agents.data.some((thread: any) => thread.id === threadId));
+      await call("thread/resume", { threadId });
+      peer = new CodexAdapter({ ...config, id: "peer" });
+      await peer.init();
+      await peer.call("thread/resume", { threadId });
       await adapter.call("turn/steer", {
         threadId: threadId,
         expectedTurnId: sent.turn.id,
@@ -180,31 +155,23 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
       assert.equal(completed?.data.turn.status, "interrupted");
-      if (peer) {
-        const events: any = await until(
-          async () =>
-            (
-              await peer!.call("notifications.list", {
-                threadId: peerThreadId,
-                limit: 50,
-              })
-            ).result as any,
-          (events) =>
-            events.items.some(
-              (event: any) =>
-                event.type === "turn/completed" &&
-                event.data.turn.id === sent.turn.id,
-            ),
-        );
-        assert.ok(
+      const peerEvents: any = await until(
+        async () =>
+          (await peer!.call("notifications.list", { threadId, limit: 50 }))
+            .result as any,
+        (events) =>
           events.items.some(
             (event: any) =>
               event.type === "turn/completed" &&
               event.data.turn.id === sent.turn.id,
           ),
-          "A subscribed second client receives the native completion",
-        );
-      }
+      );
+      assert.equal(
+        peerEvents.items.find((event: any) => event.type === "turn/completed")
+          .data.turn.status,
+        "interrupted",
+        "a second subscribed client receives the same native completion",
+      );
       const history = await call("thread/read", {
         threadId,
         includeTurns: true,
@@ -212,6 +179,8 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       assert.ok(
         history.thread.turns.some((turn: any) => turn.id === sent.turn.id),
       );
+      assert.equal(history.thread.turns.length, 1);
+      assert.equal(modelRequests, 1);
       await call("thread/resume", { threadId });
       await call("thread/archive", { threadId });
       await call("thread/unarchive", { threadId });

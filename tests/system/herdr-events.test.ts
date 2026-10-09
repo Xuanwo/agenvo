@@ -1,3 +1,4 @@
+import { codexFixture } from "../support/codex-server.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -35,8 +36,7 @@ test(
         kind: "codex",
         id: "herdr",
         label: "Codex on the same host",
-        binary: resolve("tests/fixtures/codex-backend.mjs"),
-        mode: "managed-stdio",
+        endpoint: await codexFixture(t, lab.root),
         cwd: lab.root,
         home: lab.root,
       },

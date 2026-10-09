@@ -57,7 +57,7 @@ call 返回 `{execution, requestId, result, nativeIds?, error?}`。在代码中�
 
 `notifications.list({threadId, cursor?, limit?})` 读取当前连接收到的有界通知，不是持久历史或所有会话的完整覆盖。resume 会话以订阅；resume 不重放历史输出。保存 nextCursor，在淘汰或重连后检查 gap。空会话、临时会话及某些原生版本可能不支持历史读取；历史可用时直接读取，通知用于获取已收到的输出。
 
-`requests.list({threadId?, cursor?})` 返回待回答问题和工具调用，包含原生参数与 responseSchema。可以在 execute 中筛选，再通过 `requests.respond({interactionId, result})` 回答。标识绑定当前连接，重复或过期回应失败。附着模式下提交成功不证明你的回答赢得其他客户端的并发竞争。权限审批自动回答，不进入待回答列表。
+`requests.list({threadId?, cursor?})` 返回待回答问题和工具调用，包含原生参数与 responseSchema。可以在 execute 中筛选，再通过 `requests.respond({interactionId, result})` 回答。标识绑定当前连接，重复或过期回应失败。提交成功不证明你的回答赢得其他客户端的并发竞争。权限审批自动回答，不进入待回答列表。
 
 ## Herdr
 

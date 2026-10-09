@@ -270,7 +270,10 @@ export async function eventsLab(t: TestContext) {
     assert.equal(result.error, undefined, JSON.stringify(result));
     return result.result;
   };
-  const connectors = new Map<string, () => Promise<void>>();
+  const connectors = new Map<
+    string,
+    { stop(): Promise<void>; start(): Promise<void> }
+  >();
   const connect = async (instances: InstanceConfig[]) => {
     instances = await Promise.all(
       instances.map(async (c) =>
@@ -278,7 +281,9 @@ export async function eventsLab(t: TestContext) {
           ? c
           : {
               ...c,
-              binary: await realpath(c.binary),
+              ...(c.kind === "codex"
+                ? {}
+                : { binary: await realpath(c.binary) }),
               cwd: await realpath(c.cwd),
               ...(c.kind === "herdr"
                 ? { configRoot: await realpath(c.configRoot) }
@@ -324,33 +329,46 @@ export async function eventsLab(t: TestContext) {
     });
     await atomicJson(join(dir, "credentials.json"), { secret: deviceSecret });
     await mkdir(join(root, "config"), { recursive: true });
-    const child = spawn(
-      process.execPath,
-      [
-        resolve(
-          `apps/${instances[0].kind === "codex" ? "codex-app-server" : instances[0].kind}/dist/cli.js`,
-        ),
-        "run",
-      ],
-      {
-        env: {
-          ...isolatedEnvironment(root),
-          AGENVO_CONFIG_DIR: dir,
-          NODE_EXTRA_CA_CERTS: ca,
+    let child: ReturnType<typeof spawn>;
+    const startConnector = async () => {
+      await rm(join(dir, "status.json"), { force: true });
+      await atomicJson(join(dir, "credentials.json"), { secret: deviceSecret });
+      child = spawn(
+        process.execPath,
+        [
+          resolve(
+            `apps/${instances[0].kind === "codex" ? "codex-app-server" : instances[0].kind}/dist/cli.js`,
+          ),
+          "run",
+        ],
+        {
+          env: {
+            ...isolatedEnvironment(root),
+            AGENVO_CONFIG_DIR: dir,
+            NODE_EXTRA_CA_CERTS: ca,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    let logs = "";
-    child.stdout.on("data", (c) => {
-      logs += c;
-    });
-    child.stderr.on("data", (c) => {
-      logs += c;
-    });
+      );
+      let logs = "";
+      child.stdout!.on("data", (c) => {
+        logs += c;
+      });
+      child.stderr!.on("data", (c) => {
+        logs += c;
+      });
+      await until(
+        async () => {
+          if (child.exitCode !== null) throw new Error(logs);
+          return readFile(join(dir, "status.json"), "utf8")
+            .then(JSON.parse)
+            .catch(() => ({}));
+        },
+        (s) => s.state === "online",
+      );
+    };
     const stopConnector = async () => {
-      // Credential removal uses the connector's normal shutdown path on every
-      // platform, allowing managed runtimes to close before their parent exits.
+      // Exercise the connector's normal shutdown path on every platform.
       await rm(join(dir, "credentials.json"), { force: true });
       try {
         await until(
@@ -363,16 +381,8 @@ export async function eventsLab(t: TestContext) {
       }
     };
     cleanups.push(stopConnector);
-    connectors.set(deviceId, stopConnector);
-    await until(
-      async () => {
-        if (child.exitCode !== null) throw new Error(logs);
-        return readFile(join(dir, "status.json"), "utf8")
-          .then(JSON.parse)
-          .catch(() => ({}));
-      },
-      (s) => s.state === "online",
-    );
+    await startConnector();
+    connectors.set(deviceId, { stop: stopConnector, start: startConnector });
     return deviceId;
   };
   const call = async (
@@ -404,7 +414,12 @@ export async function eventsLab(t: TestContext) {
     request,
     rpc,
     connect,
-    disconnect: (deviceId: string) => connectors.get(deviceId)!(),
+    disconnect: (deviceId: string) => connectors.get(deviceId)!.stop(),
+    async restartConnector(deviceId: string) {
+      const connector = connectors.get(deviceId)!;
+      await connector.stop();
+      await connector.start();
+    },
     call,
     admin,
     setDeliveryStatus(status: number) {

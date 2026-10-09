@@ -32,7 +32,7 @@ This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-am
 3. **Authorize the MCP client:** use [MCP authorization](usage.md#authorize-mcp-clients), or the [ChatGPT connection guide](chatgpt.md). The endpoint is `https://YOUR_RELAY/mcp`. Clients need OAuth and Streamable HTTP support; ChatGPT must allow custom MCP servers.
 4. **Check the connection:** use `search` to discover targets and method schemas, then use `execute` to call native `session.list` (Herdr) or `thread/list` (Codex). Check both connector availability and native service reachability before reporting that the environment is ready.
 
-Herdr runs independently; the connector attaches to it. The Codex connector starts a separate app-server by default. Experimental attach mode needs an existing compatible control endpoint and does not automatically expose the Codex desktop App's conversations.
+Herdr and Codex app-server run independently; their Connectors only connect to existing services. Start Codex with a Unix socket or loopback WebSocket endpoint before configuring its Connector. A desktop App's stdio process does not automatically expose that endpoint or its conversations. Connector shutdown and updates leave native services running.
 
 For subsequent task management, use the live method descriptions and the [management guide](management.md). For connection failures, use [diagnostics](usage.md#revoke-and-diagnose).
 

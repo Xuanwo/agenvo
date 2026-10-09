@@ -32,7 +32,7 @@ npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --worksp
 3. **授权 MCP 客户端：**按照 [MCP 授权说明](usage.zh-CN.md#授权-mcp-客户端)或 [ChatGPT 连接指南](chatgpt.zh-CN.md)操作。端点为 `https://YOUR_RELAY/mcp`。客户端需要支持 OAuth 和 Streamable HTTP；ChatGPT 需要允许自定义 MCP 服务。
 4. **检查连接：**通过 `search` 发现目标与方法 schema，再用 `execute` 调用原生 `session.list`（Herdr）或 `thread/list`（Codex）。确认连接器可用，并检查原生服务的可达性，再报告环境已就绪。
 
-Herdr 独立运行，连接器只连接它。Codex 连接器默认启动独立的 app-server；实验性的 attach 模式要求已有兼容控制端点，不会自动共享 Codex 桌面 App 的会话。
+Herdr 和 Codex app-server 均独立运行，Connector 只连接已有服务。配置 Codex Connector 前，先独立启动监听 Unix socket 或 loopback WebSocket 端点的 Codex。桌面 App 的 stdio 进程不会自动暴露该端点或会话。关闭和更新 Connector 不会停止原生服务。
 
 后续任务管理参考实时方法描述和[管理指南](management.zh-CN.md)。连接失败时参考[诊断说明](usage.zh-CN.md#撤销与诊断)。
 

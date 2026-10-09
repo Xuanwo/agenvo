@@ -1,10 +1,11 @@
+import { codexFixture } from "../support/codex-server.js";
 import { callCode, nativeOutcome } from "../support/code.js";
 const ADMIN_SECRET = "test-admin-secret-not-for-production-1234567890";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 import { once } from "node:events";
@@ -338,10 +339,9 @@ test(
       id: "test",
       label: "Test runtime",
       kind: "codex",
-      binary: resolve("tests/fixtures/codex-backend.mjs"),
+      endpoint: await codexFixture(t, dataDir),
       cwd: dataDir,
       home: dataDir,
-      mode: "managed-stdio",
     });
     if (adapterConfig.kind !== "codex") throw Error();
     const adapter = new CodexAdapter(adapterConfig);

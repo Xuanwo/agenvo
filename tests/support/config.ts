@@ -30,8 +30,6 @@ export const descriptor = (
           ? "herdr-0.9.3-native-v1"
           : config.kind === "amp"
             ? "amp-plugin-native-v1"
-            : config.mode === "attach-unix"
-              ? "codex-0.160.1-attach-native-v1"
-              : "codex-0.160.1-native-v1",
+            : "codex-0.160.1-attach-native-v1",
     config.kind === "amp" ? executionPolicy.execution : undefined,
   );

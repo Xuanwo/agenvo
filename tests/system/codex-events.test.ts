@@ -1,21 +1,20 @@
+import { codexServer } from "../support/codex-server.js";
 import { binary as executable } from "@agenvo/connector/cli/binary";
-import { once } from "node:events";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 import { eventsLab } from "../support/events-lab.js";
 import { modelServer } from "../support/model-server.js";
-import { until, isolatedEnvironment } from "../support/environment.js";
+import { until } from "../support/environment.js";
 
-for (const mode of ["managed-stdio", "attach-unix"] as const)
+for (const mode of ["websocket", "unix"] as const)
   test(
-    `native Codex ${mode} executes a local mock-model turn, notifies completion, reads output and accepts follow-up interruption`,
+    `native Codex ${mode} preserves active work across CLI shutdown and restart through MCP`,
     {
       timeout: 45000,
       skip:
-        process.platform === "win32" && mode === "attach-unix"
+        process.platform === "win32" && mode === "unix"
           ? "Codex Unix socket attachment is Unix-only"
           : false,
     },
@@ -25,44 +24,26 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
       lab.cleanup(() => model.close());
       const home = join(lab.root, "codex");
       await mkdir(home);
+      await writeFile(
+        join(home, "config.toml"),
+        `model = "fixture"\nmodel_provider = "fixture"\n[model_providers.fixture]\nname = "Isolated model"\nbase_url = ${JSON.stringify(model.config["model_providers.fixture.base_url"])}\nwire_api = "responses"\nrequires_openai_auth = false\nsupports_websockets = false\n`,
+      );
       const binary = await executable("codex", {});
       const socketPath = join(home, "native.sock");
-      if (mode === "attach-unix") {
-        const child = spawn(
-          binary,
-          ["app-server", "--listen", "unix://" + socketPath],
-          {
-            env: { ...isolatedEnvironment(lab.root), CODEX_HOME: home },
-            stdio: "ignore",
-          },
-        );
-        lab.cleanup(async () => {
-          if (child.exitCode !== null || child.signalCode !== null) return;
-          const ended = once(child, "exit");
-          child.kill("SIGTERM");
-          const timer = setTimeout(() => child.kill("SIGKILL"), 2000);
-          await ended;
-          clearTimeout(timer);
-        });
-        await until(
-          () =>
-            stat(socketPath).then(
-              () => true,
-              () => false,
-            ),
-          (present) => present,
-        );
-      }
+      const native = await codexServer(
+        home,
+        binary,
+        mode === "unix" ? socketPath : undefined,
+      );
+      lab.cleanup(native.close);
       const device = await lab.connect([
         {
           kind: "codex",
           id: "codex",
           label: "Isolated native Codex",
-          binary,
           cwd: lab.root,
           home,
-          mode,
-          ...(mode === "attach-unix" ? { socketPath } : {}),
+          endpoint: native.endpoint,
         },
       ]);
       const call = (method: string, params = {}) =>
@@ -109,7 +90,44 @@ for (const mode of ["managed-stdio", "attach-unix"] as const)
         () => model.requests.length,
         (n) => n > count,
       );
-      await call("turn/interrupt", { threadId, turnId: second.turn.id });
+      await lab.disconnect(device);
+      assert.equal(native.child.exitCode, null);
+      assert.equal(native.child.signalCode, null);
+      // Finish while no connector is connected, then recover through the same
+      // installed CLI and device identity. There must be no replayed input.
+      model.release();
+      await lab.restartConnector(device);
+      const threads = await call("thread/list", {
+        modelProviders: ["fixture"],
+      });
+      assert.ok(threads.data.some((thread: any) => thread.id === threadId));
+      await call("thread/resume", { threadId });
+      const history = await until(
+        () => call("thread/read", { threadId, includeTurns: true }),
+        (result) =>
+          result.thread.turns.some(
+            (turn: any) =>
+              turn.id === second.turn.id && turn.status === "completed",
+          ),
+      );
+      assert.equal(history.thread.turns.length, 2);
+      assert.match(
+        JSON.stringify(
+          history.thread.turns.find((turn: any) => turn.id === second.turn.id),
+        ),
+        /ISOLATED_MODEL_RESULT/,
+      );
+      assert.equal(model.requests.length, count + 1);
+      model.hold();
+      const third = await call("turn/start", {
+        threadId,
+        input: [{ type: "text", text: "Wait for interruption." }],
+      });
+      await until(
+        () => model.requests.length,
+        (n) => n === count + 2,
+      );
+      await call("turn/interrupt", { threadId, turnId: third.turn.id });
       await until(
         () => lab.received,
         (events) =>

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Attach to an existing Codex app-server or manage an isolated process.
+Connect to an independently running Codex app-server over a Unix socket or loopback WebSocket. Connector shutdown and updates leave the native service and its turns running.
 
 For AI agents: use the [source installation guide](https://github.com/Xuanwo/agenvo/blob/main/docs/installation.md). Agenvo has no public releases yet.
 
