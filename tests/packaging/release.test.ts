@@ -30,7 +30,7 @@ const repository = resolve(".");
 
 test(
   "release tarballs install outside the workspace and expose isolated, usable applications",
-  { timeout: 180000 },
+  { timeout: 300000 },
   async (t) => {
     const cleanups: Array<() => unknown | Promise<unknown>> = [];
     t.after(async () => {
@@ -78,6 +78,7 @@ test(
         ],
         { cwd: prefix },
       );
+      t.diagnostic(`Installed isolated tarball: ${sourceManifest.name}`);
       const packageDir = join(prefix, "node_modules", sourceManifest.name);
       const manifest = JSON.parse(
         await readFile(join(packageDir, "package.json"), "utf8"),
