@@ -1,0 +1,18 @@
+name: PR title
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const pattern = /^(feat|fix|perf|revert|docs|style|refactor|test|build|ci|chore)(\([^()\r\n]+\))?!?: \S[^\r\n]*$/;
+            if (!pattern.test(title)) {
+              core.setFailed('Use a Conventional Commit PR title, such as "fix: reconnect after relay restart" or "feat!: change the pairing protocol". Squash merges use this title to select the release version.');
+            }

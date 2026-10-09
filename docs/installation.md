@@ -6,7 +6,7 @@ Use this guide when your task is to set up Agenvo. It links command installation
 
 ## Install the commands
 
-This checkout documents the `0.2.0-rc.1` preview. For the stable release, use the [0.1.0 installation guide](https://github.com/Xuanwo/agenvo/blob/v0.1.0/docs/installation.md).
+These instructions match version `0.2.0-rc.1` of this checkout. <!-- x-release-please-version -->
 
 Requirements:
 
@@ -18,6 +18,8 @@ CI pins Herdr 0.9.3, Codex CLI 0.160.1 and Paseo CLI 0.11.1 for reproducible tes
 
 Install only the packages needed on this machine. Connectors can coexist:
 
+<!-- x-release-please-start-version -->
+
 ```sh
 npm install --global @agenvo/herdr@0.2.0-rc.1
 npm install --global @agenvo/codex-app-server@0.2.0-rc.1
@@ -26,17 +28,23 @@ npm install --global @agenvo/amp@0.2.0-rc.1
 npm install --global @agenvo/lody@0.2.0-rc.1
 ```
 
-For a VPS relay, install `npm install --global @agenvo/server@0.2.0-rc.1`. Each package provides its corresponding `agenvo-<name>` command. Installation does not start services or install native agent runtimes. Configure each runtime and its credentials separately.
+<!-- x-release-please-end -->
+
+For a VPS relay, install `npm install --global @agenvo/server@0.2.0-rc.1`. Each package provides its corresponding `agenvo-<name>` command. Installation does not start services or install native agent runtimes. Configure each runtime and its credentials separately. <!-- x-release-please-version -->
 
 ## Get deployment files or build from source
 
 Cloudflare deployment and the VPS Docker setup use files from the release checkout:
+
+<!-- x-release-please-start-version -->
 
 ```sh
 git clone --branch v0.2.0-rc.1 --depth 1 https://github.com/Xuanwo/agenvo.git
 cd agenvo
 npm ci
 ```
+
+<!-- x-release-please-end -->
 
 To build the commands from source instead of installing the npm packages:
 

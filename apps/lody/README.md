@@ -4,10 +4,16 @@
 
 Manage a Lody cloud workspace or attach to an existing local daemon through native document synchronization and RPC. Cloud and local instances can coexist. Closing the Connector leaves native work running.
 
+<!-- x-release-please-start-version -->
+
 ```sh
 npm install --global @agenvo/lody@0.2.0-rc.1
 ```
 
-Requires Node.js 24.13+. Cloud access needs a CLI token and workspace access; local attachment needs a running daemon on the same machine. Follow the [installation guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/installation.md).
+<!-- x-release-please-end -->
 
-[Configuration and usage](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/lody.md)
+Requires Node.js 24.13+.
+
+Cloud access needs a CLI token and workspace access; local attachment needs a running daemon on the same machine. Follow the [installation guide](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/installation.md). <!-- x-release-please-version -->
+
+[Configuration and usage](https://github.com/Xuanwo/agenvo/blob/v0.2.0-rc.1/docs/lody.md) <!-- x-release-please-version -->

@@ -62,6 +62,6 @@ Lody cloud protocol tests run with `npm test` and `npm run test:integration`, st
 
 Lody local system tests use pinned `lody@0.104.0` native daemon/ACP, Codex 0.160.1 and an isolated model through Relay MCP, covering creation, sending, history, exact cancellation and no replay after disconnect. The npm bundle is a cloud build; the fixture changes only its four platform selection constants to OSS. This does not certify an unmodified OSS distribution. Protocol and execution code are unchanged; no personal configuration or production account is used.
 
-For package publication and GitHub releases, follow [Releasing](RELEASING.md).
+Use Conventional Commit PR titles (`fix:`, `feat:`, or `feat!:` for incompatible changes). Squash merges use the title to determine the next release. Release Please maintains one version PR for all workspaces; follow [Releasing](RELEASING.md).
 
 OpenCode system tests use the installer-pinned `opencode-ai@1.18.35`, isolated native state and a local model. They cover external sessions across projects, real MCP calls, events, active execution surviving Connector restart, interruption and continuation. No personal credentials or production providers are used.

@@ -55,10 +55,42 @@ test("release tags must match versions and prereleases never update latest", () 
 test("release notes must belong to the selected version", () => {
   const notes =
     "# Changelog\n\n## 0.2.0 - 2026-10-09\n\nNew release.\n\n## 0.1.0 - 2026-10-08\n\nOld release.\n";
-  assert.equal(releaseNotes(notes, "0.2.0"), "New release.\n");
+  const result = releaseNotes(notes, "0.2.0");
+  assert.ok(result.startsWith("New release.\n"));
+  assert.ok(!result.includes("Old release."));
+  assert.match(result, /v0\.2\.0\/RELEASING\.md#validation-boundaries/);
   assert.throws(
     () => releaseNotes(notes, "0.3.0"),
     /needs dated release notes/,
+  );
+});
+
+test("release-please changelog sections retain features and breaking changes without older releases", () => {
+  const notes = `# Changelog
+
+## [0.2.0](https://github.com/Xuanwo/agenvo/compare/v0.1.0...v0.2.0) (2026-10-10)
+
+### ⚠ BREAKING CHANGES
+
+* Change configuration.
+
+### Features
+
+* Add a connector. See [setup](docs/installation.md).
+
+## 0.2.0-rc.1 - 2026-10-09
+
+Old preview.
+`;
+  const result = releaseNotes(notes, "0.2.0");
+  assert.match(result, /Change configuration/);
+  assert.match(result, /Add a connector/);
+  assert.match(result, /blob\/v0\.2\.0\/docs\/installation\.md/);
+  assert.ok(!result.includes("Old preview"));
+  assert.throws(() => releaseNotes(notes, "0.3.0"), /needs dated/);
+  assert.throws(
+    () => releaseNotes("## [0.2.0](https://example.com)\nUndated", "0.2.0"),
+    /needs dated/,
   );
 });
 
