@@ -54,6 +54,7 @@ test(
       name: "search",
       arguments: {
         query: "archive workspace",
+        includeSchema: true,
         deviceId: device,
         instanceId: "paseo",
       },
