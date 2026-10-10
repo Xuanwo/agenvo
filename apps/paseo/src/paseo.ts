@@ -50,8 +50,7 @@ export const permissionInput = agentTarget.extend({
   response: AgentPermissionResponseSchema,
 });
 type Operation = Method & {
-  schema: z.ZodType;
-  run: (p: any) => Promise<unknown>;
+  prepare: (input: Record<string, unknown>) => () => Promise<unknown>;
 };
 const executionMode = (provider: string) => {
   if (provider === "codex") return "full-access";
@@ -80,20 +79,23 @@ export class PaseoAdapter implements Adapter {
   private approvals = new Set<string>();
 
   constructor(readonly config: PaseoConfig) {
-    const define = (
+    const define = <S extends z.ZodType>(
       name: string,
-      schema: z.ZodType,
+      schema: S,
       readOnly: boolean,
       description: string,
-      run: Operation["run"],
+      run: (params: z.output<S>) => Promise<unknown>,
     ) => {
       if (this.operations.has(name)) throw new Fault("duplicate_method", name);
       this.operations.set(name, {
         name,
-        schema,
         readOnly,
         description,
-        run,
+        prepare: (input) => {
+          const parsed = schema.safeParse(input);
+          if (!parsed.success) throw new Fault("invalid_params");
+          return () => run(parsed.data);
+        },
         inputSchema: z.toJSONSchema(schema, { unrepresentable: "any" }),
       });
     };
@@ -483,11 +485,10 @@ export class PaseoAdapter implements Adapter {
   async call(method: string, input: Record<string, unknown>): Promise<Outcome> {
     const op = this.operations.get(method);
     if (!op) throw new Fault("unsupported_capability");
-    const p = op.schema.safeParse(input);
-    if (!p.success) throw new Fault("invalid_params");
+    const run = op.prepare(input);
     this.connected();
     try {
-      const result = await op.run(p.data);
+      const result = await run();
       if (
         result &&
         typeof result === "object" &&

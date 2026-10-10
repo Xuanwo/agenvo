@@ -39,15 +39,28 @@ export const instancesSchema = z
   .array(instanceSchema)
   .max(LIMITS.instances)
   .refine((a) => new Set(a.map((i) => i.instanceId)).size === a.length);
-export type Execution =
-  "not_started" | "starting" | "accepted" | "rejected" | "unknown";
-export type Outcome = {
-  execution: Execution;
-  requestId?: string;
-  result?: unknown;
-  nativeIds?: Record<string, string>;
-  error?: { code: string; message: string; native?: unknown };
-};
+export const executionSchema = z.enum([
+  "not_started",
+  "starting",
+  "accepted",
+  "rejected",
+  "unknown",
+]);
+export type Execution = z.infer<typeof executionSchema>;
+export const outcomeSchema = z.object({
+  execution: executionSchema,
+  requestId: z.string().optional(),
+  result: z.unknown().optional(),
+  nativeIds: z.record(z.string(), z.string()).optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      native: z.unknown().optional(),
+    })
+    .optional(),
+});
+export type Outcome = z.infer<typeof outcomeSchema>;
 export class Fault extends Error {
   constructor(
     public code: string,

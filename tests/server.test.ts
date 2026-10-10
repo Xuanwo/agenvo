@@ -75,3 +75,31 @@ test("unapproved OAuth registrations expire instead of permanently exhausting ca
   await oauth.clientsStore.registerClient(metadata);
   assert.equal(store.list("oauth:client:").length, 1);
 });
+
+test("server initialization failure releases the database and close is idempotent", async (t) => {
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { startServer } = await import("../apps/server/src/server.js");
+  const dir = await mkdtemp(join(tmpdir(), "agenvo-server-lifecycle-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "agenvo.sqlite");
+  // Use the production file initializer so the permissions are valid on every host.
+  const { openStore } = await import("../apps/server/src/store.js");
+  const seed = await openStore(dir);
+  seed.put("schema", 99);
+  seed.close();
+  const input = { baseUrl: "https://127.0.0.1", dataDir: dir, port: 0 };
+  const secret = "c".repeat(64);
+  await assert.rejects(startServer(input, secret), /unsupported_schema/);
+  const repair = new SqliteStore(path);
+  repair.remove("schema");
+  repair.close();
+  const server = await startServer(input, secret);
+  const closing = server.close();
+  assert.equal(server.close(), closing);
+  await closing;
+  const reopened = new SqliteStore(path);
+  assert.equal(reopened.get("schema"), 1);
+  reopened.close();
+});

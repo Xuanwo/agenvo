@@ -5,7 +5,8 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 import { Fault } from "@agenvo/protocol";
-import { serverConfig, startServer } from "./server.js";
+import { startServer } from "./server.js";
+import { serverConfig } from "./config.js";
 
 const log = logger.child({ component: "server" });
 

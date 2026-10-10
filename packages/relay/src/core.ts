@@ -1,51 +1,25 @@
 import { Releases, releaseVersion, type ReleaseFetch } from "./releases.js";
+import { Access, type Device, type RevocationKind } from "./access.js";
+import type { RecordStore } from "./store.js";
 import { logger } from "@agenvo/logging";
 import { Events, type WebhookTransport } from "./events.js";
 import { runtimeEvent } from "@agenvo/protocol/events";
-import { z } from "zod";
 import {
   bytes,
-  digest,
   LIMITS,
   PROTOCOL,
   VERSION,
   instancesSchema,
+  outcomeSchema,
   failure,
   Fault,
   page,
-  type Instance,
   type Call,
   type Outcome,
 } from "@agenvo/protocol";
 
 const log = logger.child({ component: "relay.connection" });
 
-type Device = {
-  id: string;
-  label: string;
-  digest: string;
-  revoked: boolean;
-  instances: Instance[];
-  approved: Record<string, string>;
-  epoch?: string;
-  connectorVersion?: string;
-  versionObservedAt?: number;
-};
-type Pairing = {
-  code: string;
-  digest: string;
-  pollDigest: string;
-  label: string;
-  instances: Instance[];
-  expires: number;
-  deviceId?: string;
-};
-type Grant = {
-  id: string;
-  clientId: string;
-  expires: number;
-  revoked: boolean;
-};
 type Attachment = { deviceId: string; epoch: string; ready: boolean };
 type Pending = {
   deviceId: string;
@@ -56,14 +30,6 @@ type Pending = {
   finish(value: Outcome): void;
 };
 
-export interface RecordStore {
-  get<T>(key: string): T | undefined;
-  put(key: string, value: unknown): void;
-  remove(key: string): void;
-  list<T>(prefix: string): T[];
-  transaction<T>(action: () => T): T;
-  expire(prefix: string, now: number): void;
-}
 export interface RelaySocket {
   readonly readyState: number;
   send(message: string): void;
@@ -84,8 +50,12 @@ export interface RelayHost {
 export class Relay {
   private events: Events;
   private releases: Releases;
+  private access: Access;
   private pending = new Map<string, Pending>();
   constructor(private host: RelayHost) {
+    this.access = new Access(host, (kind, id, instanceId) => {
+      this.revoke(kind, id, instanceId);
+    });
     this.releases = new Releases({
       store: host.store,
       fetch: host.fetchRelease,
@@ -94,9 +64,14 @@ export class Relay {
     this.events = new Events({
       store: host.store,
       allowed: (grant, args, fingerprint) =>
-        this.allowed(grant, args?.deviceId, args?.instanceId, fingerprint),
+        this.access.allowed(
+          grant,
+          args?.deviceId,
+          args?.instanceId,
+          fingerprint,
+        ),
       fingerprint: (args) =>
-        this.device(args.deviceId)!.approved[args.instanceId],
+        this.access.device(args.deviceId)!.approved[args.instanceId],
       send:
         host.sendWebhook ??
         (async () => {
@@ -104,13 +79,9 @@ export class Relay {
         }),
       schedule: (at) => host.scheduleCleanup(at),
     });
-    const schema = this.get<number>("schema");
-    if (schema !== undefined && schema !== 1)
-      throw new Error("unsupported_schema");
-    if (schema === undefined) this.put("schema", 1);
   }
   release(grant: string) {
-    if (!this.allowed(grant)) throw new Fault("permission_denied");
+    if (!this.access.allowed(grant)) throw new Fault("permission_denied");
     return this.releases.read();
   }
   eventsList(grant: string) {
@@ -122,20 +93,41 @@ export class Relay {
   eventsUnsubscribe(grant: string, input: unknown) {
     return this.events.unsubscribe(grant, input);
   }
-  private get<T>(key: string) {
-    return this.host.store.get<T>(key);
+  createPairing(input: unknown, address: string) {
+    return this.access.createPairing(input, address);
   }
-  private put(key: string, value: unknown) {
-    this.host.store.put(key, value);
+  approvePairing(code: string, expectedDigest: string) {
+    return this.access.approvePairing(code, expectedDigest);
   }
-  private remove(key: string) {
-    this.host.store.remove(key);
+  pollPairing(code: string, secret: string) {
+    return this.access.pollPairing(code, secret);
   }
-  private list<T>(prefix: string) {
-    return this.host.store.list<T>(prefix);
+  cancelPairing(code: string, secret: string) {
+    return this.access.cancelPairing(code, secret);
   }
-  private device(id: string) {
-    return this.get<Device>("device:" + id);
+  registerGrant(id: string, clientId: string) {
+    return this.access.registerGrant(id, clientId);
+  }
+  checkGrant(id: string) {
+    return this.access.checkGrant(id);
+  }
+  approveInstance(deviceId: string, instanceId: string, fingerprint: string) {
+    return this.access.approveInstance(deviceId, instanceId, fingerprint);
+  }
+  authenticateDevice(deviceId: string, secret: string) {
+    return this.access.authenticateDevice(deviceId, secret);
+  }
+  revoke(kind: RevocationKind, id: string, instanceId?: string) {
+    this.access.revoke(kind, id, instanceId);
+    this.events.cleanup();
+    for (const p of this.pending.values())
+      if (
+        !this.access.allowed(p.grantId, p.deviceId, p.instanceId, p.fingerprint)
+      )
+        p.finish(failure("permission_denied", "unknown"));
+    if (kind === "device")
+      for (const ws of this.host.sockets(id)) ws.close(4001, "revoked");
+    return { revoked: true, runningTasksCancelled: false };
   }
   private socket(device: Device) {
     return this.host
@@ -146,153 +138,12 @@ export class Relay {
           (ws.deserializeAttachment() as Attachment).epoch === device.epoch,
       );
   }
-  async createPairing(input: unknown, address: string) {
-    const p = z
-      .strictObject({
-        digest: z.string().regex(/^[a-f0-9]{64}$/),
-        label: z.string().min(1).max(128),
-        instances: instancesSchema,
-      })
-      .parse(input);
-    this.cleanup();
-    const bucket = "rate:" + (await digest(address));
-    const rate = this.get<{ key: string; count: number; expires: number }>(
-      bucket,
-    ) ?? {
-      key: bucket,
-      count: 0,
-      expires: Date.now() + 600000,
-    };
-    if (rate.count >= 10 || this.list<Pairing>("pair:").length >= 32)
-      throw new Fault("rate_limited");
-    rate.count++;
-    this.put(bucket, rate);
-    const pollSecret = crypto.randomUUID() + crypto.randomUUID();
-    const pollDigest = await digest(pollSecret);
-    const code = crypto.randomUUID();
-    this.put("pair:" + code, {
-      ...p,
-      code,
-      pollDigest,
-      expires: Date.now() + 600000,
-    } satisfies Pairing);
-    await this.host.scheduleCleanup();
+  adminState() {
+    this.access.cleanup();
     return {
-      code,
-      pollSecret,
-      fingerprint: p.digest,
-      expiresIn: 600,
-      approvalUrl: this.host.baseUrl + "/admin/pair?code=" + code,
-    };
-  }
-  approvePairing(code: string, expectedDigest: string) {
-    return this.host.store.transaction(() => {
-      const p = this.get<Pairing>("pair:" + code);
-      if (
-        !p ||
-        p.expires <= Date.now() ||
-        p.deviceId ||
-        p.digest !== expectedDigest
-      )
-        throw new Fault("pairing_expired");
-      if (
-        this.list<Device>("device:").filter((d) => !d.revoked).length >=
-        LIMITS.devices
-      )
-        throw new Fault("resource_exhausted");
-      if (this.instanceCount() + p.instances.length > LIMITS.instances)
-        throw new Fault("resource_exhausted");
-      const id = crypto.randomUUID();
-      this.put("device:" + id, {
-        id,
-        label: p.label,
-        digest: p.digest,
-        revoked: false,
-        instances: p.instances,
-        approved: Object.fromEntries(
-          p.instances.map((i) => [i.instanceId, i.fingerprint]),
-        ),
-      } satisfies Device);
-      p.deviceId = id;
-      this.put("pair:" + code, p);
-      return { deviceId: id };
-    });
-  }
-  async pollPairing(code: string, secret: string) {
-    const hash = await digest(secret);
-    return this.host.store.transaction(() => {
-      const p = this.get<Pairing>("pair:" + code);
-      if (!p || p.expires <= Date.now() || p.pollDigest !== hash)
-        throw new Fault("pairing_expired");
-      if (!p.deviceId) return { status: "pending" };
-      this.remove("pair:" + code);
-      return { status: "approved", deviceId: p.deviceId };
-    });
-  }
-  async cancelPairing(code: string, secret: string) {
-    const hash = await digest(secret);
-    return this.host.store.transaction(() => {
-      const p = this.get<Pairing>("pair:" + code);
-      if (!p || p.pollDigest !== hash) throw new Fault("pairing_expired");
-      // Cancellation also closes an approval which has not yet been consumed.
-      if (p.deviceId) this.revoke("device", p.deviceId);
-      this.remove("pair:" + code);
-      return { cancelled: true };
-    });
-  }
-  private instanceCount() {
-    return this.list<Device>("device:")
-      .filter((d) => !d.revoked)
-      .reduce((n, d) => n + d.instances.length, 0);
-  }
-  registerGrant(id: string, clientId: string) {
-    const existing = this.get<Grant>("grant:" + id);
-    if (existing) return this.checkGrant(id);
-    this.put("grant:" + id, {
-      id,
-      clientId,
-      expires: Date.now() + 2592000000,
-      revoked: false,
-    } satisfies Grant);
-    return true;
-  }
-  checkGrant(id: string) {
-    const g = this.get<Grant>("grant:" + id);
-    return Boolean(g && !g.revoked && g.expires > Date.now());
-  }
-  private allowed(
-    grant: string,
-    deviceId?: string,
-    instanceId?: string,
-    fingerprint?: string,
-  ) {
-    if (!this.checkGrant(grant)) return false;
-    if (!deviceId) return true;
-    const d = this.device(deviceId);
-    if (!d || d.revoked) return false;
-    if (!instanceId) return true;
-    const i = d.instances.find((i) => i.instanceId === instanceId);
-    return Boolean(
-      i &&
-      d.approved[instanceId] === i.fingerprint &&
-      (!fingerprint || fingerprint === i.fingerprint),
-    );
-  }
-  adminState(): {
-    devices: Array<
-      Omit<Device, "digest" | "approved" | "instances"> & {
-        fingerprint: string;
-        online: boolean;
-        instances: Array<Instance & { approved: boolean }>;
-      }
-    >;
-    pairings: Array<Omit<Pairing, "pollDigest">>;
-    grants: Grant[];
-  } {
-    this.cleanup();
-    return {
-      devices: this.list<Device>("device:").map(
-        ({ digest: fingerprint, approved, ...d }) => ({
+      devices: this.access
+        .devices()
+        .map(({ digest: fingerprint, approved, ...d }) => ({
           ...d,
           fingerprint,
           online: Boolean(this.socket({ ...d, digest: fingerprint, approved })),
@@ -300,75 +151,25 @@ export class Relay {
             ...i,
             approved: approved[i.instanceId] === i.fingerprint,
           })),
-        }),
-      ),
-      pairings: this.list<Pairing>("pair:").map(({ pollDigest: _, ...p }) => p),
-      grants: this.list<Grant>("grant:"),
+        })),
+      pairings: this.access.pairings().map(({ pollDigest: _, ...p }) => p),
+      grants: this.access.grants(),
     };
   }
   adminStateJson() {
     return JSON.stringify(this.adminState());
   }
-  approveInstance(deviceId: string, instanceId: string, fingerprint: string) {
-    const d = this.device(deviceId);
-    const i = d?.instances.find((i) => i.instanceId === instanceId);
-    if (!d || d.revoked || !i || i.fingerprint !== fingerprint)
-      throw new Fault("permission_denied");
-    d.approved[instanceId] = fingerprint;
-    this.put("device:" + d.id, d);
-    return { approved: true };
-  }
-  revoke(
-    kind: "device" | "instance" | "grant",
-    id: string,
-    instanceId?: string,
-  ) {
-    this.host.store.transaction(() => {
-      if (kind === "grant") {
-        const g = this.get<Grant>("grant:" + id);
-        if (!g) throw new Fault("not_found", "Grant not found");
-        g.revoked = true;
-        this.put("grant:" + id, g);
-      } else {
-        const d = this.device(id);
-        if (!d) throw new Fault("not_found", "Device not found");
-        if (kind === "device") d.revoked = true;
-        else {
-          if (
-            !instanceId ||
-            (!d.instances.some((i) => i.instanceId === instanceId) &&
-              !Object.hasOwn(d.approved, instanceId))
-          )
-            throw new Fault("not_found", "Instance not found");
-          delete d.approved[instanceId];
-        }
-        this.put("device:" + id, d);
-      }
-    });
-    this.events.cleanup();
-    for (const p of this.pending.values())
-      if (!this.allowed(p.grantId, p.deviceId, p.instanceId, p.fingerprint))
-        p.finish(failure("permission_denied", "unknown"));
-    if (kind === "device")
-      for (const ws of this.host.sockets(id)) ws.close(4001, "revoked");
-    return { revoked: true, runningTasksCancelled: false };
-  }
-  async authenticateDevice(deviceId: string, secret: string) {
-    const hash = await digest(secret);
-    const d = this.device(deviceId);
-    return Boolean(d && !d.revoked && hash === d.digest);
-  }
   connect(id: string, socket: RelaySocket) {
     // Authentication is awaited by the transport; recheck revocation immediately
     // before assigning the connection epoch so a concurrent revoke cannot win late.
-    const device = this.device(id);
+    const device = this.access.device(id);
     if (!device || device.revoked) throw new Fault("permission_denied");
-    const d = this.device(id)!;
+    const d = this.access.device(id)!;
     const epoch = crypto.randomUUID();
     d.epoch = epoch;
     delete d.connectorVersion;
     delete d.versionObservedAt;
-    this.put("device:" + id, d);
+    this.access.saveDevice(d);
     for (const ws of this.host.sockets(id)) {
       this.failConnection(ws);
       ws.close(4002, "replaced");
@@ -385,8 +186,9 @@ export class Relay {
     grantId: string,
     options: { deviceId?: string; cursor?: string; limit?: number } = {},
   ) {
-    if (!this.allowed(grantId)) return failure("permission_denied");
-    const items = this.list<Device>("device:")
+    if (!this.access.allowed(grantId)) return failure("permission_denied");
+    const items = this.access
+      .devices()
       .filter(
         (d) => !d.revoked && (!options.deviceId || d.id === options.deviceId),
       )
@@ -437,9 +239,9 @@ export class Relay {
   ): Promise<Outcome> {
     const requestId = crypto.randomUUID();
     const reject = (code: string) => ({ ...failure(code), requestId });
-    if (!this.allowed(grantId, input.deviceId, input.instanceId))
+    if (!this.access.allowed(grantId, input.deviceId, input.instanceId))
       return reject("permission_denied");
-    const d = this.device(input.deviceId)!;
+    const d = this.access.device(input.deviceId)!;
     const i = d.instances.find((i) => i.instanceId === input.instanceId)!;
     const ws = this.socket(d);
     if (!ws || !(ws.deserializeAttachment() as Attachment).ready)
@@ -496,7 +298,7 @@ export class Relay {
   }
   async webSocketMessage(ws: RelaySocket, raw: string | ArrayBuffer) {
     const a = ws.deserializeAttachment() as Attachment;
-    const d = this.device(a.deviceId);
+    const d = this.access.device(a.deviceId);
     if (!d || d.revoked || a.epoch !== d.epoch) {
       ws.close(4002, "replaced");
       return;
@@ -520,7 +322,7 @@ export class Relay {
       if (
         !parsed.success ||
         bytes(raw) > LIMITS.frame ||
-        this.instanceCount() - d.instances.length + parsed.data.length >
+        this.access.instanceCount() - d.instances.length + parsed.data.length >
           LIMITS.instances
       ) {
         this.failConnection(ws);
@@ -532,7 +334,7 @@ export class Relay {
         d.versionObservedAt = Date.now();
       }
       d.instances = parsed.data;
-      this.put("device:" + d.id, d);
+      this.access.saveDevice(d);
       a.ready = true;
       ws.serializeAttachment(a);
       ws.send(
@@ -546,7 +348,7 @@ export class Relay {
       );
       for (const pending of this.pending.values())
         if (
-          !this.allowed(
+          !this.access.allowed(
             pending.grantId,
             pending.deviceId,
             pending.instanceId,
@@ -583,7 +385,7 @@ export class Relay {
       )
         return;
       if (
-        !this.allowed(
+        !this.access.allowed(
           pending.grantId,
           pending.deviceId,
           pending.instanceId,
@@ -597,25 +399,8 @@ export class Relay {
         pending.finish(failure("result_too_large", "unknown"));
         return;
       }
-      const result = z
-        .object({
-          execution: z.enum([
-            "not_started",
-            "starting",
-            "accepted",
-            "rejected",
-            "unknown",
-          ]),
-          result: z.unknown().optional(),
-          nativeIds: z.record(z.string(), z.string()).optional(),
-          error: z
-            .object({
-              code: z.string(),
-              message: z.string(),
-              native: z.unknown().optional(),
-            })
-            .optional(),
-        })
+      const result = outcomeSchema
+        .omit({ requestId: true })
         .safeParse(p.outcome);
       pending.finish(
         result.success ? result.data : failure("invalid_response", "unknown"),
@@ -658,17 +443,12 @@ export class Relay {
     this.failConnection(ws);
     ws.close(1011, "connection_error");
   }
-  private cleanup() {
-    for (const p of this.list<Pairing>("pair:"))
-      if (p.expires <= Date.now()) this.remove("pair:" + p.code);
-    this.host.store.expire("rate:", Date.now());
-  }
   async settled() {
     await this.releases.close();
     await this.events.settled();
   }
   async alarm() {
-    this.cleanup();
+    this.access.cleanup();
     await this.events.drain();
   }
 }

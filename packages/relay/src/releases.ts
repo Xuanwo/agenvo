@@ -3,7 +3,7 @@ import type { Instance } from "@agenvo/protocol";
 import valid from "semver/functions/valid.js";
 import gt from "semver/functions/gt.js";
 import { z } from "zod";
-import type { RecordStore } from "./core.js";
+import type { RecordStore } from "./store.js";
 
 const log = logger.child({ component: "relay.releases" });
 const repository = "https://github.com/Xuanwo/agenvo";

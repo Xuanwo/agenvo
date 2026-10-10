@@ -1,5 +1,8 @@
+import { mkdir, lstat, open } from "node:fs/promises";
+import { join } from "node:path";
+import { Fault } from "@agenvo/protocol";
 import { DatabaseSync } from "node:sqlite";
-import { type RecordStore } from "@agenvo/relay/core";
+import type { RecordStore } from "@agenvo/relay/store";
 
 /** One process owns this database. Transactions never await external work. */
 export class SqliteStore implements RecordStore {
@@ -59,4 +62,33 @@ export class SqliteStore implements RecordStore {
   close() {
     this.db.close();
   }
+}
+
+export async function openStore(dataDir: string): Promise<SqliteStore> {
+  await mkdir(dataDir, { recursive: true, mode: 0o700 });
+  const info = await lstat(dataDir);
+  if (
+    !info.isDirectory() ||
+    (process.platform !== "win32" &&
+      ((info.mode & 0o077) !== 0 || info.uid !== process.getuid?.()))
+  )
+    throw new Fault(
+      "insecure_data_directory",
+      "The data directory must be owned by this user with mode 0700",
+    );
+  const dbPath = join(dataDir, "agenvo.sqlite");
+  try {
+    const file = await open(dbPath, "wx", 0o600);
+    await file.close();
+  } catch (error: any) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  const dbInfo = await lstat(dbPath);
+  if (
+    !dbInfo.isFile() ||
+    (process.platform !== "win32" &&
+      (dbInfo.uid !== process.getuid?.() || (dbInfo.mode & 0o077) !== 0))
+  )
+    throw new Fault("insecure_database");
+  return new SqliteStore(dbPath);
 }

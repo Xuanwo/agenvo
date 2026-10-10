@@ -1,3 +1,4 @@
+import { pairingRoute } from "@agenvo/relay/http";
 import { RelayAddress } from "@agenvo/protocol/address";
 import { cookiePrefix } from "@agenvo/relay/admin/auth";
 import { logger } from "@agenvo/logging";
@@ -134,38 +135,16 @@ function createProvider(baseUrl: string) {
         });
       if (path === "/connect" || path === "/disconnect")
         return relay.fetch(request);
-      if (path === "/pairings" && request.method === "POST") {
-        const result = await relay.createPairing(
-          JSON.parse(await readBody(request)),
-          request.headers.get("CF-Connecting-IP") ?? "local",
-        );
-        return Response.json(result, {
-          status: 201,
-          headers: { "Cache-Control": "no-store" },
-        });
-      }
-      if (
-        ["/pairings/poll", "/pairings/cancel"].includes(path ?? "") &&
-        request.method === "POST"
-      ) {
-        const { code } = z
-          .strictObject({ code: z.string().uuid() })
-          .parse(JSON.parse(await readBody(request)));
-        return Response.json(
-          await (path === "/pairings/cancel"
-            ? relay.cancelPairing(
-                code,
-                request.headers.get("authorization")?.replace(/^Bearer /, "") ??
-                  "",
-              )
-            : relay.pollPairing(
-                code,
-                request.headers.get("authorization")?.replace(/^Bearer /, "") ??
-                  "",
-              )),
-          { headers: { "Cache-Control": "no-store" } },
-        );
-      }
+      const pairing = path
+        ? await pairingRoute(
+            request,
+            relay,
+            request.headers.get("CF-Connecting-IP") ?? "local",
+            undefined,
+            path,
+          )
+        : undefined;
+      if (pairing) return pairing;
       if (
         path !== "/authorize" &&
         path !== "/admin" &&

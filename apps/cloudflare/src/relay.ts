@@ -3,7 +3,8 @@ import { logger } from "@agenvo/logging";
 import { sendWebhook } from "@agenvo/relay/webhook";
 import { OwnerAuth } from "@agenvo/relay/admin/auth";
 import { DurableObject } from "cloudflare:workers";
-import { Relay, type RecordStore } from "@agenvo/relay/core";
+import { Relay } from "@agenvo/relay/core";
+import type { RecordStore } from "@agenvo/relay/store";
 import { PROTOCOL, type Call } from "@agenvo/protocol";
 
 const log = logger.child({ component: "worker.relay" });

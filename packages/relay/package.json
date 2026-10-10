@@ -19,7 +19,9 @@
       "workerd": "./src/engine.cloudflare.ts",
       "default": "./src/engine.ts"
     },
-    "./releases": "./src/releases.ts"
+    "./releases": "./src/releases.ts",
+    "./store": "./src/store.ts",
+    "./http": "./src/http.ts"
   },
   "dependencies": {
     "@agenvo/logging": "0.2.0",
