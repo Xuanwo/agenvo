@@ -1,11 +1,9 @@
+import { CodexConnection, type NativePacket } from "./connection.js";
+import { methodValidators, validate } from "./native-schema.js";
+import { Interactions, interactionMethods } from "./interactions.js";
 import type { RuntimeEvent } from "@agenvo/protocol/events";
-import WebSocket from "ws";
-import { connect as connectUnix } from "node:net";
-import { realpath, stat } from "node:fs/promises";
-import { dirname } from "node:path";
+import { realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { Ajv, type ValidateFunction } from "ajv";
-import addFormats from "ajv-formats";
 import { z } from "zod";
 import schemas from "./schema/codex.json";
 import type { CodexConfig } from "./config.js";
@@ -14,20 +12,9 @@ import {
   type Adapter,
   type Method,
 } from "@agenvo/connector/adapters/adapter";
-import {
-  executionParams,
-  automaticApproval,
-  validateAnswers,
-} from "./codex-execution.js";
+import { executionParams } from "./codex-execution.js";
 import { Observations } from "@agenvo/connector/adapters/observations";
-import {
-  bytes,
-  Fault,
-  LIMITS,
-  page,
-  VERSION,
-  type Outcome,
-} from "@agenvo/protocol";
+import { bytes, Fault, VERSION, type Outcome } from "@agenvo/protocol";
 
 const descriptions: Record<keyof typeof schemas.methods, string> = {
   "model/list": "List available models.",
@@ -54,46 +41,26 @@ const descriptions: Record<keyof typeof schemas.methods, string> = {
     "Interrupt the turn identified by turnId. Read native notifications to observe completion.",
 };
 
-const ajv = new Ajv({ strict: false, allErrors: false });
-addFormats(ajv);
-for (const name of ["uint", "uint32", "uint64", "int64", "int32"])
-  ajv.addFormat(name, true);
-const methodValidators = new Map(
-  Object.entries(schemas.methods).map(([name, schema]) => [
-    name,
-    ajv.compile(schema),
-  ]),
-);
-const responseValidators = new Map(
-  Object.entries(schemas.responses).map(([name, schema]) => [
-    name,
-    ajv.compile(schema),
-  ]),
-);
-type Interaction = {
-  interactionId: string;
-  nativeId: string | number;
-  method: string;
-  params: Record<string, any>;
-};
-type Rpc = { resolve(value: unknown): void; reject(error: Fault): void };
 export class CodexAdapter implements Adapter {
   version = "unknown";
   available = false;
   onAvailabilityChange?: () => void;
-  private socket?: WebSocket;
+  private connection?: CodexConnection;
   private reconnect?: NodeJS.Timeout;
   private reconnectAttempt = 0;
   // Desired subscriptions survive transport loss; observed coverage does not.
   private resumeTargets = new Set<string>();
   private generation = randomUUID();
-  private id = 0;
-  private pending = new Map<number, Rpc>();
-  private interactions = new Map<string, Interaction>();
-  private interactionBytes = 0;
+  private interactions: Interactions;
   private closed = false;
   private readonly notifications = new Observations();
-  constructor(public config: CodexConfig) {}
+  constructor(public config: CodexConfig) {
+    this.interactions = new Interactions(
+      () => this.generation,
+      (packet) => this.write(packet),
+      (threadId, type, data) => this.record(threadId, type, data),
+    );
+  }
   private record(
     threadId: unknown,
     type: string,
@@ -132,51 +99,17 @@ export class CodexAdapter implements Adapter {
   }
   private async attach() {
     if (this.closed) throw new Fault("runtime_unavailable");
-    const path = this.config.endpoint.startsWith("unix://")
-      ? this.config.endpoint.slice(7)
-      : undefined;
-    if (path) {
-      const info = await stat(path);
-      const parent = await stat(dirname(await realpath(path)));
-      if (
-        !info.isSocket() ||
-        info.uid !== process.getuid?.() ||
-        parent.uid !== info.uid ||
-        (parent.mode & 0o022) !== 0
-      )
-        throw new Fault(
-          "insecure_socket",
-          "Use a Unix socket in a private directory owned by this user",
-        );
-    }
-    if (this.closed) throw new Fault("runtime_unavailable");
-    const ws = (this.socket = new WebSocket(
-      path ? "ws://localhost/rpc" : this.config.endpoint,
-      {
-        ...(path ? { createConnection: () => connectUnix(path) } : {}),
-        maxPayload: LIMITS.parse,
-        handshakeTimeout: 8000,
+    const connection = new CodexConnection(
+      this.config,
+      (packet) => {
+        if (this.connection === connection) this.receive(packet);
       },
-    ));
-    ws.on("message", (raw) => {
-      if (this.socket !== ws) return;
-      try {
-        this.receive(JSON.parse(raw.toString()));
-      } catch {
-        this.fail();
-      }
-    });
-    ws.on("error", () => {
-      if (this.socket === ws) this.fail();
-    });
-    ws.on("close", () => {
-      if (this.socket === ws) this.fail();
-    });
-    await new Promise<void>((resolve, reject) => {
-      ws.once("open", resolve);
-      ws.once("error", reject);
-      ws.once("close", () => reject(new Fault("runtime_unavailable")));
-    });
+      () => {
+        if (this.connection === connection) this.fail();
+      },
+    );
+    this.connection = connection;
+    await connection.open();
     const init: any = await this.rpc("initialize", {
       clientInfo: { name: "agenvo", version: VERSION },
       capabilities: { experimentalApi: true },
@@ -202,7 +135,7 @@ export class CodexAdapter implements Adapter {
         } else throw error;
       }
     }
-    if (this.socket !== ws || ws.readyState !== WebSocket.OPEN)
+    if (this.connection !== connection || !connection.isOpen)
       throw new Fault("runtime_unavailable");
     this.reconnectAttempt = 0;
     this.available = true;
@@ -210,49 +143,22 @@ export class CodexAdapter implements Adapter {
     this.onAvailabilityChange?.();
   }
   private write(value: unknown) {
-    if (
-      this.socket?.readyState !== WebSocket.OPEN ||
-      this.socket.bufferedAmount > LIMITS.parse
-    )
+    if (!this.connection)
       throw new Fault(
         "runtime_unavailable",
         "Native transport unavailable",
         "unknown",
       );
-    this.socket.send(JSON.stringify(value));
+    this.connection.write(value);
   }
   private rpc(method: string, params: unknown): Promise<unknown> {
-    if (this.pending.size >= 16) throw new Fault("resource_exhausted");
-    const id = ++this.id;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(
-          new Fault(
-            "execution_unknown",
-            "Codex did not confirm within 8 seconds; inspect native state.",
-            "unknown",
-          ),
-        );
-      }, 8000);
-      this.pending.set(id, {
-        resolve: (value) => {
-          clearTimeout(timer);
-          resolve(value);
-        },
-        reject: (error) => {
-          clearTimeout(timer);
-          reject(error);
-        },
-      });
-      try {
-        this.write({ jsonrpc: "2.0", id, method, params });
-      } catch (error) {
-        clearTimeout(timer);
-        this.pending.delete(id);
-        reject(error);
-      }
-    });
+    if (!this.connection)
+      throw new Fault(
+        "runtime_unavailable",
+        "Native transport unavailable",
+        "unknown",
+      );
+    return this.connection.rpc(method, params);
   }
   private eventSink?: (event: RuntimeEvent) => void;
   private stopEvents?: () => void;
@@ -312,22 +218,8 @@ export class CodexAdapter implements Adapter {
       native: bytes(native) < 24000 ? native : { omittedBytes: bytes(native) },
     });
   }
-  private receive(packet: any) {
-    if (!packet || typeof packet !== "object")
-      throw new Error("invalid_packet");
-    if (packet.method === "item/completed") {
-      // Some native request types have no serverRequest/resolved broadcast.
-      // Item completion is also authoritative, including another client's answer.
-      for (const [id, r] of this.interactions)
-        if (
-          r.params.threadId === packet.params?.threadId &&
-          r.params.turnId === packet.params?.turnId &&
-          (r.params.itemId === packet.params?.item?.id ||
-            r.params.callId === packet.params?.item?.id)
-        )
-          this.interactions.delete(id);
-      this.recount();
-    }
+  private receive(packet: NativePacket) {
+    if (!packet.method) return;
     if (typeof packet.method === "string" && packet.id === undefined)
       this.record(
         packet.params?.threadId ?? packet.params?.thread?.id,
@@ -353,107 +245,9 @@ export class CodexAdapter implements Adapter {
         packet.params ?? {},
         packet.params?.threadId ?? packet.params?.thread?.id,
       );
-    if (packet.method === "serverRequest/resolved") {
-      for (const [id, r] of this.interactions)
-        if (
-          r.nativeId === packet.params?.requestId &&
-          r.params.threadId === packet.params?.threadId
-        )
-          this.interactions.delete(id);
-      this.recount();
-    } else if (packet.method && packet.id !== undefined) {
-      try {
-        const result = automaticApproval(packet.method, packet.params ?? {});
-        if (result) {
-          this.validate(responseValidators.get(packet.method)!, result);
-          this.write({ jsonrpc: "2.0", id: packet.id, result });
-          this.record(packet.params?.threadId, "permission.submitted", {
-            method: packet.method,
-            threadId: packet.params?.threadId,
-            automatic: true,
-          });
-          return;
-        }
-      } catch (error) {
-        this.write({
-          jsonrpc: "2.0",
-          id: packet.id,
-          error: {
-            code: -32000,
-            message: "Native approval could not be answered automatically",
-          },
-        });
-        this.record(packet.params?.threadId, "permission.failed", {
-          method: packet.method,
-          threadId: packet.params?.threadId,
-        });
-        return;
-      }
-      // Another native client can handle requests this connector does not expose.
-      if (!responseValidators.has(packet.method)) return;
-      for (const [id, r] of this.interactions)
-        if (r.nativeId === packet.id) this.interactions.delete(id);
-      this.recount();
-      const interactionId = this.generation + ":" + randomUUID();
-      const interaction: Interaction = {
-        interactionId,
-        nativeId: packet.id,
-        method: packet.method,
-        params: packet.params,
-      };
-      const size = bytes(interaction);
-      if (
-        bytes({
-          ...interaction,
-          responseSchema:
-            schemas.responses[packet.method as keyof typeof schemas.responses],
-        }) >
-          LIMITS.frame - 4096 ||
-        this.interactionBytes + size > LIMITS.parse
-      ) {
-        return;
-      }
-      this.interactions.set(interactionId, interaction);
-      this.record(packet.params?.threadId, "interaction.pending", {
-        interactionId,
-        method: packet.method,
-        threadId: packet.params?.threadId,
-      });
-      this.recount();
-    } else if (["thread/closed", "thread/archived"].includes(packet.method)) {
-      const threadId = packet.params?.threadId;
-      this.resumeTargets.delete(threadId);
-      for (const [id, r] of this.interactions)
-        if (r.params.threadId === threadId) this.interactions.delete(id);
-      this.recount();
-    } else if (packet.method === "turn/completed") {
-      for (const [id, r] of this.interactions)
-        if (
-          r.params.threadId === packet.params?.threadId &&
-          r.params.turnId === packet.params?.turn?.id
-        )
-          this.interactions.delete(id);
-      this.recount();
-    } else if (!packet.method && typeof packet.id === "number") {
-      const pending = this.pending.get(packet.id);
-      this.pending.delete(packet.id);
-      if (packet.error)
-        pending?.reject(
-          new Fault(
-            "native_error",
-            "Codex rejected the request",
-            "rejected",
-            packet.error,
-          ),
-        );
-      else pending?.resolve(packet.result);
-    }
-  }
-  private recount() {
-    this.interactionBytes = [...this.interactions.values()].reduce(
-      (n, i) => n + bytes(i),
-      0,
-    );
+    this.interactions.receive(packet);
+    if (["thread/closed", "thread/archived"].includes(packet.method))
+      this.resumeTargets.delete(packet.params?.threadId);
   }
   private fail() {
     const wasAvailable = this.available;
@@ -464,21 +258,11 @@ export class CodexAdapter implements Adapter {
         reason: "native_disconnected",
       });
     }
-    for (const p of this.pending.values())
-      p.reject(
-        new Fault(
-          "execution_unknown",
-          "Codex app server exited or transport failed",
-          "unknown",
-        ),
-      );
-    this.pending.clear();
-    this.interactions.clear();
-    this.interactionBytes = 0;
+    this.interactions.reset();
     this.notifications.reset();
-    const ws = this.socket;
-    this.socket = undefined;
-    ws?.terminate();
+    const connection = this.connection;
+    this.connection = undefined;
+    connection?.close();
     this.generation = randomUUID();
     if (!this.closed && !this.reconnect) {
       this.reconnect = setTimeout(
@@ -507,30 +291,7 @@ export class CodexAdapter implements Adapter {
         description: descriptions[name as keyof typeof schemas.methods],
         inputSchema: schema,
       })),
-      {
-        name: "requests.list",
-        readOnly: true,
-        description:
-          "List pending requests for user input and dynamic tool calls received on this connection. Permission approvals are answered automatically.",
-        inputSchema: z.toJSONSchema(
-          z.strictObject({
-            cursor: z.string().optional(),
-            threadId: z.string().optional(),
-          }),
-        ),
-      },
-      {
-        name: "requests.respond",
-        readOnly: false,
-        description:
-          "Respond to a pending request for user input or a dynamic tool call. Native response schemas are included in requests.list.",
-        inputSchema: z.toJSONSchema(
-          z.strictObject({
-            interactionId: z.string(),
-            result: z.record(z.string(), z.unknown()),
-          }),
-        ),
-      },
+      ...interactionMethods,
       {
         name: "notifications.list",
         readOnly: true,
@@ -561,54 +322,11 @@ export class CodexAdapter implements Adapter {
         .parse(original);
       return accepted(this.notifications.list(p.threadId, p.cursor, p.limit));
     }
-    if (method === "requests.list") {
-      const p = z
-        .strictObject({
-          cursor: z.string().optional(),
-          threadId: z.string().optional(),
-        })
-        .parse(original);
-      return accepted(
-        page(
-          [...this.interactions.values()]
-            .filter((i) => !p.threadId || i.params.threadId === p.threadId)
-            .map((i) => ({
-              ...i,
-              responseSchema:
-                schemas.responses[i.method as keyof typeof schemas.responses],
-            })),
-          p.cursor,
-        ),
-      );
-    }
-    if (method === "requests.respond") {
-      const p = z
-        .strictObject({
-          interactionId: z.string(),
-          result: z.record(z.string(), z.unknown()),
-        })
-        .parse(original);
-      const interaction = this.interactions.get(p.interactionId);
-      if (!interaction) throw new Fault("interaction_expired");
-      this.validate(responseValidators.get(interaction.method)!, p.result);
-      validateAnswers(interaction.method, interaction.params, p.result);
-      this.interactions.delete(p.interactionId);
-      this.recount();
-      this.write({
-        jsonrpc: "2.0",
-        id: interaction.nativeId,
-        result: p.result,
-      });
-      return accepted({
-        interactionId: p.interactionId,
-        submitted: true,
-        resolution: "unconfirmed",
-        note: "The native server arbitrates concurrent answers. Inspect native turn/item state; submission is not proof this answer won.",
-      });
-    }
+    if (method.startsWith("requests."))
+      return this.interactions.call(method, original);
     const validator = methodValidators.get(method);
     if (!validator) throw new Fault("unsupported_method");
-    this.validate(validator, original);
+    validate(validator, original);
     const params = executionParams(this.config, method, original);
     if (
       ["thread/start", "thread/resume"].includes(method) &&
@@ -627,13 +345,6 @@ export class CodexAdapter implements Adapter {
       this.resumeTargets.delete(String(params.threadId));
     }
     return accepted(result);
-  }
-  private validate(validator: ValidateFunction, input: unknown) {
-    if (!validator(input))
-      throw new Fault(
-        "invalid_params",
-        "Parameters do not match the approved native schema",
-      );
   }
   async close() {
     this.closed = true;

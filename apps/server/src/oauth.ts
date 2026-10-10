@@ -26,7 +26,8 @@ import {
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { redirectUriMatches } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
 import { type AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { type Relay, type RecordStore } from "@agenvo/relay/core";
+import type { Relay } from "@agenvo/relay/core";
+import type { RecordStore } from "@agenvo/relay/store";
 import { consentPage, consentRedirect } from "@agenvo/relay/admin/page";
 import { ownerSessionToken } from "@agenvo/relay/admin/auth";
 import { Fault } from "@agenvo/protocol";

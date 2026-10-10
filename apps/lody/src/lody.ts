@@ -31,8 +31,7 @@ const historyCursor = z.strictObject({
 });
 
 type Operation = Method & {
-  schema: z.ZodType;
-  run(input: any): Promise<unknown>;
+  run(input: Record<string, unknown>): Promise<unknown>;
 };
 export class LodyAdapter implements Adapter {
   available = false;
@@ -50,20 +49,23 @@ export class LodyAdapter implements Adapter {
   private generation = randomUUID();
   private listeners = new Set<(event: RuntimeEvent) => void>();
   constructor(readonly config: LodyConfig) {
-    const define = (
+    const define = <S extends z.ZodType>(
       name: string,
-      schema: z.ZodType,
+      schema: S,
       readOnly: boolean,
       description: string,
-      run: Operation["run"],
+      run: (params: z.output<S>) => Promise<unknown>,
     ) => {
       if (this.operations.has(name)) throw new Fault("duplicate_method", name);
       this.operations.set(name, {
         name,
-        schema,
         readOnly,
         description,
-        run,
+        run: (input) => {
+          const parsed = schema.safeParse(input);
+          if (!parsed.success) throw new Fault("invalid_params");
+          return run(parsed.data);
+        },
         inputSchema: z.toJSONSchema(schema, { unrepresentable: "any" }),
       });
     };
@@ -369,9 +371,7 @@ export class LodyAdapter implements Adapter {
     try {
       const op = this.operations.get(method);
       if (!op) throw new Fault("unsupported_capability");
-      const parsed = op.schema.safeParse(input);
-      if (!parsed.success) throw new Fault("invalid_params");
-      const result: any = await op.run(parsed.data);
+      const result = await op.run(input);
       const outcome = accepted(result);
       outcome.nativeIds = lodyIds(result);
       return outcome;

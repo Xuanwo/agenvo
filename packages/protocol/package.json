@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./events": "./src/events.ts",
     "./index": "./src/index.ts",
-    "./address": "./src/address.ts"
+    "./address": "./src/address.ts",
+    "./messages": "./src/messages.ts"
   },
   "dependencies": {
     "zod": "4.6.5"

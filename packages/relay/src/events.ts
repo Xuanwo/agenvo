@@ -10,7 +10,7 @@ import {
   type EventFilter,
   type RuntimeEvent,
 } from "@agenvo/protocol/events";
-import type { RecordStore } from "./core.js";
+import type { RecordStore } from "./store.js";
 
 const log = logger.child({ component: "relay.events" });
 

@@ -1,6 +1,6 @@
 # Agenvo 架构与协议
 
-Agenvo 将远程 MCP 请求送到用户批准的原生 Agent 管理服务。Relay 持有连接与访问授权，Connector 持有原生运行时连接，任务生命周期归 Herdr、Codex、Paseo 或 Lody。首版支持单所有者、多个设备、Cloudflare 和单 VPS 两种部署。
+Agenvo 将远程 MCP 请求送到用户批准的原生 Agent 管理服务。Relay 持有连接与访问授权，Connector 持有原生运行时连接，任务生命周期归各原生 Agent 服务。首版支持单所有者、多个设备、Cloudflare 和单 VPS 两种部署。
 
 公共调用契约与扩展原则见 [MCP 与 Connector 设计原则](agent-management.zh-CN.md)，各运行时的原生语义和验证基线见 [Connector 接口依据](agent-management-interface-audit.zh-CN.md)。
 
@@ -11,20 +11,47 @@ flowchart TB
   MCP["MCP HTTP 接口 · packages/relay/src/mcp.ts"] --> CORE["Relay 核心 · packages/relay/src/core.ts"]
   CF["Cloudflare OAuth"] --> MCP
   VPS["VPS OAuth"] --> MCP
+  CORE --> ACCESS["Access · 配对、授权与持久状态"]
   CORE --> PORT["RecordStore / RelayHost / RelaySocket"]
+  ACCESS --> PORT
   PORT --> DO["Durable Object SQL + 可休眠 WebSocket"]
   PORT --> NODE["Node SQLite + ws + HTTPS 代理"]
   CORE <--> CON["Connector · 配置、重连、协议校验"]
   CON --> HERDR["Herdr 适配器 · 原生 JSON-RPC"]
   CON --> CODEX["Codex 适配器 · app-server"]
   CON --> PASEO["Paseo 适配器 · daemon WebSocket"]
+  CON --> AMP["Amp 适配器 · 原生插件桥接"]
+  CON --> LODY["Lody 适配器 · 云端 / 本机连接"]
+  CON --> OPENCODE["OpenCode 适配器 · HTTP / SSE"]
 ```
 
-`packages/relay/src/core.ts` 维护设备配对、实例指纹批准、授权、连接 epoch、并发限制、请求关联和结果交付。核心不依赖 Cloudflare 或 Node API。`packages/relay/src/admin.ts` 共用管理端点的校验、撤销与错误语义；未知撤销目标返回 404，不报告成功。存储事务必须同步执行，不在事务内等待网络。
+`packages/relay/src/access.ts` 维护设备配对、实例指纹批准、grant 与持久授权状态。`core.ts` 维护连接 epoch、并发限制、请求关联和结果交付，协调撤销授权后的事件清理与在途调用失效。核心不依赖 Cloudflare 或 Node API。`packages/relay/src/admin.ts` 共用管理端点的校验、撤销与错误语义；未知撤销目标返回 404，不报告成功。存储事务必须同步执行，不在事务内等待网络。
 
 Cloudflare 的 `apps/cloudflare/src/relay.ts` 实现 Durable Object 宿主与 RPC 边界，使用 SQLite records 表；`worker.ts` 提供 HTTP 与 OAuth，管理页和登录逻辑位于共享的 `packages/relay/src/admin`。VPS 的 `apps/server` 实现 Node HTTP/WebSocket、SQLite 和 MCP SDK OAuth Provider。两种 OAuth 实现使用平台各自支持的存储与协议库，共用 Relay 授权检查和 MCP 接口。
 
 VPS 只有一个进程持有数据库排他锁。状态目录属于运行用户且权限 0700，数据库为 0600。公网 HTTPS 可以由代理或 Node TLS 提供；内部 HTTP 不构成公网明文支持。两种部署间没有自动迁移，切换需要新的设备配对和客户端授权。
+
+## 源码阅读路径与状态归属
+
+先按用户入口阅读，再进入对应原生服务；无需从一个大入口文件追踪全部闭包状态。
+
+| 入口或职责 | 模块 | 持有的状态与边界 |
+| --- | --- | --- |
+| MCP 发现与执行 | `packages/relay/src/mcp.ts`、`catalog.ts`、`code.ts` | 发现、脚本执行与输出选择；不持有原生任务状态 |
+| Relay 授权 | `packages/relay/src/access.ts`、`store.ts` | 配对、设备、grant 和同步存储事务 |
+| Relay 交付 | `packages/relay/src/core.ts` | 连接 epoch、在途调用、结果交付前的授权检查 |
+| Connector 安装实例 | `packages/connector/src/main.ts` | 配置锁、适配器、文件监听；启动失败与关闭统一释放 |
+| Connector 连接 | `packages/connector/src/connection.ts`、`dispatch.ts`、`status.ts` | 连接独有的心跳与去重、跨重连的在途容量、串行状态落盘 |
+| Connector CLI | `packages/connector/src/cli/main.ts`、`connect.ts`、`configuration.ts`、`diagnostics.ts` | 命令分派、配对流程、配置与诊断；进程信号归 CLI |
+| VPS 宿主 | `apps/server/src/server.ts`、`host.ts`、`http.ts`、`store.ts` | 资源组合、套接字与定时器、HTTP 适配、数据库打开与权限 |
+| Herdr 原生边界 | `apps/herdr/src/methods.ts`、`services.ts`、`startups.ts`、`herdr.ts` | 方法 schema 与 argv、原生端点与 generation、异步启动确认、调用协调 |
+| Codex 原生边界 | `apps/codex-app-server/src/connection.ts`、`interactions.ts`、`native-schema.ts`、`codex.ts` | 单连接 RPC、待响应请求、原生校验、重连与订阅意图 |
+| Paseo / Lody 方法 | 各自的 `paseo.ts` / `lody.ts` | 方法定义从 schema 推导 handler 参数类型；原生状态仍由各自 SDK / workspace 持有 |
+| Amp / OpenCode 方法 | 各自的 `methods.ts` 与适配器 | 原生方法目录、插件桥接或 HTTP/SSE；不增加共同原生传输层 |
+
+重连只重建连接和允许恢复的观察，不重放业务输入。Connector 在途容量由每次调用独立持有，重复 requestId 或新连接上的同名 requestId 不能释放其他调用的容量。关闭连接不会终止附着的原生服务。
+
+协议类型与其校验 schema 放在 `packages/protocol`。两种宿主共用 `packages/relay/src/http.ts` 的配对端点，宿主先通过 `RelayAddress` 解析部署子路径，并负责请求体限制和可信客户端地址。OAuth 继续使用各平台的现有实现。
 
 ## 连接与权限
 
@@ -74,7 +101,7 @@ Herdr 适配器连接独立的原生服务，不提供 session.start/stop。原�
 
 ## 包与发行边界
 
-仓库使用 npm workspaces。计划公开发行六个程序：`@agenvo/herdr`、`@agenvo/codex-app-server`、`@agenvo/paseo`、`@agenvo/amp`、`@agenvo/lody`、`@agenvo/server`。`@agenvo/protocol`、`@agenvo/connector`、`@agenvo/relay` 是私有 workspace 包，构建时进入对应发行产物，不要求使用者安装私有包。Cloudflare 是部署入口，不发布 npm 包。各包统一版本，线协议版本独立维护。
+仓库使用 npm workspaces。统一发行七个程序：`@agenvo/herdr`、`@agenvo/codex-app-server`、`@agenvo/paseo`、`@agenvo/amp`、`@agenvo/lody`、`@agenvo/opencode`、`@agenvo/server`。`@agenvo/protocol`、`@agenvo/connector`、`@agenvo/relay` 是私有 workspace 包，构建时进入对应发行产物，不要求使用者安装私有包。Cloudflare 是部署入口，不发布 npm 包。各包统一版本，线协议版本独立维护。
 
 共享 Connector 不导入后端实现。每个后端拥有配置 schema、配置生成、能力版本、诊断、原生连接及生命周期行为，通过静态 Backend 接口接入共同 CLI 和连接循环。不存在动态插件注册或加载。
 

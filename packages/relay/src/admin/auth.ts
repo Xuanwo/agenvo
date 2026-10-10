@@ -1,7 +1,7 @@
 import { RelayAddress } from "@agenvo/protocol/address";
 import { language, messages } from "./language.js";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { type RecordStore } from "../core.js";
+import type { RecordStore } from "../store.js";
 import { digest, Fault } from "@agenvo/protocol";
 import { html, escapeHtml as e } from "./page.js";
 

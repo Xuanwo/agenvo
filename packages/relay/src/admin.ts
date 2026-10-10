@@ -3,6 +3,8 @@ import { z } from "zod";
 import { readBody, transportedFault, asOutcome } from "@agenvo/protocol";
 import { type Relay } from "./core.js";
 
+export type AdminState = ReturnType<Relay["adminState"]>;
+
 type Result<K extends "approvePairing" | "approveInstance" | "revoke"> =
   ReturnType<Relay[K]>;
 export interface AdminRelay {
@@ -51,9 +53,7 @@ export async function admin(
     });
   try {
     if (read) {
-      const state: ReturnType<Relay["adminState"]> = JSON.parse(
-        await relay.adminStateJson(),
-      );
+      const state: AdminState = JSON.parse(await relay.adminStateJson());
       return Response.json(
         path.endsWith("pairings")
           ? { pairings: state.pairings.filter((p) => !p.deviceId) }
