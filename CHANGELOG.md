@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/Xuanwo/agenvo/compare/v0.2.0...v0.2.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** align release toolchains and use the Windows PowerShell shim ([#43](https://github.com/Xuanwo/agenvo/issues/43)) ([c7ca5dc](https://github.com/Xuanwo/agenvo/commit/c7ca5dc1e55710b66438a0acba0e328579d6dbe9))
+
 ## [0.2.0](https://github.com/Xuanwo/agenvo/compare/v0.1.0...v0.2.0) (2026-10-09)
 
 
