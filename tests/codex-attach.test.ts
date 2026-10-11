@@ -1,4 +1,8 @@
-import { socketTempDir, isolatedEnvironment } from "./support/environment.js";
+import {
+  socketTempDir,
+  isolatedEnvironment,
+  until,
+} from "./support/environment.js";
 import { join } from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +18,7 @@ import { instanceConfigSchema } from "./support/config.js";
 // A second native client owns resolution; the adapter only owns its connection.
 for (const mode of ["unix", "websocket"])
   test(
-    `${mode} applies full access, tracks peer resolution and reconnects without replay`,
+    `${mode} auto-subscribes without turn history, applies full access and reconnects without replay`,
     {
       skip:
         process.platform === "win32" && mode === "unix"
@@ -47,9 +51,11 @@ for (const mode of ["unix", "websocket"])
           const result =
             p.method === "initialize"
               ? { userAgent: "Codex Desktop/0.162.0 (test)", codexHome: root }
-              : ["thread/resume", "thread/read"].includes(p.method)
-                ? { thread: { id: "t" } }
-                : {};
+              : p.method === "thread/loaded/list"
+                ? { data: ["t"], nextCursor: null }
+                : ["thread/resume", "thread/read"].includes(p.method)
+                  ? { thread: { id: "t" } }
+                  : {};
           ws.send(JSON.stringify({ id: p.id, result }));
         });
       });
@@ -83,11 +89,15 @@ for (const mode of ["unix", "websocket"])
       assert.equal(adapter.available, true);
       const info = adapter.methods().find((m) => m.name === "thread/resume")!;
       assert.ok((info.inputSchema as any).properties.sandbox);
-      await adapter.call("thread/resume", {
-        threadId: "t",
-        excludeTurns: true,
-      });
+      const stopWatching = adapter.watchEvents(() => {});
+      await until(
+        async () => calls.find((p) => p.method === "thread/resume"),
+        Boolean,
+      );
+      stopWatching();
       const resumed = calls.find((p) => p.method === "thread/resume").params;
+      assert.equal(resumed.threadId, "t");
+      assert.equal(resumed.excludeTurns, true);
       assert.equal(resumed.sandbox, "danger-full-access");
       assert.equal(resumed.approvalPolicy, "never");
       assert.equal(resumed.cwd, undefined);

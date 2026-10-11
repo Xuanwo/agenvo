@@ -184,7 +184,10 @@ export class CodexAdapter implements Adapter {
               typeof threadId === "string" &&
               !this.resumeTargets.has(threadId)
             )
-              await this.call("thread/resume", { threadId });
+              await this.call("thread/resume", {
+                threadId,
+                excludeTurns: true,
+              });
           }
           cursor = result.nextCursor ?? undefined;
         } while (cursor && !stopped);
