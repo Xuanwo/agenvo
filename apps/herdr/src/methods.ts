@@ -61,7 +61,7 @@ const keys = z
     "Native logical keys, for example esc, ctrl+c, enter. Herdr validates the whole list before writing.",
   );
 const snapshot =
-  "Read terminal output as a bounded snapshot. Output is not durable conversation history; native status does not establish task success.";
+  "Read output as a bounded terminal snapshot, which may include earlier output, blank lines and TUI decoration. Select or filter result.output inside execute before returning it. Native status does not track every output change or establish task success; snapshots are not durable history or incremental output.";
 const inputKeys =
   "Submit input as native logical keys to the selected terminal. esc or ctrl+c may interrupt the running agent. accepted confirms input delivery, not task success. Read terminal output to observe the result.";
 // Each method owns its schema, discovery contract and native argument mapping.

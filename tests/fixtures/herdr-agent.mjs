@@ -31,6 +31,23 @@ function report(state) {
     socket.on("error", reject);
   });
 }
+if (process.argv.includes("--decorated-output")) {
+  console.log(
+    [
+      "─".repeat(48),
+      "",
+      "",
+      "│ Keep table content │",
+      "  Keep indentation",
+      "Repeated result",
+      "Repeated result",
+      "── Working ──",
+      "---",
+      "█ chart",
+      "─".repeat(48),
+    ].join("\n"),
+  );
+}
 console.log("Fixture ready");
 await report("idle");
 let waiting = false;

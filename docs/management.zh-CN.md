@@ -103,6 +103,27 @@ agent.prompt 和 agent.send-keys 使用原生 name 寻址，pane 输入使用 pa
 
 使用 agent.read 或 pane.read 读取；`lines` 默认为 `80`，`source` 默认为 `recent-unwrapped`。Agent 忙碌导致历史不可读时，显式选择 source: visible。输出是有界终端快照；检查当前界面后，可用原生文本和按键回答问题。不要把终端输出当成结构化请求标识或持久历史。
 
+### 筛选终端输出
+
+快照可能包含旧输出、空白行和 TUI 装饰。在 `execute` 内筛选或截取文本，让需要的结果进入 context。例如，使用已发现的 `target` 和包含 `session`、`paneId` 的 `base`，删除空白行以及完全由框线字符组成的行：
+
+```js
+const read = await call(target, "pane.read", {
+  ...base, lines: 80, source: "recent-unwrapped"
+});
+if (read.error) return read;
+return read.result.output
+  .split("\n")
+  .filter(line => line.trim() && !/^[\s\u2500-\u257f]+$/.test(line))
+  .join("\n");
+```
+
+使用 `agent.read` 时，将 `base` 中的 `paneId` 换成 `name`。这个示例有损：它删除空白行和表格边框，但保留缩进、重复正文和包含文字的行。格式重要或需要检查原始快照时，使用 `return read.result.output`；筛选只改变当前脚本的返回值，不会腾出原生 `lines` 窗口的额度，也不能恢复窗口外的文本。
+
+也可以用自己输入中有辨识度的片段选取窗口。这只是启发式方法：重复输入或回复引用输入可能产生歧义，折叠、折行或滚出窗口的输入可能无法匹配。出现歧义或回退到末尾若干行时，应明确报告；匹配成功不证明回复完整，也不构成增量输出。
+
+只关心完成或需要输入的时刻时，可以用原生状态或事件决定何时读取。需要观察执行进展时，即使状态未变也应读取当前输出：`state_change_seq` 记录状态切换，不反映每次输出变化。根据所需上下文选择 `lines` 和 `source`，在两次读取之间于 `execute` 外等待。这两种策略都不保证取得快照之间产生的全部输出。
+
 Herdr 参数校验失败时返回 `invalid_params`，`error.message` 包含字段路径和原因。路径使用 JSON 数组，例如 `["lines"]`；`[]` 表示整个参数对象的错误，例如包含无法识别的字段。
 
 按变化触发观察时使用已有的[事件协议](events.zh-CN.md)，再通过 execute 读取当前状态和输出。

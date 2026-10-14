@@ -105,6 +105,27 @@ Create a terminal container with `workspace.create`, or add a shell pane beside 
 
 Read `agent.read` or `pane.read`; `lines` defaults to `80` and `source` to `recent-unwrapped`. If history is unavailable while the Agent is busy, select source `visible` explicitly. Output is a bounded terminal snapshot. Questions can be answered with native text and keys after inspecting the current UI. Do not infer structured request IDs or durable history from terminal output.
 
+### Filter terminal output
+
+Snapshots may include earlier output, blank lines and TUI decoration. Filter or select text inside `execute` so only the result you need enters your context. For example, using the discovered `target` and `base` containing `session` and `paneId`, remove blank lines and lines made entirely of box-drawing characters:
+
+```js
+const read = await call(target, "pane.read", {
+  ...base, lines: 80, source: "recent-unwrapped"
+});
+if (read.error) return read;
+return read.result.output
+  .split("\n")
+  .filter(line => line.trim() && !/^[\s\u2500-\u257f]+$/.test(line))
+  .join("\n");
+```
+
+For `agent.read`, use `name` instead of `paneId` in `base`. This example is lossy: it removes blank lines and table borders, but preserves indentation, repeated text and lines containing text. Use `return read.result.output` when formatting matters or to inspect the original snapshot; filtering changes only this script's return value. It does not free space in the native `lines` window or recover text outside that window.
+
+Optionally select a window using a distinctive fragment of your own input. Treat this as a heuristic: repeated or quoted input can be ambiguous, and folded, wrapped or scrolled-out input may not match. Report ambiguity or a fallback to the last few lines explicitly; a match proves neither a complete reply nor incremental output.
+
+When only completion or a request for input matters, native state or events can guide when to read. To observe progress, read the current output even if state has not changed: `state_change_seq` tracks state transitions, not every output change. Choose `lines` and `source` for the required context, and wait outside `execute` between reads. Neither strategy guarantees all output produced between snapshots.
+
 Herdr parameter validation failures return `invalid_params` with field paths and reasons in `error.message`. Paths are JSON arrays such as `["lines"]`; `[]` identifies an error on the whole parameter object, such as an unrecognized key.
 
 For change-triggered observation, use the existing [events protocol](events.md), then read current state and output through execute.

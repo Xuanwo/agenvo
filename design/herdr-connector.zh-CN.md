@@ -12,6 +12,8 @@ Herdr 的 work context 是 terminal pane 内运行的 agent；session 指原生�
 
 `agent.prompt`、`agent.send-keys` 使用原生 name，pane 输入使用 paneId。`agent.read`、`pane.read` 返回终端快照；历史不可读时，调用者可显式选择 visible。终端中的问题通过文本和按键回答，不模拟结构化请求 ID 或持久会话历史。
 
+读取结果的筛选由调用者在 `execute` 内完成，再返回所需文本，避免装饰和不相关内容进入 context。Connector 保留原始快照，不增加固定的有损压缩策略或读取游标。调用者可随时选择原文检查格式；过滤不能恢复读取窗口外的内容。原生状态用于选择观察时机，不代表输出是否变化；按输入片段截取只能提供启发式窗口，不能承诺完整回复或增量历史。管理指南提供中英文示例，`tests/system/herdr-read.test.ts` 经真实 MCP 和隔离 Herdr 验证示例筛选及原始读取。
+
 `agent.start` 接受原生 `kind` 字符串，由 Herdr 判断支持范围；`args` 原样转发，不维护 Agent 类型白名单、不注入权限参数，也不拒绝调用者的权限设置。配置者通过实例 `context` 声明执行约定，调用者选择对应的原生参数；Agenvo 不解析或强制执行这些声明。权限行为由原生 Agent 的参数和配置决定。异步启动与后续查询沿用现有跟踪机制。
 
 `worktree.list/create/open/remove` 直接映射 Herdr 的 Git worktree 操作，`tab.create/close` 管理 workspace 内的终端容器。它们为 `agent.start` 提供检出和 pane，不把这些资源等同为 work context。列表包括外部创建的 worktree，删除检出保留分支；`force` 保留原生丢弃未提交改动的语义。创建与打开固定使用 `--no-focus`，不抢占用户焦点。
