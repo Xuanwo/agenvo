@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/Xuanwo/agenvo/compare/v0.2.0...v0.3.0) (2026-10-15)
+
+
+### Features
+
+* paseo terminals ([#50](https://github.com/Xuanwo/agenvo/issues/50)) ([9ec5643](https://github.com/Xuanwo/agenvo/commit/9ec5643610ab8408503adc79a9e37f42eeb8e6e2))
+
+
+### Bug Fixes
+
+* **ci:** align release toolchains and use the Windows PowerShell shim ([#43](https://github.com/Xuanwo/agenvo/issues/43)) ([c7ca5dc](https://github.com/Xuanwo/agenvo/commit/c7ca5dc1e55710b66438a0acba0e328579d6dbe9))
+* **codex:** exclude turn history when auto-subscribing ([#48](https://github.com/Xuanwo/agenvo/issues/48)) ([93b7fa0](https://github.com/Xuanwo/agenvo/commit/93b7fa01f497dca07e8aa2c40bf049364bc36451))
+
 ## [0.2.0](https://github.com/Xuanwo/agenvo/compare/v0.1.0...v0.2.0) (2026-10-09)
 
 
