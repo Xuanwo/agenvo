@@ -1,0 +1,43 @@
+{
+  "name": "@agenvo/dsh",
+  "version": "0.2.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xuanwo/agenvo.git",
+    "directory": "apps/dsh"
+  },
+  "engines": {
+    "node": ">=24.13.0"
+  },
+  "devDependencies": {
+    "@agenvo/connector": "0.2.0",
+    "@agenvo/protocol": "0.2.0",
+    "zod": "4.6.5"
+  },
+  "description": "DeepSeek Harness (DSH) desktop connector for Agenvo",
+  "bin": {
+    "agenvo-dsh": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build.mjs dsh",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "execa": "9.6.0",
+    "pino": "10.4.0",
+    "ws": "8.22.0",
+    "ajv": "8.20.0"
+  }
+}

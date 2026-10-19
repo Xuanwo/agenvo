@@ -1,4 +1,5 @@
 import { OpenCodeAdapter } from "../apps/opencode/src/opencode.js";
+import { DshAdapter } from "../apps/dsh/src/dsh.js";
 import { codexServer } from "./support/codex-server.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -404,7 +405,13 @@ test("connectors use shared discovery terms while preserving native method names
     endpoint: "http://localhost:1",
     username: "opencode",
   });
-  for (const adapter of [codex, herdr, amp, paseo, lody, opencode])
+  const dsh = new DshAdapter({
+    kind: "dsh",
+    id: "d",
+    label: "DSH",
+    endpoint: "unix:///unused/native.sock",
+  });
+  for (const adapter of [codex, herdr, amp, paseo, lody, opencode, dsh])
     assert.ok(
       adapter.methods().every((m) => !m.name.startsWith("management.")),
     );
@@ -418,7 +425,7 @@ test("connectors use shared discovery terms while preserving native method names
     } while (cursor);
     return found;
   };
-  for (const [query, c, h, a, p, l, o] of [
+  for (const [query, c, h, a, p, l, o, d] of [
     [
       "Create work context",
       "thread/start",
@@ -427,6 +434,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.create",
       "lody.sessions.create",
       "session.create",
+      "session/create",
     ],
     [
       "SUBMIT INPUT",
@@ -436,6 +444,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.send",
       "lody.sessions.send",
       "session.prompt_async",
+      "session/prompt",
     ],
     [
       "read output",
@@ -445,6 +454,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.history",
       "lody.sessions.history",
       "session.messages",
+      "session/follow",
     ],
     [
       "interrupt",
@@ -454,6 +464,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.cancel",
       "lody.sessions.cancel",
       "session.abort",
+      "session/cancel",
     ],
   ]) {
     assert.ok(
@@ -478,6 +489,10 @@ test("connectors use shared discovery terms while preserving native method names
     );
     assert.ok(
       all(lody, query).some((m) => m.name === l),
+      query,
+    );
+    assert.ok(
+      all(dsh, query).some((m) => m.name === d),
       query,
     );
   }

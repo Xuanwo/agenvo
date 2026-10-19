@@ -74,3 +74,5 @@ Experimental Amp integration uses a local plugin and an independently running Am
 Lody supports cloud access and local daemon attachment in one Connector. See the [Lody guide](lody.md) to select and configure the connection.
 
 OpenCode support is new in the current source tree and is not included in the published preview. Build it from the current checkout and follow the [OpenCode guide](opencode.md).
+
+DeepSeek Harness (DSH) desktop support is also new in the current source tree. Install the native bridge plugin into the desktop profile, then follow the [DSH guide](dsh.md).

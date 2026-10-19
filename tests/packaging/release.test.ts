@@ -1,4 +1,5 @@
 import { opencodeFixture } from "../fixtures/opencode-server.js";
+import { dshDesktop } from "../fixtures/dsh-desktop.js";
 import { releasePackages } from "../../scripts/release-packages.ts";
 import { codexServer } from "../support/codex-server.js";
 import { assertPublicBrand } from "../support/brand.js";
@@ -178,6 +179,33 @@ test(
       env: isolatedEnvironment(root),
     });
     assert.match(doctor.stdout, /HTTP and global events connected/);
+
+    // The DSH desktop native bridge is a Unix socket; DSH desktop runs on macOS.
+    if (process.platform !== "win32") {
+      const dsh = await dshDesktop();
+      cleanups.push(dsh.close);
+      const dshCli = installed.get("dsh")!;
+      await exec(
+        process.execPath,
+        [dshCli, "instance", "add", "--id", "dsh", "--endpoint", dsh.endpoint],
+        { cwd: root, env: isolatedEnvironment(root) },
+      );
+      const dshConfig = JSON.parse(
+        await readFile(
+          join(root, ".config", "agenvo", "dsh", "config.json"),
+          "utf8",
+        ),
+      );
+      assert.equal(dshConfig.instances[0].endpoint, dsh.endpoint);
+      const dshDoctor = await exec(process.execPath, [dshCli, "doctor"], {
+        cwd: root,
+        env: isolatedEnvironment(root),
+      });
+      assert.match(
+        dshDoctor.stdout,
+        /native bridge and session\/control connected/,
+      );
+    }
 
     const paseo = await paseoFixture();
     cleanups.push(() => paseo.close());

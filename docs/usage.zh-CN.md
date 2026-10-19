@@ -63,6 +63,10 @@ agenvo-paseo run
 
 使用 `agenvo-opencode` 连接已有 OpenCode HTTP 服务，跨项目管理原生会话。配置与操作见 [OpenCode 指南](opencode.zh-CN.md)。
 
+## DeepSeek Harness（DSH）
+
+使用 `agenvo-dsh` 经原生桥接插件连接正在运行的 DSH 桌面版，管理全部桌面会话。配置与操作见 [DSH 指南](dsh.zh-CN.md)。
+
 ## Lody
 
 使用 `agenvo-lody` 连接已授权的云端 workspace 或已有本机 daemon；配置、凭据和行为边界见 [Lody 指南](lody.zh-CN.md)。

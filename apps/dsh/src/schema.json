@@ -1,0 +1,752 @@
+{
+  "dsh": "0.2.1-rc.2",
+  "operations": [
+    {
+      "name": "session/list",
+      "mode": "unary",
+      "nativeDescription": "Read all visible Session rows without resuming an Agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "_request": {
+            "type": "object",
+            "properties": {
+              "cursor": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": true,
+            "description": "reserved empty list request."
+          }
+        },
+        "required": ["_request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/search",
+      "mode": "unary",
+      "nativeDescription": "Search visible Session content without resuming an Agent. A non-owner receives only the hits whose Session `allows()` admits; `hasMore` describes the bounded result before that filtering.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"],
+            "additionalProperties": true,
+            "description": "literal message-content query."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/projections",
+      "mode": "unary",
+      "nativeDescription": "Read exact projections, returning cached hints only when migration is required.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": true,
+            "description": "Session whose current values are required."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/follow",
+      "mode": "stream",
+      "nativeDescription": "Follow one Session log from its opening or resume cursor.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "session"
+                      },
+                      "sessionId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "sessionId"],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "subagent"
+                      },
+                      "parentSessionId": {
+                        "type": "string"
+                      },
+                      "childSessionId": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": ["one-shot", "continuable", "unknown"]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "parentSessionId",
+                      "childSessionId",
+                      "mode"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "assistantStream": {
+                "type": "boolean",
+                "const": true,
+                "description": "Include process-local assistant presentation frames for the Web client."
+              },
+              "maxMessages": {
+                "type": "number"
+              },
+              "turnWindow": {
+                "type": "object",
+                "properties": {
+                  "minMessages": {
+                    "type": "number",
+                    "description": "Minimum append-origin user/assistant messages; must not exceed maxMessages."
+                  },
+                  "minTurns": {
+                    "type": "number",
+                    "description": "Minimum Turn starts crossed, including the partial Turn at beforeSeq."
+                  }
+                },
+                "required": ["minMessages", "minTurns"],
+                "additionalProperties": true,
+                "description": "Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins."
+              }
+            },
+            "required": ["address"],
+            "additionalProperties": true,
+            "description": "durable address and last committed sequence already held by the caller."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/page",
+      "mode": "unary",
+      "nativeDescription": "Read one cold-safe, message-aligned Session history page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "session"
+                      },
+                      "sessionId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["kind", "sessionId"],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "subagent"
+                      },
+                      "parentSessionId": {
+                        "type": "string"
+                      },
+                      "childSessionId": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": ["one-shot", "continuable", "unknown"]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "parentSessionId",
+                      "childSessionId",
+                      "mode"
+                    ],
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "throughSeq": {
+                "type": "number",
+                "description": "Inclusive log cut obtained from the corresponding follow opening frame."
+              },
+              "beforeSeq": {
+                "type": "number"
+              },
+              "maxMessages": {
+                "type": "number"
+              },
+              "turnWindow": {
+                "type": "object",
+                "properties": {
+                  "minMessages": {
+                    "type": "number",
+                    "description": "Minimum append-origin user/assistant messages; must not exceed maxMessages."
+                  },
+                  "minTurns": {
+                    "type": "number",
+                    "description": "Minimum Turn starts crossed, including the partial Turn at beforeSeq."
+                  }
+                },
+                "required": ["minMessages", "minTurns"],
+                "additionalProperties": true,
+                "description": "Stop at a Turn start after both minima, unless maxMessages or history exhaustion wins."
+              }
+            },
+            "required": ["address", "throughSeq"],
+            "additionalProperties": true,
+            "description": "durable address, backward cursor, and page budget."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/create",
+      "mode": "unary",
+      "nativeDescription": "Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "workspaceId": {
+                "type": "string",
+                "description": "Workspace the Session joins; exclusive with `cwd`."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Directory the Session owns when no Workspace is named."
+              },
+              "sessionId": {
+                "type": "string",
+                "description": "Blank Session to reuse while it is reusable, or the identity of a new Session when none is stored under it."
+              },
+              "agentPreset": {
+                "type": "string",
+                "description": "Preset the Session runs, replacing a reused Session's recorded preset; the configured default when omitted."
+              }
+            },
+            "required": [],
+            "additionalProperties": true,
+            "description": "optional blank Session to reuse, location, and Agent preset."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/prompt",
+      "mode": "unary",
+      "nativeDescription": "Admit one prompt after explicitly resuming its Session.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "description": "Client-minted identity persisted on the exact accepted user message."
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": ["queue", "steer"]
+              },
+              "content": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "text"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["type", "text"],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "image"
+                        },
+                        "mediaType": {
+                          "type": "string",
+                          "enum": [
+                            "image/png",
+                            "image/jpeg",
+                            "image/webp",
+                            "image/gif"
+                          ]
+                        },
+                        "data": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["type", "mediaType", "data"],
+                      "additionalProperties": true
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "file"
+                        },
+                        "receiptId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["type", "receiptId"],
+                      "additionalProperties": true
+                    }
+                  ]
+                },
+                "description": "At least one non-whitespace text part or attachment."
+              },
+              "clientTimeZone": {
+                "type": "string"
+              }
+            },
+            "required": ["requestId", "sessionId", "mode", "content"],
+            "additionalProperties": true,
+            "description": "Session identity, prompt content, source metadata, and delivery mode."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/cancel",
+      "mode": "unary",
+      "nativeDescription": "Cancel one active Agent turn without dropping its pending inbox.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": true,
+            "description": "Session whose active Agent turn is cancelled."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/updateQueue",
+      "mode": "unary",
+      "nativeDescription": "Mutate one still-pending queue occurrence, resuming a cold Agent first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              },
+              "itemId": {
+                "type": "string"
+              },
+              "action": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "edit"
+                      },
+                      "content": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "text"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["type", "text"],
+                          "additionalProperties": true
+                        },
+                        "description": "Non-empty text-only replacement content."
+                      }
+                    },
+                    "required": ["kind", "content"],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "remove"
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "steer"
+                      }
+                    },
+                    "required": ["kind"],
+                    "additionalProperties": true
+                  }
+                ]
+              }
+            },
+            "required": ["sessionId", "itemId", "action"],
+            "additionalProperties": true,
+            "description": "Session, queue item, and requested mutation."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/rename",
+      "mode": "unary",
+      "nativeDescription": "Rename one Session after explicitly resuming it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionId", "title"],
+            "additionalProperties": true,
+            "description": "Session identity and proposed title."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/fork",
+      "mode": "unary",
+      "nativeDescription": "Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              },
+              "atSeq": {
+                "type": "number",
+                "description": "Exact inclusive source event seq; omission selects the latest completed-turn prefix."
+              },
+              "allowMigration": {
+                "type": "boolean",
+                "description": "False asks the Host to check for required migration before forking. Defaults to true."
+              }
+            },
+            "required": ["sessionId"],
+            "additionalProperties": true,
+            "description": "source Session, optional exact inclusive event boundary, and migration preflight choice."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/modelCatalog",
+      "mode": "unary",
+      "nativeDescription": "Describe every currently routable model for Host-generation selectors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "session/selectModel",
+      "mode": "unary",
+      "nativeDescription": "Select one Session-local model after explicitly resuming the Session; save the default in the background.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "reasoningEffort": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionId", "provider", "model"],
+            "additionalProperties": true,
+            "description": "Session identity and requested model selection."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "workspace/create",
+      "mode": "unary",
+      "nativeDescription": "Create or idempotently resolve one Workspace over an existing directory.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": ["path"],
+            "additionalProperties": true,
+            "description": "directory path to register."
+          }
+        },
+        "required": ["request"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "userQuestions/answer",
+      "mode": "unary",
+      "nativeDescription": "Answer a continued question. The reply is steered into the agent as a user message whose source names the call; that message is also the record that closes the question in the projection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "description": "Live root agent for the owning Session."
+          },
+          "callId": {
+            "type": "string",
+            "description": "Continued question identity."
+          },
+          "answer": {
+            "type": "object",
+            "properties": {
+              "answers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The answered question id."
+                    },
+                    "selected": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Selected option labels. May accompany custom text for a multi-select question."
+                    },
+                    "custom": {
+                      "type": "string",
+                      "description": "Optional free-text \"Other\" answer."
+                    }
+                  },
+                  "required": ["id", "selected"],
+                  "additionalProperties": true
+                },
+                "description": "Structured answers keyed by question id."
+              }
+            },
+            "required": ["answers"],
+            "additionalProperties": true,
+            "description": "Complete structured answer batch, one item per question of the call."
+          }
+        },
+        "required": ["agentId", "callId", "answer"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "commands/list",
+      "mode": "unary",
+      "nativeDescription": "List the effective immutable command descriptors for one agent.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "description": "exact receiving agent and scoped-layer key."
+          }
+        },
+        "required": ["agentId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "commands/execute",
+      "mode": "unary",
+      "nativeDescription": "Parse and execute a known command without sending it to the model. A resolved command's lifecycle is logged: `command/run` is appended before the handler is invoked and `command/done` after settlement (a thrown or aborted handler settles as `kind: 'error'`). Both are direct log-only appends — no turn wraps them, and persistence drains them at ordinary checkpoints. Admission misses (syntax or unknown name) log nothing — they never entered a handler. A `command/run` append failure fails the execution loud; a `command/done` append failure on the handler-failure path is contained so the handler's own error stays the reported failure. Attachment admission is enforced here, not in the composer: attachments sent to a command that does not declare `input.attachments`, an absent attachment store, and an exceeded image limit each settle as an error result before the handler runs. Validation rejection starts no attachment writes; a storage failure can leave only unreachable content-addressed objects for deferred collection.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agentId": {
+            "type": "string",
+            "description": "exact receiving agent."
+          },
+          "line": {
+            "type": "string",
+            "description": "complete slash-command line."
+          },
+          "submittedAttachments": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "image"
+                    },
+                    "mediaType": {
+                      "type": "string",
+                      "enum": [
+                        "image/png",
+                        "image/jpeg",
+                        "image/webp",
+                        "image/gif"
+                      ],
+                      "description": "Declared media type, verified against the decoded bytes during admission."
+                    },
+                    "data": {
+                      "type": "string",
+                      "description": "Canonical base64 encoding of the image bytes."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Optional display name; it is never interpreted as a path."
+                    }
+                  },
+                  "required": ["type", "mediaType", "data"],
+                  "additionalProperties": true
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "file"
+                    },
+                    "receiptId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["type", "receiptId"],
+                  "additionalProperties": true
+                }
+              ]
+            },
+            "description": "encoded images and staged file receipts accompanying the line, in submission order; empty for a plain invocation."
+          }
+        },
+        "required": ["agentId", "line", "submittedAttachments"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

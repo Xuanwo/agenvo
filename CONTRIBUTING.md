@@ -45,7 +45,7 @@ Source responsibilities:
 - `packages/protocol`: wire schemas, limits and execution outcomes.
 - `packages/relay`: shared Relay, MCP, event delivery and administration UI.
 - `packages/connector`: shared connection, configuration storage, observation and CLI mechanisms.
-- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`, `apps/opencode`: independently installed Connectors owning their configuration schemas and adapters.
+- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`, `apps/opencode`, `apps/dsh`: independently installed Connectors owning their configuration schemas and adapters.
 - `apps/server`, `apps/cloudflare`: VPS and Cloudflare hosts.
 
 New deployment hosts must reuse the routing core and preserve authorization, epoch and uncertain-execution semantics. Native adapter additions follow the [Connector contract (Chinese)](design/agent-management.zh-CN.md#新增或扩展-connector): expose discoverable native methods through the existing `search` and `execute` tools, with shared operation terms and explicit interaction semantics. Do not add retry mechanisms that can duplicate writes.
@@ -67,3 +67,5 @@ Lody local system tests use pinned `lody@0.104.0` native daemon/ACP, Codex 0.160
 Use Conventional Commit PR titles (`fix:`, `feat:`, or `feat!:` for incompatible changes). Squash merges use the title to determine the next release. Release Please maintains one version PR for all workspaces; follow [Releasing](RELEASING.md).
 
 OpenCode system tests use the installer-pinned `opencode-ai@1.18.35`, isolated native state and a local model. They cover external sessions across projects, real MCP calls, events, active execution surviving Connector restart, interruption and continuation. No personal credentials or production providers are used.
+
+DSH tests run with `npm test`, `npm run test:integration` and `npm run test:packages`. A Unix socket fixture implements the plugin's native bridge contract and, through the real MCP entry, covers discovery, the full-access switch, events, native refusals, `unknown` after a lost response and no replay across restarts. The tests do not start the DSH desktop app or use model credentials; see the [DSH design](design/dsh-connector.zh-CN.md#验证依据) for real desktop acceptance. The bridge is a Unix socket, so Windows skips these tests.

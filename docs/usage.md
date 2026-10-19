@@ -63,6 +63,10 @@ Discovery includes agents created by other clients. Creating an agent sends no p
 
 Use `agenvo-opencode` to attach an existing OpenCode HTTP service and manage native sessions across projects. See the [OpenCode guide](opencode.md).
 
+## DeepSeek Harness (DSH)
+
+Use `agenvo-dsh` to attach a running DSH desktop app through the native bridge plugin and manage every desktop session. See the [DSH guide](dsh.md).
+
 ## Lody
 
 Use `agenvo-lody` for an authorized cloud workspace or an existing local daemon; see the [Lody guide](lody.md) for configuration, credentials and behavior.

@@ -17,6 +17,7 @@ const connectorPackages: Record<Instance["kind"], string> = {
   amp: "@agenvo/amp",
   lody: "@agenvo/lody",
   opencode: "@agenvo/opencode",
+  dsh: "@agenvo/dsh",
 };
 const packages = ["@agenvo/server", ...Object.values(connectorPackages)];
 

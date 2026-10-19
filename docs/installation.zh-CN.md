@@ -74,3 +74,5 @@ Paseo 同样独立运行；先配置 daemon 和 provider，再附着 `agenvo-pas
 Lody 在同一个 Connector 中支持云端访问与本机 daemon 附着。按 [Lody 指南](lody.zh-CN.md)选择连接方式并配置和验证。
 
 OpenCode 支持是当前源码树中的新增能力，不包含在已发布的预览版中。从当前 checkout 构建，并按 [OpenCode 指南](opencode.zh-CN.md)连接。
+
+DeepSeek Harness（DSH）桌面版支持同样是当前源码树中的新增能力。先在桌面 profile 中安装原生桥接插件，再按 [DSH 指南](dsh.zh-CN.md)连接。

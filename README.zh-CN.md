@@ -10,7 +10,7 @@
 
 在手机上让 ChatGPT 查看服务器上 Codex 的进展，或让笔记本上 Herdr 里的 Agent 修复一个失败的测试。Agenvo 通过 MCP 将助手接入 [Herdr](https://herdr.dev) 和 [Codex app-server](https://developers.openai.com/codex/app-server/)，中继由你自己部署在 Cloudflare 或单台 VPS 上。你描述目标，助手自己判断如何推进工作。
 
-实验性的 [Amp 支持](docs/amp.zh-CN.md)通过本地插件接入原生 Amp 宿主。
+实验性的 [Amp 支持](docs/amp.zh-CN.md)通过本地插件接入原生 Amp 宿主。[DeepSeek Harness 支持](docs/dsh.zh-CN.md)经插件的原生桥接接入 DSH 桌面版。
 
 ![Agenvo 架构。助手层展示 ChatGPT、dots、Grok Bot 和 Muse。你的助手通过 HTTPS 向你自托管在 Cloudflare 或 VPS 上的 Agenvo 中继发起 MCP 调用，中继把变化事件推送回助手。个人电脑和服务器上的 Herdr 连接器与 Codex 连接器通过 WSS 主动连接中继，请求和结果都经由这条连接往返。信鸽标识 Agenvo 的组件。连接器把工作交给 Herdr 或 Codex app-server，Agent 在那里使用你的项目和本地工具运行。你的电脑无需开放入站端口。](docs/images/architecture.zh-CN.png)
 

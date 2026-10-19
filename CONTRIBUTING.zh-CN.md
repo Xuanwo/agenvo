@@ -45,7 +45,7 @@ Herdr 会话测试通过公开 MCP 入口接入已有 Codex 或启动具名 Code
 - `packages/protocol`：通信 schema、限制与执行结果。
 - `packages/relay`：共享 Relay、MCP、事件投递与管理网页。
 - `packages/connector`：共享连接、配置存储、观察与 CLI 机制。
-- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`、`apps/opencode`：独立 Connector，拥有各自的配置 schema 与适配器。
+- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`、`apps/opencode`、`apps/dsh`：独立 Connector，拥有各自的配置 schema 与适配器。
 - `apps/server`、`apps/cloudflare`：VPS 与 Cloudflare 宿主。
 
 新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器遵循 [Connector 契约](design/agent-management.zh-CN.md#新增或扩展-connector)：通过现有 `search` 和 `execute` 工具暴露可发现的原生方法，使用共同操作术语，并说明交互语义。不添加可能重复写入的自动重试。
@@ -67,3 +67,5 @@ Lody 本地系统测试使用固定的 `lody@0.104.0` 原生 daemon/ACP、Codex 
 PR 标题使用 Conventional Commits（`fix:`、`feat:`，不兼容变更使用 `feat!:`）。Squash merge 使用标题确定下一版本。Release Please 为全部 workspace 维护一个发版 PR，详见[发版流程](RELEASING.md)。
 
 OpenCode 系统测试使用安装器固定的 `opencode-ai@1.18.35`、隔离原生状态和本地模型，覆盖跨项目外部会话、真实 MCP 调用、事件、执行中重启 Connector 后保持运行、中断与继续，不使用个人凭据或生产模型提供者。
+
+DSH 测试随 `npm test`、`npm run test:integration` 和 `npm run test:packages` 运行，使用按插件原生桥接契约实现的 Unix socket fixture，经过真实 MCP 入口覆盖发现、full access 切换、事件、原生拒绝、响应丢失后的 `unknown` 和重启不重放。测试不启动 DSH 桌面版，不使用模型凭据；真实桌面版的验收范围见 [DSH 设计](design/dsh-connector.zh-CN.md#验证依据)。桥接是 Unix socket，Windows 上跳过。

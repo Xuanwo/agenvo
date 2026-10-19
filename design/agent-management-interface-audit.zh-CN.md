@@ -10,5 +10,6 @@
 | Amp | [插件宿主、原生接口与验证边界](amp-interface-audit.zh-CN.md) |
 | OpenCode | [HTTP 原生操作、跨项目会话与全局事件](opencode-connector.zh-CN.md) |
 | Lody | [云端与本地连接、Session 与交互](lody-connector.zh-CN.md) |
+| DSH 桌面版 | [原生桥接、Session/Turn 与观察流](dsh-connector.zh-CN.md) |
 
 接口版本用于复现和追溯，不作为运行时版本白名单。升级时核对原生来源，并通过对应 Connector 的隔离测试验证实际调用路径；字段或方法存在不等于具备去重、重放或完整历史保证。

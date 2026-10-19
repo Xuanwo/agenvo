@@ -1,4 +1,5 @@
 import { instanceConfigSchema as opencode } from "../../apps/opencode/src/config.js";
+import { instanceConfigSchema as dsh } from "../../apps/dsh/src/config.js";
 import { z } from "zod";
 import { instanceConfigSchema as herdr } from "../../apps/herdr/src/config.js";
 import { instanceConfigSchema as codex } from "../../apps/codex-app-server/src/config.js";
@@ -19,6 +20,7 @@ export const instanceConfigSchema = z.union([
   amp,
   lody,
   opencode,
+  dsh,
 ]);
 export type InstanceConfig = z.infer<typeof instanceConfigSchema>;
 export const descriptor = (
@@ -32,18 +34,20 @@ export const descriptor = (
     version,
     config.kind === "opencode"
       ? "opencode-1.18.35-native-v1"
-      : config.kind === "lody"
-        ? "lody-cloud-3d478711-local-v7-native-v1"
-        : config.kind === "paseo"
-          ? "paseo-0.11.1-native-v1"
-          : config.kind === "herdr"
-            ? "herdr-0.9.3-native-v1"
-            : config.kind === "amp"
-              ? "amp-plugin-native-v1"
-              : "codex-0.160.1-attach-native-v1",
+      : config.kind === "dsh"
+        ? "dsh-test-native-v1"
+        : config.kind === "lody"
+          ? "lody-cloud-3d478711-local-v7-native-v1"
+          : config.kind === "paseo"
+            ? "paseo-0.11.1-native-v1"
+            : config.kind === "herdr"
+              ? "herdr-0.9.3-native-v1"
+              : config.kind === "amp"
+                ? "amp-plugin-native-v1"
+                : "codex-0.160.1-attach-native-v1",
     config.kind === "amp"
       ? executionPolicy.execution
-      : config.kind === "opencode"
+      : config.kind === "opencode" || config.kind === "dsh"
         ? "native-session-full-access"
         : undefined,
   );

@@ -10,7 +10,7 @@
 
 Ask ChatGPT on your phone to check on Codex running on your server, or have an agent in Herdr on your laptop fix a failing test. Agenvo connects your assistant to [Herdr](https://herdr.dev) and [Codex app-server](https://developers.openai.com/codex/app-server/) through MCP, using a relay you host on Cloudflare or a single VPS. You describe the goal; your assistant decides how to move the work forward.
 
-Experimental [Amp support](docs/amp.md) connects native Amp hosts through a local plugin.
+Experimental [Amp support](docs/amp.md) connects native Amp hosts through a local plugin. [DeepSeek Harness support](docs/dsh.md) attaches the DSH desktop app through a plugin's native bridge.
 
 ![Agenvo architecture. The assistant layer shows ChatGPT, dots, Grok Bot and Muse. Your assistant sends MCP calls over HTTPS to the Agenvo relay you host on Cloudflare or a VPS, and the relay sends change events back. On your laptop and server, the Herdr and Codex connectors connect out to the relay over WSS; requests and results travel over that connection. The pigeon identifies Agenvo components. Each connector passes work to Herdr or Codex app-server, where agents run with your projects and local tools. Your computers need no inbound ports.](docs/images/architecture.png)
 
