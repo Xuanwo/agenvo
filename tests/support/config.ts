@@ -1,6 +1,7 @@
 import { instanceConfigSchema as opencode } from "../../apps/opencode/src/config.js";
 import { z } from "zod";
 import { instanceConfigSchema as herdr } from "../../apps/herdr/src/config.js";
+import { instanceConfigSchema as herdrCore } from "../../apps/herdr-core/src/config.js";
 import { instanceConfigSchema as codex } from "../../apps/codex-app-server/src/config.js";
 import {
   instanceConfigSchema as amp,
@@ -14,6 +15,7 @@ export { type HerdrConfig } from "../../apps/herdr/src/config.js";
 export { type CodexConfig } from "../../apps/codex-app-server/src/config.js";
 export const instanceConfigSchema = z.union([
   herdr,
+  herdrCore,
   codex,
   paseo,
   amp,
@@ -38,9 +40,11 @@ export const descriptor = (
           ? "paseo-0.11.1-native-v1"
           : config.kind === "herdr"
             ? "herdr-0.9.3-native-v1"
-            : config.kind === "amp"
-              ? "amp-plugin-native-v1"
-              : "codex-0.160.1-attach-native-v1",
+            : config.kind === "herdr-core"
+              ? "herdr-core-0.1.15-native-v1"
+              : config.kind === "amp"
+                ? "amp-plugin-native-v1"
+                : "codex-0.160.1-attach-native-v1",
     config.kind === "amp"
       ? executionPolicy.execution
       : config.kind === "opencode"

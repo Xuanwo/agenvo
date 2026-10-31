@@ -22,6 +22,7 @@ import { request } from "node:http";
 import { isolatedEnvironment, until } from "../support/environment.js";
 import { lodyCloudFixture } from "../fixtures/lody-cloud.js";
 import { paseoFixture } from "../fixtures/paseo-daemon.js";
+import { herdrCoreFixture } from "../fixtures/herdr-core.js";
 import { eventsLab } from "../support/events-lab.js";
 import { serviceDefinition } from "@agenvo/connector/cli/service";
 import { pathToFileURL } from "node:url";
@@ -203,6 +204,36 @@ test(
     assert.equal(paseoConfig.instances[0].serverId, paseo.serverId);
     assert.equal(paseoConfig.instances[0].endpoint, paseo.endpoint);
     assert.equal(paseoConfig.instances[0].binary, undefined);
+
+    const core = await herdrCoreFixture();
+    cleanups.push(() => core.close());
+    await exec(
+      process.execPath,
+      [
+        installed.get("herdr-core")!,
+        "instance",
+        "add",
+        "--id",
+        "hc",
+        "--endpoint",
+        core.endpoint,
+      ],
+      { cwd: root, env: isolatedEnvironment(root) },
+    );
+    const coreConfig = JSON.parse(
+      await readFile(
+        join(root, ".config", "agenvo", "herdr-core", "config.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(coreConfig.instances[0].coreId, core.coreId);
+    assert.equal(coreConfig.instances[0].endpoint, core.endpoint);
+    const coreDoctor = await exec(
+      process.execPath,
+      [installed.get("herdr-core")!, "doctor"],
+      { cwd: root, env: isolatedEnvironment(root) },
+    );
+    assert.match(coreDoctor.stdout, /hc:core/);
 
     // Install Amp's standalone plugin from the tarball, without source imports.
     const ampCli = installed.get("amp")!;

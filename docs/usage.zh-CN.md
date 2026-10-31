@@ -45,6 +45,20 @@ codex app-server --listen ws://127.0.0.1:4500
 
 在另一终端执行 `agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"`。配置目录应保留在用户目录中，由 Windows 目录 ACL 保护。Windows 不支持 Unix socket 附着。Herdr 默认配置目录通常是 `$env:APPDATA/herdr`，将实际目录传给 `--config-root`。
 
+## 附着 herdr-core
+
+先自行启动 herdr-core（`hc`）的 core，例如运行 `hc server start`，再附着其端点：
+
+```sh
+agenvo-herdr-core instance add --id hc
+agenvo-herdr-core connect https://relay.example.com --name laptop-hc
+agenvo-herdr-core run
+```
+
+默认配置目录为 `~/.config/agenvo/herdr-core`。不带选项时使用 `default` session 的原生默认端点；其他 `HC_SESSION` 传入 `--session NAME`，`HC_SOCKET` 或 config 中的 `socket` 设置改变端点时传入 `--endpoint PATH`。添加实例只做握手并记录 core 的永久 ID，不会启动 core。该 core 的状态被清除后 ID 会改变，需要重新配置并批准实例。
+
+core 没有 API 密码：能访问端点即可用 core 账户的权限控制全部 terminal，包括 core 已添加 machine 上的 terminal。批准实例就是把这些 terminal 交给获授权的 MCP 客户端。端点应放在只有当前账户能进入的目录。停止或更新 Connector 不会停止 core 及其中的程序。
+
 ## 附着 Paseo
 
 独立运行 Paseo daemon 并配置 provider，再附着其直接 WebSocket 端点：

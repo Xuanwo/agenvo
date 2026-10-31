@@ -12,6 +12,7 @@ const cacheKey = "releases:v1";
 const cacheMs = 60 * 60 * 1000;
 const connectorPackages: Record<Instance["kind"], string> = {
   herdr: "@agenvo/herdr",
+  "herdr-core": "@agenvo/herdr-core",
   codex: "@agenvo/codex-app-server",
   paseo: "@agenvo/paseo",
   amp: "@agenvo/amp",

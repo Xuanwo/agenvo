@@ -26,7 +26,7 @@ Agenvo 只提供 `search` 和 `execute` 两个 MCP 工具。search 接受关键�
 
 deviceId 标识一个 Connector，不是一台物理机器。离线或无法查询的实例仍返回状态或错误；方法查询失败可能留下部分结果。没有匹配方法的在线实例不出现在非空查询结果中。名称在实例内唯一，不添加 Agenvo 命名空间。
 
-两种 Connector 使用共同的操作词：list、create、read、submit input、interrupt、respond。work context 在 Codex 中是 conversation thread，在 Herdr 中是 terminal pane 内运行的 agent；Herdr session 指原生服务进程，workspace 指终端容器。原生方法名和字段名保留，不把不同对象强行等同。
+两种 Connector 使用共同的操作词：list、create、read、submit input、interrupt、respond。work context 在 Codex 中是 conversation thread，在 Herdr 中是 terminal pane 内运行的 agent，在 herdr-core 中是 terminal；Herdr session 指原生服务进程，workspace 指终端容器。原生方法名和字段名保留，不把不同对象强行等同。
 
 发现结果还会原样携带配置者提供的可选 `context` 自由文本。选择和使用实例时先阅读它；空查询、匹配方法的查询和离线实例均可包含最近通告。上下文不参与方法关键词匹配，不是实时能力或权限保证，也不会自动传入原生调用。配置方式见[实例上下文](usage.zh-CN.md#补充实例上下文)。
 
@@ -145,5 +145,19 @@ return read.result.output
 Herdr 参数校验失败时返回 `invalid_params`，`error.message` 包含字段路径和原因。路径使用 JSON 数组，例如 `["lines"]`；`[]` 表示整个参数对象的错误，例如包含无法识别的字段。
 
 按变化触发观察时使用已有的[事件协议](events.zh-CN.md)，再通过 execute 读取当前状态和输出。
+
+## herdr-core
+
+herdr-core（`hc`）只有一种资源：运行程序或交互式 Agent 的 terminal。地址可以是 `t7`、live terminal 的名称，或已添加 machine 上的 `machine/t7`。`terminal.list` 包括从 CLI、其他 Agent 和其他客户端启动的 terminal；`all: true` 同时列出已结束的。名称只在 live terminal 中唯一，之后可能复用。core 独立运行，Agenvo 不启动、停止、重启或更新它。
+
+状态只来自程序通过 OSC 7501 报告的内容（`idle`、`working`、`done`、`blocked`、`error`）。不报告状态的程序没有 status，这不代表空闲或已完成。程序每次离开 `working`，`turn` 加一。状态和 turn 都不证明业务目标完成。
+
+用 `terminal.run` 创建工作，必须提供 `name`。Agent 参数，包括实例 `context` 要求的执行设置，放在 `argv` 中，Agenvo 原样转发。以交互方式运行 Agent，便于继续引导。用 `templates.list` 查找角色：`argv[0]` 是模板名时，herdr-core 启动模板命令，并在 Agent 报告就绪后，把模板说明和 `argv` 其余部分作为第一条消息发送。检查 `first_message.sent`；为 `false` 表示任务没有发送，先读取 terminal，再自行发送。模板启动超出单次调用时间时返回 `execution: "starting"` 和 `{terminal, query: "terminal.get"}`，其中 `terminal` 是名称，指定 `on` 时带 `machine/` 前缀；用该地址轮询 `terminal.get`，在 `startup` 中读取原生结果，不要再次启动。
+
+用 `terminal.send` 提交输入（约 3 秒无人输入后粘贴并回车），或用 `terminal.keys` 发送按键（`enter`、`esc`、`down`、`ctrl+c` 等）。程序处于 `blocked` 时，`terminal.send` 以错误 kind `blocked` 拒绝，表示有权限请求或问题待处理。读取屏幕后交给用户决定；`force: true` 会强制输入，可能回答该对话框。`terminal.interrupt` 按下停止键并报告 `stopped`、`exited`、`still_working` 或 `unknown`，不会结束程序。`terminal.kill` 结束程序，`terminal.rm` 删除已结束的记录。
+
+用 `terminal.read` 读取输出：屏幕加 `lines` 行历史（默认 `0`，即只读屏幕）。`complete: false` 表示可能缺失部分内容；全屏程序工作时不会被滚动读取，停止后再读。与 Herdr 一样，在 `execute` 内筛选 `result.text`。Agenvo 不提供阻塞等待：观察 `status` 和 `turn` 事件，或在之后的 `execute` 中再次读取。
+
+原生错误保留 herdr-core 的 `error.native.kind` 和 `hint`，例如 `not_found`、`name_taken`、`blocked`、`finished`、`unavailable`。`core_identity_changed` 表示端点已换成另一个 core，需要重新配置实例。回复丢失时结果为 `unknown`：重复输入前先用 `terminal.get` 或 `terminal.read` 检查。Connector 类型 `herdr-core` 包含 `herdr`，搜索 `herdr` 也会匹配 herdr-core 的方法；用 `instanceId` 或更具体的关键词限定。terminal 之外的命令执行（`machine.exec`）、文件、文档、attach 流以及 core 和 machine 管理均不暴露。
 
 Lody 通过 `lody.*` 方法暴露原生 Session、历史、精确轮次取消和交互。云端与本地连接边界见 [Lody 指南](lody.zh-CN.md)。
