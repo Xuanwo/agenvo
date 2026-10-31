@@ -131,6 +131,7 @@ export class HerdrCoreAdapter implements Adapter {
         this.available = available;
         this.onAvailabilityChange?.();
       },
+      this.callMs,
     );
     this.events = events;
     events.start();

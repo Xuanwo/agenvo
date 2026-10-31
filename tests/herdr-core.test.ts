@@ -354,6 +354,42 @@ test("herdr-core events follow the native stream and ask for resync on gaps", as
   );
 });
 
+test("herdr-core event handshake that never answers times out, goes unavailable and reconnects", async (t) => {
+  const fixture = await herdrCoreFixture();
+  t.after(() => fixture.close());
+  const adapter = adapterFor(fixture, 300);
+  await adapter.init();
+  assert.equal(adapter.available, true);
+  // The core accepts connections but does not answer the handshake.
+  const hello = fixture.handlers.hello;
+  fixture.handlers.hello = () => new Promise(() => {});
+  const events: RuntimeEvent[] = [];
+  const stop = adapter.watchEvents((event) => events.push(event));
+  t.after(stop);
+  await until(
+    () => adapter.available,
+    (available) => available === false,
+  );
+  await until(
+    () => fixture.requests.filter((r) => r.method === "hello").length,
+    (n) => n >= 3,
+  );
+  assert.equal(
+    fixture.requests.some((r) => r.method === "events.subscribe"),
+    false,
+  );
+  fixture.handlers.hello = hello;
+  await until(
+    () =>
+      events.some(
+        (e) => (e.native as any)?.reason === "native_subscription_ready",
+      ),
+    Boolean,
+    15000,
+  );
+  assert.equal(adapter.available, true);
+});
+
 test("herdr-core configuration discovers the running core without starting one", async (t) => {
   const fixture = await herdrCoreFixture();
   t.after(() => fixture.close());

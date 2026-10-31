@@ -20,6 +20,7 @@ export class HcEvents {
     private coreId: string,
     private emit: (event: RuntimeEvent) => void,
     private availability: (available: boolean) => void,
+    private setupMs = 8000,
   ) {}
   start() {
     if (this.stopped) return;
@@ -30,8 +31,9 @@ export class HcEvents {
       clearTimeout(this.watchdog);
       if (this.connection !== connection || this.stopped) return;
       this.connection = undefined;
+      // A core that accepts but never completes the handshake is unavailable too.
+      this.availability(false);
       if (ready) {
-        this.availability(false);
         this.publish("agenvo.resync_required", undefined, {
           reason: "native_subscription_lost",
         });
@@ -56,6 +58,10 @@ export class HcEvents {
           seq: params?.seq,
         });
     };
+    // Bound the handshake; the heartbeat watchdog replaces this once subscribed.
+    clearTimeout(this.watchdog);
+    this.watchdog = setTimeout(() => connection.fail(), this.setupMs);
+    this.watchdog.unref();
     void (async () => {
       try {
         await connection.hello(this.coreId);
