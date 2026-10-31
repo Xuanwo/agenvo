@@ -31,7 +31,7 @@
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "wrangler": "4.147.0",
+    "wrangler": "4.156.0",
     "@cloudflare/workers-oauth-provider": "1.2.1",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@modelcontextprotocol/server": "2.3.1",
