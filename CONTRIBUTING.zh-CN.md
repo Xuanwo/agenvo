@@ -28,7 +28,7 @@ npm run test:system
 npm run test:adapters
 ```
 
-安装器下载固定的 Herdr 0.9.3、Codex CLI 0.160.1、Paseo CLI 0.11.1 和 Amp CLI，校验 Herdr 发布资产摘要。固定版本用于复现测试，不是运行时版本白名单。Linux、macOS 和 Windows CI 使用相同命令。Windows 直接在 GitHub 托管的 Windows runner 上运行，使用 Herdr 命名管道和 Codex loopback WebSocket，不使用 WSL。`npm run test:ci` 将开头的检查（audit 除外）与系统测试合并。
+安装器下载固定的 Herdr 0.9.3、herdr-core 0.1.15、Codex CLI 0.160.1、Paseo CLI 0.11.1 和 Amp CLI，校验 Herdr 发布资产摘要和 herdr-core 发布清单中的 SHA-256。固定版本用于复现测试，不是运行时版本白名单。Linux、macOS 和 Windows CI 使用相同命令。Windows 直接在 GitHub 托管的 Windows runner 上运行，使用 Herdr 命名管道和 Codex loopback WebSocket，不使用 WSL。`npm run test:ci` 将开头的检查（audit 除外）与系统测试合并。
 
 系统测试覆盖 OAuth 登录 → 设备配对 → MCP 发现与订阅 → 输入任务 → 原生通知 → 读取输出 → 继续或中断 → 取消订阅。真实 Connector 和独立 Herdr/Codex/Paseo 进程使用本地模型 mock。测试入口清除继承凭证，提供临时 HOME、CODEX_HOME 和 Herdr 配置，fixture 负责清理进程。不要将测试指向个人部署。Codex Unix socket 测试仅在 macOS/Linux 运行，systemd 用户服务测试仅在 Linux 运行。Codex 生命周期测试在原生执行期间关闭并重启 Connector，恢复同一线程且不重放输入。检查跳过输出以确认平台专属覆盖。
 
@@ -38,14 +38,14 @@ Herdr 会话测试通过公开 MCP 入口接入已有 Codex 或启动具名 Code
 
 私有配置、凭据、原生日志和生成的构建产物不能进入 Git。
 
-更新 Codex schema 时，使用 `scripts/import-codex-schema.py` 指定支持的 CLI 版本，并验证执行配置与适配器。
+更新 Codex schema 时，使用 `scripts/import-codex-schema.py` 指定支持的 CLI 版本，并验证执行配置与适配器。更新 herdr-core 基线时，用 `scripts/import-herdr-core-schema.py` 从对应版本的 `schema/hc.openrpc.json` 重新冻结测试用 OpenRPC 子集，并审阅差异。
 
 源码职责：
 
 - `packages/protocol`：通信 schema、限制与执行结果。
 - `packages/relay`：共享 Relay、MCP、事件投递与管理网页。
 - `packages/connector`：共享连接、配置存储、观察与 CLI 机制。
-- `apps/herdr`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`、`apps/opencode`：独立 Connector，拥有各自的配置 schema 与适配器。
+- `apps/herdr`、`apps/herdr-core`、`apps/codex-app-server`、`apps/paseo`、`apps/amp`、`apps/lody`、`apps/opencode`：独立 Connector，拥有各自的配置 schema 与适配器。
 - `apps/server`、`apps/cloudflare`：VPS 与 Cloudflare 宿主。
 
 新增部署宿主应复用路由核心，保留授权、epoch 和执行结果不确定的语义。新增适配器遵循 [Connector 契约](design/agent-management.zh-CN.md#新增或扩展-connector)：通过现有 `search` 和 `execute` 工具暴露可发现的原生方法，使用共同操作术语，并说明交互语义。不添加可能重复写入的自动重试。

@@ -12,9 +12,9 @@ Requirements:
 
 - Node.js 24.13+ and npm.
 - macOS, Linux or Windows for connectors; Linux for a VPS relay.
-- The native runtime (Herdr, Codex CLI, Paseo, Amp or Lody) on the computers that will run agents, with the agents' provider credentials configured separately.
+- The native runtime (Herdr, herdr-core, Codex CLI, Paseo, Amp or Lody) on the computers that will run agents, with the agents' provider credentials configured separately.
 
-CI pins Herdr 0.9.3, Codex CLI 0.160.1 and Paseo CLI 0.11.1 for reproducible tests. These are test baselines, not required exact versions; Agenvo does not reject a runtime just because its version differs. Compatibility depends on the native interfaces used by the connector.
+CI pins Herdr 0.9.3, herdr-core 0.1.15, Codex CLI 0.160.1 and Paseo CLI 0.11.1 for reproducible tests. These are test baselines, not required exact versions; Agenvo does not reject a runtime just because its version differs. Compatibility depends on the native interfaces used by the connector.
 
 Install only the packages needed on this machine. Connectors can coexist:
 
@@ -22,6 +22,7 @@ Install only the packages needed on this machine. Connectors can coexist:
 
 ```sh
 npm install --global @agenvo/herdr@0.2.0
+npm install --global @agenvo/herdr-core@0.2.0
 npm install --global @agenvo/codex-app-server@0.2.0
 npm install --global @agenvo/paseo@0.2.0
 npm install --global @agenvo/amp@0.2.0
@@ -50,10 +51,10 @@ To build the commands from source instead of installing the npm packages:
 
 ```sh
 npm run build
-npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
+npm link --workspace @agenvo/herdr --workspace @agenvo/herdr-core --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
 ```
 
-This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-amp`, `agenvo-lody`, and `agenvo-server` available. Linking commands does not start a relay or connector. Keep the checkout because the commands link to its built files. If a checkout already exists, build it there.
+This makes `agenvo-herdr`, `agenvo-herdr-core`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-amp`, `agenvo-lody`, and `agenvo-server` available. Linking commands does not start a relay or connector. Keep the checkout because the commands link to its built files. If a checkout already exists, build it there.
 
 ## Deploy and connect
 
@@ -66,6 +67,8 @@ This makes `agenvo-herdr`, `agenvo-codex-app-server`, `agenvo-paseo`, `agenvo-am
 Herdr and Codex app-server run independently; their Connectors only connect to existing services. Start Codex with a Unix socket or loopback WebSocket endpoint before configuring its Connector. A desktop App's stdio process does not automatically expose that endpoint or its conversations. Connector shutdown and updates leave native services running.
 
 For subsequent task management, use the live method descriptions and the [management guide](management.md). For connection failures, use [diagnostics](usage.md#revoke-and-diagnose).
+
+The herdr-core core also runs independently; start it, for example with `hc server start`, before attaching `agenvo-herdr-core`.
 
 Paseo also runs independently; configure its daemon and providers before attaching `agenvo-paseo`.
 

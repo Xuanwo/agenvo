@@ -1,0 +1,1963 @@
+{
+  "components": {
+    "schemas": {
+      "CoreInfo": {
+        "properties": {
+          "id": {
+            "description": "Permanent random id, reset only when state is wiped.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name, the hostname by default.",
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "type": "object"
+      },
+      "FirstMessage": {
+        "properties": {
+          "reason": {
+            "description": "Why it was not sent.",
+            "type": ["string", "null"]
+          },
+          "sent": {
+            "type": "boolean"
+          },
+          "started": {
+            "description": "Whether the agent started working on it (see terminal.send).",
+            "type": ["boolean", "null"]
+          },
+          "turn": {
+            "description": "The turn when it went in (see terminal.send).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          }
+        },
+        "required": ["sent"],
+        "type": "object"
+      },
+      "Foreground": {
+        "properties": {
+          "argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cwd": {
+            "description": "Its working directory now (resolved by the OS).",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its name as the OS has it (`node`, `vim`, `sh`).",
+            "type": "string"
+          },
+          "pid": {
+            "description": "The foreground process group's leader.",
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": ["pid", "name", "argv", "cwd"],
+        "type": "object"
+      },
+      "HelloResult": {
+        "properties": {
+          "core": {
+            "$ref": "#/components/schemas/CoreInfo"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "framed": {
+            "type": "boolean"
+          },
+          "generation": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation",
+          "version",
+          "core",
+          "framed",
+          "methods",
+          "features"
+        ],
+        "type": "object"
+      },
+      "HolderInfo": {
+        "properties": {
+          "current": {
+            "description": "Same build as the core: takes new terminals. Others drain.",
+            "type": "boolean"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "terminals": {
+            "description": "Live terminals it runs.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["pid", "instance", "current", "terminals"],
+        "type": "object"
+      },
+      "IdleOrWorking": {
+        "enum": ["idle", "working"],
+        "type": "string"
+      },
+      "InterruptResult": {
+        "properties": {
+          "key": {
+            "description": "The key sent: esc for programs that report status, else ctrl+c.",
+            "type": "string"
+          },
+          "outcome": {
+            "description": "stopped (left working, or a shell got its prompt back), exited,\nstill_working (no change in time), or unknown (it doesn't report status).",
+            "type": "string"
+          }
+        },
+        "required": ["outcome", "key"],
+        "type": "object"
+      },
+      "KeysResult": {
+        "properties": {
+          "status": {
+            "type": ["string", "null"]
+          },
+          "turn": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["turn"],
+        "type": "object"
+      },
+      "ListResult": {
+        "properties": {
+          "hidden_finished": {
+            "description": "Finished terminals left out (see `all`).",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "machines": {
+            "description": "Machines added here and their lines: one that is not connected is\nlisted here, not waited on.",
+            "items": {
+              "$ref": "#/components/schemas/MachineView"
+            },
+            "type": "array"
+          },
+          "terminals": {
+            "description": "This machine's terminals, then each connected machine's (`machine/t7`).",
+            "items": {
+              "$ref": "#/components/schemas/Terminal"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["terminals", "hidden_finished", "machines"],
+        "type": "object"
+      },
+      "MachineListResult": {
+        "properties": {
+          "machines": {
+            "items": {
+              "$ref": "#/components/schemas/MachineView"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["machines"],
+        "type": "object"
+      },
+      "MachineView": {
+        "description": "A machine as `machine ls` and `ls` show it: its profile and its line now.",
+        "properties": {
+          "host": {
+            "description": "What that core calls itself (its hostname).",
+            "type": "string"
+          },
+          "id": {
+            "description": "The other core's permanent id.",
+            "type": "string"
+          },
+          "name": {
+            "description": "What this core calls it: `rohan` in `rohan/t7`.",
+            "type": "string"
+          },
+          "session": {
+            "description": "The hc session there (null: its default).",
+            "type": ["string", "null"]
+          },
+          "since_ms": {
+            "description": "Since when it is not connected (ms since the epoch).",
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "state": {
+            "description": "connecting, connected, needs_login or unreachable.",
+            "type": "string"
+          },
+          "target": {
+            "description": "How it is reached: an ssh target, or (`via`) a command.",
+            "type": "string"
+          },
+          "temporary": {
+            "default": false,
+            "description": "Short-lived (a sandbox for a task): clients may show it apart from the\nmachines that stay. hc treats it like any other.",
+            "type": "boolean"
+          },
+          "version": {
+            "description": "Its hc version when last seen.",
+            "type": "string"
+          },
+          "via": {
+            "default": false,
+            "description": "`target` is a command that runs a shell line there, given as its last\nargument, like ssh (a provider's own CLI, ssh with its options).",
+            "type": "boolean"
+          },
+          "why": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["name", "target", "id", "host", "version", "state"],
+        "type": "object"
+      },
+      "ReadResult": {
+        "properties": {
+          "complete": {
+            "description": "False when part of what was asked for may be missing.",
+            "type": "boolean"
+          },
+          "how": {
+            "description": "\"screen\", \"history\", or \"stitched\" (a full-screen app, read by scrolling it).",
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "why": {
+            "description": "Why only the screen: \"working\" (a full-screen app isn't scrolled while\nit works; read again once it stops).",
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["text", "complete", "how"],
+        "type": "object"
+      },
+      "RemoveResult": {
+        "properties": {
+          "removed": {
+            "type": "string"
+          }
+        },
+        "required": ["removed"],
+        "type": "object"
+      },
+      "RunResult": {
+        "properties": {
+          "address": {
+            "description": "`t7`: this terminal forever on this core.",
+            "type": "string"
+          },
+          "argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cols": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "die_with_parent": {
+            "default": false,
+            "type": "boolean"
+          },
+          "exit_code": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "finished_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "first_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FirstMessage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Template runs: whether the first message went in."
+          },
+          "foreground": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Foreground"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What runs in it right now and where (null once it has finished)."
+          },
+          "identity": {
+            "default": "",
+            "description": "Which terminal the program believes it runs in (TERM_PROGRAM and\nversion), fixed at start; XTVERSION answers with it.",
+            "type": "string"
+          },
+          "keep": {
+            "default": false,
+            "description": "Replace a lost program with this machine\u2019s shell, in place. Exit with a code and kill remain final.",
+            "type": "boolean"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "notify": {
+            "default": false,
+            "description": "Its parent gets notes about it (see `--no-notify`).",
+            "type": "boolean"
+          },
+          "output": {
+            "description": "With `wait`: its text then, like `terminal.read` (the screen, plus\nhistory unless it is a full-screen app).",
+            "type": ["string", "null"]
+          },
+          "parent": {
+            "default": null,
+            "description": "The terminal that started it (`t3`), set once at start.",
+            "type": ["string", "null"]
+          },
+          "paste_gap_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "reason": {
+            "description": "Why its program ended or is pending (`spawn_pending` means its initial\nspawn timed out, but the holder may still be starting it):\nexited, killed, server_stop, host_shutdown (Windows\nis ending the session, including logout), signaled (a kept program\ndied by signal without an exit code), holder_lost (its holder\ndied), stopped_by_restart (nothing ran it any more after a restart).",
+            "type": ["string", "null"]
+          },
+          "records": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "description": "Other 7501 records by id (programs reporting on several things).",
+            "type": "object"
+          },
+          "reported": {
+            "default": false,
+            "description": "Whether the program ever sent a 7501 report.",
+            "type": "boolean"
+          },
+          "rm": {
+            "default": false,
+            "description": "Removed right after it exits (once a waiting parent has the exit code).",
+            "type": "boolean"
+          },
+          "rows": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "screen": {
+            "description": "\"exact\", or \"inexact\" after a core crash (older history may be missing).",
+            "type": "string"
+          },
+          "signal": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "state": {
+            "description": "\"live\" or \"finished\".",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The program's own word for what it's doing (OSC 7501 root record);\nnull if it never said, or after it exited."
+          },
+          "status_ms": {
+            "default": null,
+            "description": "When that word last changed, ms since the epoch; null if it never said.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "stop": {
+            "type": ["string", "null"]
+          },
+          "submit": {
+            "description": "Template overrides: the key that submits a message, the stop key, the pause\nbetween paste and submit.",
+            "type": ["string", "null"]
+          },
+          "template": {
+            "default": null,
+            "description": "The template that started it.",
+            "type": ["string", "null"]
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          },
+          "turn": {
+            "default": 0,
+            "description": "Goes up each time the status leaves `working`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `wait`: how the wait ended (exit, a status, or timeout: still running)."
+          }
+        },
+        "required": [
+          "address",
+          "labels",
+          "argv",
+          "cwd",
+          "state",
+          "created_ms",
+          "screen",
+          "cols",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "SendResult": {
+        "properties": {
+          "started": {
+            "description": "Whether it went `working` within a few seconds; null when it doesn't\nreport status, so nobody can tell.",
+            "type": ["boolean", "null"]
+          },
+          "status": {
+            "description": "The program's status word when the text went in (null: it never said).",
+            "type": ["string", "null"]
+          },
+          "turn": {
+            "description": "The turn when the text went in.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitResult"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `wait`: how that turn ended."
+          }
+        },
+        "required": ["turn"],
+        "type": "object"
+      },
+      "Status": {
+        "description": "One 7501 record. Words are the program's own; nothing is translated.",
+        "properties": {
+          "app": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "permission, question or auth (blocked only, when the program said).",
+            "type": ["string", "null"]
+          },
+          "msg": {
+            "type": "string"
+          },
+          "progress": {
+            "description": "0..100 (working or blocked, when the program said).",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "state": {
+            "description": "idle, working, done, blocked or error.",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": ["state"],
+        "type": "object"
+      },
+      "StatusResult": {
+        "properties": {
+          "core": {
+            "$ref": "#/components/schemas/CoreInfo"
+          },
+          "finished": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "holder": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HolderInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The holder new terminals go to."
+          },
+          "holders": {
+            "description": "Every holder: after an update, older ones run their terminals to the end.",
+            "items": {
+              "$ref": "#/components/schemas/HolderInfo"
+            },
+            "type": "array"
+          },
+          "installed_by": {
+            "description": "The package manager this hc came from (homebrew, nix, mise, or\nsystem package manager): it updates hc, `hc update` won't.\nNull for a replaceable plain install.",
+            "type": ["string", "null"]
+          },
+          "live": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uptime_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "core",
+          "version",
+          "pid",
+          "uptime_ms",
+          "holders",
+          "live",
+          "finished"
+        ],
+        "type": "object"
+      },
+      "SubscribeResult": {
+        "properties": {
+          "channel": {
+            "description": "Framed mode: the channel events arrive on (JSON lines, with credit).\nPlain mode: none; this connection now carries only notifications.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "seq": {
+            "description": "Events after this sequence follow. After a `missed` snapshot, ignore\nevents whose seq is not above the snapshot's.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "terminals": {
+            "description": "Matching terminals here and on connected machines (`machine/t7`).",
+            "items": {
+              "$ref": "#/components/schemas/Terminal"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["seq", "terminals"],
+        "type": "object"
+      },
+      "TemplateInfo": {
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "error": {
+            "description": "Set when the file can't be used.",
+            "type": ["string", "null"]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["name", "description", "command"],
+        "type": "object"
+      },
+      "TemplatesResult": {
+        "properties": {
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateInfo"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["templates"],
+        "type": "object"
+      },
+      "Terminal": {
+        "properties": {
+          "address": {
+            "description": "`t7`: this terminal forever on this core.",
+            "type": "string"
+          },
+          "argv": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cols": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "die_with_parent": {
+            "default": false,
+            "type": "boolean"
+          },
+          "exit_code": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "finished_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "foreground": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Foreground"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What runs in it right now and where (null once it has finished)."
+          },
+          "identity": {
+            "default": "",
+            "description": "Which terminal the program believes it runs in (TERM_PROGRAM and\nversion), fixed at start; XTVERSION answers with it.",
+            "type": "string"
+          },
+          "keep": {
+            "default": false,
+            "description": "Replace a lost program with this machine\u2019s shell, in place. Exit with a code and kill remain final.",
+            "type": "boolean"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "notify": {
+            "default": false,
+            "description": "Its parent gets notes about it (see `--no-notify`).",
+            "type": "boolean"
+          },
+          "parent": {
+            "default": null,
+            "description": "The terminal that started it (`t3`), set once at start.",
+            "type": ["string", "null"]
+          },
+          "paste_gap_ms": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "reason": {
+            "description": "Why its program ended or is pending (`spawn_pending` means its initial\nspawn timed out, but the holder may still be starting it):\nexited, killed, server_stop, host_shutdown (Windows\nis ending the session, including logout), signaled (a kept program\ndied by signal without an exit code), holder_lost (its holder\ndied), stopped_by_restart (nothing ran it any more after a restart).",
+            "type": ["string", "null"]
+          },
+          "records": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "description": "Other 7501 records by id (programs reporting on several things).",
+            "type": "object"
+          },
+          "reported": {
+            "default": false,
+            "description": "Whether the program ever sent a 7501 report.",
+            "type": "boolean"
+          },
+          "rm": {
+            "default": false,
+            "description": "Removed right after it exits (once a waiting parent has the exit code).",
+            "type": "boolean"
+          },
+          "rows": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "screen": {
+            "description": "\"exact\", or \"inexact\" after a core crash (older history may be missing).",
+            "type": "string"
+          },
+          "signal": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "state": {
+            "description": "\"live\" or \"finished\".",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The program's own word for what it's doing (OSC 7501 root record);\nnull if it never said, or after it exited."
+          },
+          "status_ms": {
+            "default": null,
+            "description": "When that word last changed, ms since the epoch; null if it never said.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          },
+          "stop": {
+            "type": ["string", "null"]
+          },
+          "submit": {
+            "description": "Template overrides: the key that submits a message, the stop key, the pause\nbetween paste and submit.",
+            "type": ["string", "null"]
+          },
+          "template": {
+            "default": null,
+            "description": "The template that started it.",
+            "type": ["string", "null"]
+          },
+          "title": {
+            "default": "",
+            "type": "string"
+          },
+          "turn": {
+            "default": 0,
+            "description": "Goes up each time the status leaves `working`.",
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "address",
+          "labels",
+          "argv",
+          "cwd",
+          "state",
+          "created_ms",
+          "screen",
+          "cols",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "WaitResult": {
+        "properties": {
+          "children": {
+            "description": "With `children`: one result per child it reports on.",
+            "items": {
+              "$ref": "#/components/schemas/WaitResult"
+            },
+            "type": "array"
+          },
+          "ended": {
+            "description": "False on timeout: a check-in, the terminal is still running.",
+            "type": "boolean"
+          },
+          "exit_code": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "from": {
+            "description": "With a message: the sender's address (the text is already in your input);\nnull when a person sent it.",
+            "type": ["string", "null"]
+          },
+          "reason": {
+            "description": "status, exit (including program loss in a kept terminal), output, timeout,\nor not_started (after a send: it did not start working; a plain wait\nstill follows that send's turn); with\n`children`: children; message (someone messaged the waiter, any\nwait); for each child in `children`: status, exit, or running (still\nworking).",
+            "type": "string"
+          },
+          "signal": {
+            "format": "int32",
+            "type": ["integer", "null"]
+          },
+          "status": {
+            "description": "The exact word the program reported (current word on timeout or output).",
+            "type": ["string", "null"]
+          },
+          "terminal": {
+            "type": "string"
+          },
+          "turn": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": ["terminal", "ended", "reason", "turn", "children"],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Terminal runtime for coding agents. JSON-RPC 2.0, one message per line on the hc socket (or framed after `hello`). Protocol generation 1. Errors carry a stable `data.kind`.",
+    "license": {
+      "name": "Apache-2.0"
+    },
+    "title": "herdr-core",
+    "version": "0.1.15"
+  },
+  "methods": [
+    {
+      "description": "Handshake: protocol generation, core identity, methods and features. `framed: true` switches the connection to framed mode.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "unsupported_generation"
+          },
+          "message": "unsupported_generation"
+        }
+      ],
+      "name": "hello",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "What that core calls this one (`rohan`), so news about `t7` reaches it as `rohan/t7`.",
+          "name": "calls_you",
+          "required": false,
+          "schema": {
+            "description": "What that core calls this one (`rohan`), so news about `t7` reaches it as `rohan/t7`.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Another core dialing in: who it is. Its terminals may then be parents\nof terminals here, and hear from them.",
+          "name": "core",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoreInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Another core dialing in: who it is. Its terminals may then be parents\nof terminals here, and hear from them."
+          }
+        },
+        {
+          "description": "Switch this connection to framed mode after the reply.",
+          "name": "framed",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Switch this connection to framed mode after the reply.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Protocol generation the caller speaks.",
+          "name": "generation",
+          "required": false,
+          "schema": {
+            "description": "Protocol generation the caller speaks.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": ["integer", "null"]
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/HelloResult"
+        }
+      }
+    },
+    {
+      "description": "This core's identity, version, pid, uptime, holder and terminal counts.",
+      "errors": [],
+      "name": "server.status",
+      "paramStructure": "by-name",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/StatusResult"
+        }
+      }
+    },
+    {
+      "description": "Templates by name and description, so you can pick a role without knowing its command.",
+      "errors": [],
+      "name": "templates.list",
+      "paramStructure": "by-name",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/TemplatesResult"
+        }
+      }
+    },
+    {
+      "description": "The machines this core has added.",
+      "errors": [],
+      "name": "machine.list",
+      "paramStructure": "by-name",
+      "params": [],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/MachineListResult"
+        }
+      }
+    },
+    {
+      "description": "Live terminals (all with `all`), optionally filtered by labels.",
+      "errors": [],
+      "name": "terminal.list",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Include finished terminals.",
+          "name": "all",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Include finished terminals.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Only terminals carrying all of these labels (repeatable).",
+          "name": "labels",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Only terminals carrying all of these labels (repeatable).",
+            "type": "object"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ListResult"
+        }
+      }
+    },
+    {
+      "description": "One terminal's facts, live or finished.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        }
+      ],
+      "name": "terminal.get",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Who is calling; a parent looking at its child has seen its news.",
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "description": "Who is calling; a parent looking at its child has seen its news.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/Terminal"
+        }
+      }
+    },
+    {
+      "description": "Start a program in a new terminal; or, when argv[0] names a template, start its command and send its body plus the rest of argv as the first message once the agent is ready. Returns once it runs (and the first message is sent or not).",
+      "errors": [
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "name_taken"
+          },
+          "message": "name_taken"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "spawn_failed"
+          },
+          "message": "spawn_failed"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "unavailable"
+          },
+          "message": "unavailable"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "invalid_template"
+          },
+          "message": "invalid_template"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "config"
+          },
+          "message": "config"
+        }
+      ],
+      "name": "terminal.run",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Program and arguments, or a template name and its task. With neither\nargv nor line: that machine's own shell.",
+          "name": "argv",
+          "required": false,
+          "schema": {
+            "default": [],
+            "description": "Program and arguments, or a template name and its task. With neither\nargv nor line: that machine's own shell.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "description": "Who is calling (`HC_TERMINAL_ID` inside a terminal).",
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "description": "Who is calling (`HC_TERMINAL_ID` inside a terminal).",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Working directory (default: where hc runs; through the API, the core's;\nwith --on, that machine's home).",
+          "name": "cwd",
+          "required": false,
+          "schema": {
+            "description": "Working directory (default: where hc runs; through the API, the core's;\nwith --on, that machine's home).",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Ignored: children end with their parent unless `outlive_parent`.",
+          "name": "die_with_parent",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Ignored: children end with their parent unless `outlive_parent`.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Set on top of the core's environment. Clients pass their terminal\nidentity here (TERM, TERM_PROGRAM, COLORTERM).",
+          "name": "env",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Set on top of the core's environment. Clients pass their terminal\nidentity here (TERM, TERM_PROGRAM, COLORTERM).",
+            "type": "object"
+          }
+        },
+        {
+          "description": "Replace lost programs with a shell in place, never re-run the original command.",
+          "name": "keep",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Replace lost programs with a shell in place, never re-run the original command.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Labels, key=value (repeatable).",
+          "name": "labels",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Labels, key=value (repeatable).",
+            "type": "object"
+          }
+        },
+        {
+          "description": "A shell line instead of argv, run by that machine's shell (`sh -c`;\nWindows `%COMSPEC% /d /s /c`). The CLI sends one string with spaces or\nshell signs as a line.",
+          "name": "line",
+          "required": false,
+          "schema": {
+            "description": "A shell line instead of argv, run by that machine's shell (`sh -c`;\nWindows `%COMSPEC% /d /s /c`). The CLI sends one string with spaces or\nshell signs as a line.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Name, unique among live terminals: 1-32 of a-z 0-9 - _ .",
+          "name": "name",
+          "required": false,
+          "schema": {
+            "description": "Name, unique among live terminals: 1-32 of a-z 0-9 - _ .",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Don't type notes about it into its parent.",
+          "name": "no_notify",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Don't type notes about it into its parent.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "No parent, even when started from a terminal.",
+          "name": "no_parent",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "No parent, even when started from a terminal.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Run it on another machine (see `hc machine ls`); its address is `machine/t7`.",
+          "name": "on",
+          "required": false,
+          "schema": {
+            "description": "Run it on another machine (see `hc machine ls`); its address is `machine/t7`.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Keep it running when its parent's program ends (by default it ends too).",
+          "name": "outlive_parent",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Keep it running when its parent's program ends (by default it ends too).",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Parent terminal (default: the terminal it is started from).",
+          "name": "parent",
+          "required": false,
+          "schema": {
+            "description": "Parent terminal (default: the terminal it is started from).",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Remove it right after it exits (once a waiting parent has the exit code).",
+          "name": "rm",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Remove it right after it exits (once a waiting parent has the exit code).",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Seconds before a wait checks in, leaving it running (default: config\n`wait_timeout`, else 180).",
+          "name": "timeout",
+          "required": false,
+          "schema": {
+            "description": "Seconds before a wait checks in, leaving it running (default: config\n`wait_timeout`, else 180).",
+            "format": "double",
+            "type": ["number", "null"]
+          }
+        },
+        {
+          "description": "Then wait until it is not working, like `terminal.wait`, and return its\noutput (the CLI waits unless --bg).",
+          "name": "wait",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Then wait until it is not working, like `terminal.wait`, and return its\noutput (the CLI waits unless --bg).",
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/RunResult"
+        }
+      }
+    },
+    {
+      "description": "Paste text and press Enter, once nobody has typed for ~3 s; keys a person presses meanwhile are held, then delivered. Refuses a blocked program unless `force`.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "finished"
+          },
+          "message": "finished"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "unavailable"
+          },
+          "message": "unavailable"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "blocked"
+          },
+          "message": "blocked"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "status_mismatch"
+          },
+          "message": "status_mismatch"
+        },
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "config"
+          },
+          "message": "config"
+        }
+      ],
+      "name": "terminal.send",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Who is sending (`HC_TERMINAL_ID`, else the calling process's parent), so a\nbare wait from the same caller waits for this send's turn.",
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "description": "Who is sending (`HC_TERMINAL_ID`, else the calling process's parent), so a\nbare wait from the same caller waits for this send's turn.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Type even if the program is blocked (it may answer its dialog).",
+          "name": "force",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Type even if the program is blocked (it may answer its dialog).",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Only type if the status is exactly this.",
+          "name": "if",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdleOrWorking"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only type if the status is exactly this."
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Pasted, then submitted with Enter.",
+          "name": "text",
+          "required": true,
+          "schema": {
+            "description": "Pasted, then submitted with Enter.",
+            "type": "string"
+          }
+        },
+        {
+          "description": "With wait: seconds before it checks in (default: config, else 180).",
+          "name": "timeout",
+          "required": false,
+          "schema": {
+            "description": "With wait: seconds before it checks in (default: config, else 180).",
+            "format": "double",
+            "type": ["number", "null"]
+          }
+        },
+        {
+          "description": "Then wait for the turn this send started.",
+          "name": "wait",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Then wait for the turn this send started.",
+            "type": "boolean"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SendResult"
+        }
+      }
+    },
+    {
+      "description": "Press named keys, encoded for the program's current keyboard modes. Same quiet rule as send.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "finished"
+          },
+          "message": "finished"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "unavailable"
+          },
+          "message": "unavailable"
+        },
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        }
+      ],
+      "name": "terminal.keys",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Key names: enter, esc, tab, up, ctrl+c, alt+x, f5, a, ...",
+          "name": "keys",
+          "required": true,
+          "schema": {
+            "description": "Key names: enter, esc, tab, up, ctrl+c, alt+x, f5, a, ...",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/KeysResult"
+        }
+      }
+    },
+    {
+      "description": "Press the stop key (esc if it reports status, else ctrl+c), then report what was observed. Never escalates.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "finished"
+          },
+          "message": "finished"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "unavailable"
+          },
+          "message": "unavailable"
+        },
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        }
+      ],
+      "name": "terminal.interrupt",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Seconds to watch for an effect (default 10).",
+          "name": "timeout",
+          "required": false,
+          "schema": {
+            "description": "Seconds to watch for an effect (default 10).",
+            "format": "double",
+            "type": ["number", "null"]
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/InterruptResult"
+        }
+      }
+    },
+    {
+      "description": "The screen plus `lines` of history as text, live or finished.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        }
+      ],
+      "name": "terminal.read",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Lines of history above the screen.",
+          "name": "lines",
+          "required": false,
+          "schema": {
+            "default": 0,
+            "description": "Lines of history above the screen.",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/ReadResult"
+        }
+      }
+    },
+    {
+      "description": "End the program: hangup, then terminate, then kill. Returns the observed result.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        }
+      ],
+      "name": "terminal.kill",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Who is calling; a parent looking at its child has seen its news.",
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "description": "Who is calling; a parent looking at its child has seen its news.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/Terminal"
+        }
+      }
+    },
+    {
+      "description": "Remove a finished terminal.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "live"
+          },
+          "message": "live"
+        }
+      ],
+      "name": "terminal.rm",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Who is calling; a parent looking at its child has seen its news.",
+          "name": "caller",
+          "required": false,
+          "schema": {
+            "description": "Who is calling; a parent looking at its child has seen its news.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/RemoveResult"
+        }
+      }
+    },
+    {
+      "description": "Set or remove labels (free-form `key=value`, never interpreted).",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        },
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        }
+      ],
+      "name": "terminal.label",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Labels to set, key=value; `key=` removes one.",
+          "name": "labels",
+          "required": true,
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Labels to set, key=value; `key=` removes one.",
+            "type": "object"
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/Terminal"
+        }
+      }
+    },
+    {
+      "description": "Set whether a live terminal restarts as a shell after loss, including death by signal without an exit code. Exit with a code and explicit kill close it. Recovery runs on every OS after a grace delay, except while the core stops/restarts or Windows reports session shutdown. Streams end on loss; reattach after restarted.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32602,
+          "data": {
+            "kind": "invalid_params"
+          },
+          "message": "invalid_params"
+        }
+      ],
+      "name": "terminal.keep",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Keep this live terminal after loss. Existing streams end with the loss reason; reattach after `restarted`.",
+          "name": "keep",
+          "required": true,
+          "schema": {
+            "description": "Keep this live terminal after loss. Existing streams end with the loss reason; reattach after `restarted`.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "The terminal: `t7`, a name, or `machine/t7`.",
+          "name": "terminal",
+          "required": true,
+          "schema": {
+            "description": "The terminal: `t7`, a name, or `machine/t7`.",
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/Terminal"
+        }
+      }
+    },
+    {
+      "description": "Snapshot of matching terminals, then every fact change in order (created, lost, restarted, keep, finished, removed, status, turn, title, labels, size, doc) as `event` notifications, `heartbeat` every 15 s, and `missed` + fresh snapshot for a subscriber that fell behind.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "not_found"
+          },
+          "message": "not_found"
+        },
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        }
+      ],
+      "name": "events.subscribe",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "Only children of this terminal.",
+          "name": "children_of",
+          "required": false,
+          "schema": {
+            "description": "Only children of this terminal.",
+            "type": ["string", "null"]
+          }
+        },
+        {
+          "description": "Only terminals carrying all of these labels (repeatable).",
+          "name": "labels",
+          "required": false,
+          "schema": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "description": "Only terminals carrying all of these labels (repeatable).",
+            "type": "object"
+          }
+        },
+        {
+          "description": "Only this terminal.",
+          "name": "terminal",
+          "required": false,
+          "schema": {
+            "description": "Only this terminal.",
+            "type": ["string", "null"]
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/SubscribeResult"
+        }
+      }
+    }
+  ],
+  "openrpc": "1.3.2"
+}

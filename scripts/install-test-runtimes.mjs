@@ -47,6 +47,32 @@ if (process.platform === "win32") {
   await writeFile(join(bin, "herdr"), bytes);
   await chmod(join(bin, "herdr"), 0o755);
 }
+// herdr-core release archives carry no GitHub digest; pin the SHA-256 the
+// 0.1.15 release manifest publishes for each target.
+const herdrCore = {
+  "linux-x86_64":
+    "efbb1382da3d5053cb20c60c166a62ec34e73d8299977fb1f5abed28ddec8d66",
+  "linux-aarch64":
+    "e4939faa57cd1597eb2a07ea34b84cc8f861992c943a08f5e685b41d4d0bfa4f",
+  "macos-x86_64":
+    "55acac7e0ba75c829028655cd7e7964d138b10a03946fd73628508a2821b1118",
+  "macos-aarch64":
+    "47eba8367e0626a1efced8795fcb03d5434b2541c5a84d78c50cc02c8fb49fc8",
+  "windows-x86_64":
+    "8a1bc80030c93e76a0c77295c641d4f939aa56e36925ff7421d24c13e74a690e",
+}[`${os}-${arch}`];
+if (herdrCore) {
+  const archive = `herdr-core-${os}-${arch}${process.platform === "win32" ? ".zip" : ".tar.gz"}`;
+  const download = await fetch(
+    `https://releases.herdr.dev/core/0.1.15/${archive}`,
+  );
+  if (!download.ok) throw new Error(`herdr-core download: ${download.status}`);
+  const data = Buffer.from(await download.arrayBuffer());
+  if (createHash("sha256").update(data).digest("hex") !== herdrCore)
+    throw new Error("herdr-core archive digest mismatch");
+  await writeFile(join(root, archive), data);
+  await execa("tar", ["-xf", join(root, archive), "-C", bin]);
+}
 await execa(
   "npm",
   [

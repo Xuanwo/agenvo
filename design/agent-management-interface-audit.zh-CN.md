@@ -5,6 +5,7 @@
 | Connector | 开发文档 |
 | --- | --- |
 | Herdr | [原生资源、终端输入输出与生命周期](herdr-connector.zh-CN.md) |
+| herdr-core | [terminal、OSC 7501 状态与模板启动](herdr-core-connector.zh-CN.md) |
 | Codex app-server | [Thread/Turn、服务端请求与连接通知](codex-connector.zh-CN.md) |
 | Paseo | [客户端选择、原生能力与订阅语义](paseo-connector.zh-CN.md) |
 | Amp | [插件宿主、原生接口与验证边界](amp-interface-audit.zh-CN.md) |

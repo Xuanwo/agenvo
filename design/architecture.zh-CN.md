@@ -18,6 +18,7 @@ flowchart TB
   PORT --> NODE["Node SQLite + ws + HTTPS 代理"]
   CORE <--> CON["Connector · 配置、重连、协议校验"]
   CON --> HERDR["Herdr 适配器 · 原生 JSON-RPC"]
+  CON --> HC["herdr-core 适配器 · hc JSON-RPC"]
   CON --> CODEX["Codex 适配器 · app-server"]
   CON --> PASEO["Paseo 适配器 · daemon WebSocket"]
   CON --> AMP["Amp 适配器 · 原生插件桥接"]
@@ -45,6 +46,7 @@ VPS 只有一个进程持有数据库排他锁。状态目录属于运行用户�
 | Connector CLI | `packages/connector/src/cli/main.ts`、`connect.ts`、`configuration.ts`、`diagnostics.ts` | 命令分派、配对流程、配置与诊断；进程信号归 CLI |
 | VPS 宿主 | `apps/server/src/server.ts`、`host.ts`、`http.ts`、`store.ts` | 资源组合、套接字与定时器、HTTP 适配、数据库打开与权限 |
 | Herdr 原生边界 | `apps/herdr/src/methods.ts`、`services.ts`、`startups.ts`、`herdr.ts` | 方法 schema 与 argv、原生端点与 generation、异步启动确认、调用协调 |
+| herdr-core 原生边界 | `apps/herdr-core/src/methods.ts`、`rpc.ts`、`events.ts`、`herdr-core.ts` | 方法 schema、逐调用握手与 core 身份、事件订阅、模板启动确认 |
 | Codex 原生边界 | `apps/codex-app-server/src/connection.ts`、`interactions.ts`、`native-schema.ts`、`codex.ts` | 单连接 RPC、待响应请求、原生校验、重连与订阅意图 |
 | Paseo / Lody 方法 | 各自的 `paseo.ts` / `lody.ts` | 方法定义从 schema 推导 handler 参数类型；原生状态仍由各自 SDK / workspace 持有 |
 | Amp / OpenCode 方法 | 各自的 `methods.ts` 与适配器 | 原生方法目录、插件桥接或 HTTP/SSE；不增加共同原生传输层 |
@@ -101,13 +103,15 @@ Herdr 适配器连接独立的原生服务，不提供 session.start/stop。原�
 
 ## 包与发行边界
 
-仓库使用 npm workspaces。统一发行七个程序：`@agenvo/herdr`、`@agenvo/codex-app-server`、`@agenvo/paseo`、`@agenvo/amp`、`@agenvo/lody`、`@agenvo/opencode`、`@agenvo/server`。`@agenvo/protocol`、`@agenvo/connector`、`@agenvo/relay` 是私有 workspace 包，构建时进入对应发行产物，不要求使用者安装私有包。Cloudflare 是部署入口，不发布 npm 包。各包统一版本，线协议版本独立维护。
+仓库使用 npm workspaces。统一发行八个程序：`@agenvo/herdr`、`@agenvo/herdr-core`、`@agenvo/codex-app-server`、`@agenvo/paseo`、`@agenvo/amp`、`@agenvo/lody`、`@agenvo/opencode`、`@agenvo/server`。`@agenvo/protocol`、`@agenvo/connector`、`@agenvo/relay` 是私有 workspace 包，构建时进入对应发行产物，不要求使用者安装私有包。Cloudflare 是部署入口，不发布 npm 包。各包统一版本，线协议版本独立维护。
 
 共享 Connector 不导入后端实现。每个后端拥有配置 schema、配置生成、能力版本、诊断、原生连接及生命周期行为，通过静态 Backend 接口接入共同 CLI 和连接循环。不存在动态插件注册或加载。
 
 每个 Connector 独立配对。Herdr 与 Codex 默认目录分别是 `~/.config/agenvo/herdr` 与 `~/.config/agenvo/codex-app-server`，各有凭据、锁和系统服务。线协议中的 deviceId 表示 Connector 身份；同一物理电脑可以有多个身份。连接器之间不能复制配对凭据。
 
 包的源码通过显式 exports 导入。共享包不依赖应用，应用之间不互相导入。构建检查防止跨应用打包；发行测试从 npm tarball 在仓库外安装，验证没有对私有包或源码路径的运行依赖。
+
+herdr-core Connector 附着已运行的 `hc` core，默认配置目录为 `~/.config/agenvo/herdr-core`。它与 Herdr Connector 分开维护，原因、能力目录与验证见 [herdr-core 接入设计](herdr-core-connector.zh-CN.md)。
 
 Paseo Connector 附着已有 daemon，默认配置目录为 `~/.config/agenvo/paseo`。完整契约、原生控制动作与隔离验证见 [Paseo 接入设计](paseo-connector.zh-CN.md)。
 

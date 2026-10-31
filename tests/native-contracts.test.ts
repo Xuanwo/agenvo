@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { AmpAdapter } from "../apps/amp/src/amp.js";
 import { LodyAdapter } from "../apps/lody/src/lody.js";
 import { PaseoAdapter } from "../apps/paseo/src/paseo.js";
+import { HerdrCoreAdapter } from "../apps/herdr-core/src/herdr-core.js";
 import type { Adapter } from "@agenvo/connector/adapters/adapter";
 import { CodexAdapter } from "../apps/codex-app-server/src/codex.js";
 import { HerdrAdapter } from "../apps/herdr/src/herdr.js";
@@ -370,6 +371,13 @@ test("connectors use shared discovery terms while preserving native method names
     cwd: "/tmp",
     configRoot: "/tmp/herdr",
   });
+  const herdrCore = new HerdrCoreAdapter({
+    kind: "herdr-core",
+    id: "hc",
+    label: "herdr-core",
+    endpoint: "/unused/default.sock",
+    coreId: "fixture",
+  });
   const amp = new AmpAdapter({
     kind: "amp",
     id: "a",
@@ -404,7 +412,7 @@ test("connectors use shared discovery terms while preserving native method names
     endpoint: "http://localhost:1",
     username: "opencode",
   });
-  for (const adapter of [codex, herdr, amp, paseo, lody, opencode])
+  for (const adapter of [codex, herdr, herdrCore, amp, paseo, lody, opencode])
     assert.ok(
       adapter.methods().every((m) => !m.name.startsWith("management.")),
     );
@@ -418,7 +426,7 @@ test("connectors use shared discovery terms while preserving native method names
     } while (cursor);
     return found;
   };
-  for (const [query, c, h, a, p, l, o] of [
+  for (const [query, c, h, a, p, l, o, hc] of [
     [
       "Create work context",
       "thread/start",
@@ -427,6 +435,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.create",
       "lody.sessions.create",
       "session.create",
+      "terminal.run",
     ],
     [
       "SUBMIT INPUT",
@@ -436,6 +445,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.send",
       "lody.sessions.send",
       "session.prompt_async",
+      "terminal.send",
     ],
     [
       "read output",
@@ -445,6 +455,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.history",
       "lody.sessions.history",
       "session.messages",
+      "terminal.read",
     ],
     [
       "interrupt",
@@ -454,6 +465,7 @@ test("connectors use shared discovery terms while preserving native method names
       "paseo.agents.cancel",
       "lody.sessions.cancel",
       "session.abort",
+      "terminal.interrupt",
     ],
   ]) {
     assert.ok(
@@ -478,6 +490,10 @@ test("connectors use shared discovery terms while preserving native method names
     );
     assert.ok(
       all(lody, query).some((m) => m.name === l),
+      query,
+    );
+    assert.ok(
+      all(herdrCore, query).some((m) => m.name === hc),
       query,
     );
   }

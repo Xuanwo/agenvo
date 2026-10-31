@@ -12,9 +12,9 @@
 
 - Node.js 24.13+ 和 npm。
 - 连接器使用 macOS、Linux 或 Windows；VPS 中继使用 Linux。
-- 在运行 Agent 的电脑上安装原生运行时（Herdr、Codex CLI、Paseo、Amp 或 Lody），并单独配置 Agent 所需的模型服务凭据。
+- 在运行 Agent 的电脑上安装原生运行时（Herdr、herdr-core、Codex CLI、Paseo、Amp 或 Lody），并单独配置 Agent 所需的模型服务凭据。
 
-CI 固定使用 Herdr 0.9.3、Codex CLI 0.160.1 和 Paseo CLI 0.11.1，以便复现测试。这些是测试基线，不是安装时必须匹配的版本；Agenvo 不会仅因版本号不同而拒绝连接。兼容性取决于连接器使用的原生接口。
+CI 固定使用 Herdr 0.9.3、herdr-core 0.1.15、Codex CLI 0.160.1 和 Paseo CLI 0.11.1，以便复现测试。这些是测试基线，不是安装时必须匹配的版本；Agenvo 不会仅因版本号不同而拒绝连接。兼容性取决于连接器使用的原生接口。
 
 只安装当前电脑所需的包；多个连接器可以共存：
 
@@ -22,6 +22,7 @@ CI 固定使用 Herdr 0.9.3、Codex CLI 0.160.1 和 Paseo CLI 0.11.1，以便复
 
 ```sh
 npm install --global @agenvo/herdr@0.2.0
+npm install --global @agenvo/herdr-core@0.2.0
 npm install --global @agenvo/codex-app-server@0.2.0
 npm install --global @agenvo/paseo@0.2.0
 npm install --global @agenvo/amp@0.2.0
@@ -50,10 +51,10 @@ npm ci
 
 ```sh
 npm run build
-npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
+npm link --workspace @agenvo/herdr --workspace @agenvo/herdr-core --workspace @agenvo/codex-app-server --workspace @agenvo/paseo --workspace @agenvo/amp --workspace @agenvo/lody --workspace @agenvo/server
 ```
 
-完成后可以使用 `agenvo-herdr`、`agenvo-codex-app-server`、`agenvo-paseo`、`agenvo-amp`、`agenvo-lody` 和 `agenvo-server`。安装命令链接不会启动中继或连接器。命令指向仓库中的构建文件，因此需要保留该 checkout；已有 checkout 时，直接在那里构建。
+完成后可以使用 `agenvo-herdr`、`agenvo-herdr-core`、`agenvo-codex-app-server`、`agenvo-paseo`、`agenvo-amp`、`agenvo-lody` 和 `agenvo-server`。安装命令链接不会启动中继或连接器。命令指向仓库中的构建文件，因此需要保留该 checkout；已有 checkout 时，直接在那里构建。
 
 ## 部署与连接
 
@@ -66,6 +67,8 @@ npm link --workspace @agenvo/herdr --workspace @agenvo/codex-app-server --worksp
 Herdr 和 Codex app-server 均独立运行，Connector 只连接已有服务。配置 Codex Connector 前，先独立启动监听 Unix socket 或 loopback WebSocket 端点的 Codex。桌面 App 的 stdio 进程不会自动暴露该端点或会话。关闭和更新 Connector 不会停止原生服务。
 
 后续任务管理参考实时方法描述和[管理指南](management.zh-CN.md)。连接失败时参考[诊断说明](usage.zh-CN.md#撤销与诊断)。
+
+herdr-core 的 core 同样独立运行；先用 `hc server start` 等方式启动，再附着 `agenvo-herdr-core`。
 
 Paseo 同样独立运行；先配置 daemon 和 provider，再附着 `agenvo-paseo`。
 

@@ -45,6 +45,20 @@ codex app-server --listen ws://127.0.0.1:4500
 
 In another terminal, run `agenvo-codex-app-server instance add --id coding --home "$HOME/.codex" --endpoint ws://127.0.0.1:4500 --cwd "$HOME/code"`. Keep configuration in your user profile, protected by Windows directory ACLs. Unix socket attachment is unavailable on Windows. Herdr normally stores its configuration in `$env:APPDATA/herdr`; pass the actual directory to `--config-root`.
 
+## Attach herdr-core
+
+Start the herdr-core (`hc`) core yourself, for example with `hc server start`, then attach its endpoint:
+
+```sh
+agenvo-herdr-core instance add --id hc
+agenvo-herdr-core connect https://relay.example.com --name laptop-hc
+agenvo-herdr-core run
+```
+
+The default configuration directory is `~/.config/agenvo/herdr-core`. Without options the connector uses the native default endpoint of the `default` session; pass `--session NAME` for another `HC_SESSION`, or `--endpoint PATH` when `HC_SOCKET` or the `socket` config setting moves it. Instance setup only performs a handshake and records the core's permanent ID; it never starts a core. If that core's state is wiped, its ID changes and the instance must be configured and approved again.
+
+The core has no API password: whoever reaches the endpoint controls every terminal with the core account's access, including terminals on machines the core added. Approving the instance hands these terminals to authorized MCP clients. Keep the endpoint in a directory only your account can enter. Stopping or updating the connector leaves the core and its programs running.
+
 ## Attach Paseo
 
 Run the Paseo daemon and configure its providers independently, then attach its direct WebSocket endpoint:

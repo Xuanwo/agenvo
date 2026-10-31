@@ -28,7 +28,7 @@ npm run test:system
 npm run test:adapters
 ```
 
-The installer downloads pinned Herdr 0.9.3, Codex CLI 0.160.1, Paseo CLI 0.11.1, and Amp CLI releases and checks the Herdr asset digest. These pins make tests reproducible; they are not a runtime version allowlist. Linux, macOS and Windows CI use the same commands. Windows runs directly on a GitHub-hosted Windows runner with Herdr named pipes and Codex loopback WebSocket, without WSL. `npm run test:ci` combines the initial checks (except audit) with system tests.
+The installer downloads pinned Herdr 0.9.3, herdr-core 0.1.15, Codex CLI 0.160.1, Paseo CLI 0.11.1, and Amp CLI releases and checks the Herdr asset digest and the SHA-256 from the herdr-core release manifest. These pins make tests reproducible; they are not a runtime version allowlist. Linux, macOS and Windows CI use the same commands. Windows runs directly on a GitHub-hosted Windows runner with Herdr named pipes and Codex loopback WebSocket, without WSL. `npm run test:ci` combines the initial checks (except audit) with system tests.
 
 System tests follow OAuth login → device pairing → MCP discovery/subscription → Agent input → native notification → reading output → follow-up/interruption → unsubscribe. Real Connector and independent Herdr/Codex/Paseo processes use a local model mock. The launcher clears inherited credentials and provides temporary HOME, CODEX_HOME and Herdr configuration; fixtures clean up their processes. Never point tests at a personal deployment. Codex Unix socket tests run only on macOS/Linux; systemd user-service tests run only on Linux. Codex lifecycle tests close and restart the Connector during native execution, then recover the same thread without replaying input. Check skipped-test output for platform-specific coverage.
 
@@ -38,14 +38,14 @@ The local webhook receiver verifies signatures with test keys. A test-only callb
 
 Keep private configuration, credentials, native logs and generated outputs out of Git.
 
-When updating Codex schemas, run `scripts/import-codex-schema.py` against the supported CLI version and validate execution settings and adapters.
+When updating Codex schemas, run `scripts/import-codex-schema.py` against the supported CLI version and validate execution settings and adapters. When moving the herdr-core baseline, run `scripts/import-herdr-core-schema.py` against that version's `schema/hc.openrpc.json` to refreeze the OpenRPC subset used by tests, and review the diff.
 
 Source responsibilities:
 
 - `packages/protocol`: wire schemas, limits and execution outcomes.
 - `packages/relay`: shared Relay, MCP, event delivery and administration UI.
 - `packages/connector`: shared connection, configuration storage, observation and CLI mechanisms.
-- `apps/herdr`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`, `apps/opencode`: independently installed Connectors owning their configuration schemas and adapters.
+- `apps/herdr`, `apps/herdr-core`, `apps/codex-app-server`, `apps/paseo`, `apps/amp`, `apps/lody`, `apps/opencode`: independently installed Connectors owning their configuration schemas and adapters.
 - `apps/server`, `apps/cloudflare`: VPS and Cloudflare hosts.
 
 New deployment hosts must reuse the routing core and preserve authorization, epoch and uncertain-execution semantics. Native adapter additions follow the [Connector contract (Chinese)](design/agent-management.zh-CN.md#新增或扩展-connector): expose discoverable native methods through the existing `search` and `execute` tools, with shared operation terms and explicit interaction semantics. Do not add retry mechanisms that can duplicate writes.

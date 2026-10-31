@@ -28,7 +28,7 @@ Queries are case-insensitive whitespace-separated keywords; all words must occur
 
 A deviceId identifies a Connector, not a physical machine. Offline or unavailable instances retain their status or error; a failed method lookup may leave partial results. Online instances without matching methods are omitted from nonempty searches. Names are unique within an instance; no Agenvo namespace is required.
 
-Both Connectors use common operation terms: list, create, read, submit input, interrupt and respond. A work context is a conversation thread in Codex and an agent running in a terminal pane in Herdr. A Herdr session is a native service process; a workspace is a terminal container. Native method and field names remain unchanged, preserving these differences.
+Both Connectors use common operation terms: list, create, read, submit input, interrupt and respond. A work context is a conversation thread in Codex and an agent running in a terminal pane in Herdr, and a terminal in herdr-core. A Herdr session is a native service process; a workspace is a terminal container. Native method and field names remain unchanged, preserving these differences.
 
 Discovery results also carry the optional owner-supplied `context` text unchanged. Read it when choosing and using an instance. Empty queries, matching method queries, and offline instances can all include the last announcement. Context does not participate in method keyword matching, guarantee live capabilities or permissions, or automatically enter native calls. See [instance context configuration](usage.md#add-instance-context).
 
@@ -155,5 +155,19 @@ When only completion or a request for input matters, native state or events can 
 Herdr parameter validation failures return `invalid_params` with field paths and reasons in `error.message`. Paths are JSON arrays such as `["lines"]`; `[]` identifies an error on the whole parameter object, such as an unrecognized key.
 
 For change-triggered observation, use the existing [events protocol](events.md), then read current state and output through execute.
+
+## herdr-core
+
+herdr-core (`hc`) has one resource: a terminal running a program or interactive agent. Address it as `t7`, by its live name, or as `machine/t7` for a machine the core added. `terminal.list` includes terminals started from the CLI, other agents and other clients; `all: true` adds finished ones. Names are unique only among live terminals and can be reused later. The core runs independently; Agenvo never starts, stops, restarts or updates it.
+
+Status comes only from what a program reports through OSC 7501 (`idle`, `working`, `done`, `blocked`, `error`). A program that reports nothing has no status; that does not mean idle or finished. `turn` rises each time the program leaves `working`. Neither status nor turn proves business success.
+
+Create work with `terminal.run`, which requires `name`. Put agent arguments, including execution settings the instance `context` asks for, in `argv`; Agenvo forwards them unchanged. Run agents interactively so they stay steerable. Use `templates.list` to find roles: with a template name as `argv[0]`, herdr-core starts its command and, once the agent reports ready, sends the instructions plus the rest of `argv` as the first message. Check `first_message.sent`; `false` means the task was not sent, so read the terminal before sending it yourself. A template start that outlasts the call returns `execution: "starting"` with `{name, query: "terminal.get"}`; poll `terminal.get` with that name and read the native result under `startup`. Do not start it again.
+
+Submit input with `terminal.send` (paste then Enter, after about 3 seconds without typing) or `terminal.keys` (`enter`, `esc`, `down`, `ctrl+c`, ...). A `blocked` program refuses `terminal.send` with error kind `blocked`: a permission or question is waiting. Read the screen and let the user decide; `force: true` types anyway and may answer that dialog. `terminal.interrupt` presses the stop key and reports `stopped`, `exited`, `still_working` or `unknown`; it never ends the program. `terminal.kill` ends it and `terminal.rm` removes a finished record.
+
+Read output with `terminal.read`: the screen plus `lines` of history (default `0`, the screen only). `complete: false` means part may be missing; a full-screen app is not scrolled while it works, so read again once it stops. Filter `result.text` inside `execute` as for Herdr. Agenvo exposes no blocking wait: observe `status` and `turn` events, or read again in a later `execute`.
+
+Native errors keep herdr-core's `error.native.kind` and `hint` (for example `not_found`, `name_taken`, `blocked`, `finished`, `unavailable`). `core_identity_changed` means the endpoint now serves a different core: reconfigure the instance. A lost reply is `unknown`: inspect with `terminal.get` or `terminal.read` before repeating input. Commands outside terminals (`machine.exec`), files, documents, attach streams and core or machine management are not exposed.
 
 Lody exposes native Sessions, history, exact-turn cancellation and interactions through `lody.*` methods. See the [Lody guide](lody.md) for cloud and local connection boundaries.
