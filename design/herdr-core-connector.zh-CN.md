@@ -69,7 +69,7 @@ Connector 类型 `herdr-core` 包含 `herdr`，因此搜索 `herdr` 会同时匹
 
 `terminal.run` 在程序运行后返回，但模板会先等待 Agent 首次报告状态（原生默认 30 秒），再发送第一条消息并返回。这会超过 Relay 单次调用 10 秒的预算。上游技能文档要求把首个任务放进 `run`，因为发给启动中 Agent 的输入可能丢失，所以不能改为“先启动、后发送”。
 
-Agenvo 因此要求 `terminal.run` 提供 `name`。原生调用在自己的连接上持续到原生回复（最长 5 分钟）；8 秒内回复时直接返回原生结果，否则返回 `starting` 和查询键 `{name, query: "terminal.get"}`。之后 `terminal.get` 按该 name 附带 `startup`，其中保存最终的原生结果或错误；原生启动失败、name 未注册时，`terminal.get` 返回原生 `not_found` 与 startup 的组合，让失败可见。同名启动未结束前拒绝再次启动。这些记录只在 Connector 进程内，Connector 重启后通过 `terminal.list` 重新发现。
+Agenvo 因此要求 `terminal.run` 提供 `name`。原生调用在自己的连接上持续到原生回复（最长 5 分钟）；8 秒内回复时直接返回原生结果，否则返回 `starting` 和查询键 `{terminal, query: "terminal.get"}`。名称只在单个 core 内唯一，因此 `terminal` 是 `name`，指定 `on` 时为 `machine/name`，与 `terminal.get` 接受的地址相同。之后 `terminal.get` 按该地址附带 `startup`，其中保存最终的原生结果或错误；原生启动失败、name 未注册时，`terminal.get` 返回原生 `not_found` 与 startup 的组合，让失败可见。同一 machine 上同名启动未结束前拒绝再次启动，不同 machine 互不影响。这些记录只在 Connector 进程内，Connector 重启后通过 `terminal.list` 重新发现。
 
 ## 事件
 

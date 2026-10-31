@@ -227,12 +227,13 @@ test("herdr-core terminal.run that outlasts the call stays observable through te
   t.after(() => fixture.close());
   const adapter = adapterFor(fixture, 300);
   await adapter.init();
-  let ready!: () => void;
+  const waiting: (() => void)[] = [];
+  const ready = () => waiting.splice(0).forEach((resolve) => resolve());
   const native = fixture.handlers["terminal.run"];
   fixture.handlers["terminal.run"] = async (params, socket) => {
-    const started = native(params, socket) as any;
     // A template run answers only after its first message went in.
-    await new Promise<void>((resolve) => (ready = resolve));
+    await new Promise<void>((resolve) => waiting.push(resolve));
+    const started = native(params, socket) as any;
     return {
       ...started,
       first_message: { sent: true, started: true, turn: 0 },
@@ -243,7 +244,10 @@ test("herdr-core terminal.run that outlasts the call stays observable through te
     argv: ["reviewer", "Review src/x.rs"],
   });
   assert.equal(outcome.execution, "starting");
-  assert.deepEqual(outcome.result, { name: "review", query: "terminal.get" });
+  assert.deepEqual(outcome.result, {
+    terminal: "review",
+    query: "terminal.get",
+  });
   const again = await adapter.call("terminal.run", {
     name: "review",
     argv: ["reviewer"],
@@ -251,6 +255,17 @@ test("herdr-core terminal.run that outlasts the call stays observable through te
   assert.equal(again.error?.code, "already_exists");
   const pending = await adapter.call("terminal.get", { terminal: "review" });
   assert.equal((pending.result as any).startup.state, "starting");
+  // Names are unique per core: the same name on another machine is its own start.
+  const remote = await adapter.call("terminal.run", {
+    name: "review",
+    on: "box",
+    argv: ["reviewer"],
+  });
+  assert.equal(remote.execution, "starting");
+  assert.deepEqual(remote.result, {
+    terminal: "box/review",
+    query: "terminal.get",
+  });
   ready();
   const settled = await until(
     async () => adapter.call("terminal.get", { terminal: "review" }),
@@ -259,9 +274,24 @@ test("herdr-core terminal.run that outlasts the call stays observable through te
   const startup = (settled.result as any).startup;
   assert.equal(startup.outcome.execution, "accepted");
   assert.equal(startup.outcome.result.first_message.sent, true);
+  // The fixture is one core, so the second start is natively refused: each
+  // address keeps its own native result.
+  const remoteSettled = await until(
+    async () => adapter.call("terminal.get", { terminal: "box/review" }),
+    (r) => (r.result as any)?.startup?.state === "settled",
+  );
+  assert.equal(
+    (remoteSettled.result as any).startup.outcome.error.native.kind,
+    "name_taken",
+  );
+  assert.equal(
+    ((await adapter.call("terminal.get", { terminal: "review" })).result as any)
+      .startup.outcome.execution,
+    "accepted",
+  );
   assert.equal(
     fixture.requests.filter((r) => r.method === "terminal.run").length,
-    1,
+    2,
   );
 
   // A native start failure keeps its rejection visible under the same name.

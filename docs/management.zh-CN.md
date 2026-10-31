@@ -152,7 +152,7 @@ herdr-core（`hc`）只有一种资源：运行程序或交互式 Agent 的 term
 
 状态只来自程序通过 OSC 7501 报告的内容（`idle`、`working`、`done`、`blocked`、`error`）。不报告状态的程序没有 status，这不代表空闲或已完成。程序每次离开 `working`，`turn` 加一。状态和 turn 都不证明业务目标完成。
 
-用 `terminal.run` 创建工作，必须提供 `name`。Agent 参数，包括实例 `context` 要求的执行设置，放在 `argv` 中，Agenvo 原样转发。以交互方式运行 Agent，便于继续引导。用 `templates.list` 查找角色：`argv[0]` 是模板名时，herdr-core 启动模板命令，并在 Agent 报告就绪后，把模板说明和 `argv` 其余部分作为第一条消息发送。检查 `first_message.sent`；为 `false` 表示任务没有发送，先读取 terminal，再自行发送。模板启动超出单次调用时间时返回 `execution: "starting"` 和 `{name, query: "terminal.get"}`；用该名称轮询 `terminal.get`，在 `startup` 中读取原生结果，不要再次启动。
+用 `terminal.run` 创建工作，必须提供 `name`。Agent 参数，包括实例 `context` 要求的执行设置，放在 `argv` 中，Agenvo 原样转发。以交互方式运行 Agent，便于继续引导。用 `templates.list` 查找角色：`argv[0]` 是模板名时，herdr-core 启动模板命令，并在 Agent 报告就绪后，把模板说明和 `argv` 其余部分作为第一条消息发送。检查 `first_message.sent`；为 `false` 表示任务没有发送，先读取 terminal，再自行发送。模板启动超出单次调用时间时返回 `execution: "starting"` 和 `{terminal, query: "terminal.get"}`，其中 `terminal` 是名称，指定 `on` 时带 `machine/` 前缀；用该地址轮询 `terminal.get`，在 `startup` 中读取原生结果，不要再次启动。
 
 用 `terminal.send` 提交输入（约 3 秒无人输入后粘贴并回车），或用 `terminal.keys` 发送按键（`enter`、`esc`、`down`、`ctrl+c` 等）。程序处于 `blocked` 时，`terminal.send` 以错误 kind `blocked` 拒绝，表示有权限请求或问题待处理。读取屏幕后交给用户决定；`force: true` 会强制输入，可能回答该对话框。`terminal.interrupt` 按下停止键并报告 `stopped`、`exited`、`still_working` 或 `unknown`，不会结束程序。`terminal.kill` 结束程序，`terminal.rm` 删除已结束的记录。
 

@@ -87,7 +87,9 @@ export class HerdrCoreAdapter implements Adapter {
    * terminal.get with the name, which carries the eventual native result.
    */
   private async run(params: Record<string, any>): Promise<Outcome> {
-    const key = params.name as string;
+    // Names are unique per core: a start on another machine is addressed as
+    // machine/name, the same address terminal.get accepts.
+    const key = (params.on ? `${params.on}/` : "") + (params.name as string);
     if (this.startups.get(key)?.state === "starting")
       throw new Fault(
         "already_exists",
@@ -117,7 +119,7 @@ export class HerdrCoreAdapter implements Adapter {
     });
     return {
       execution: "starting",
-      result: { name: key, query: "terminal.get" },
+      result: { terminal: key, query: "terminal.get" },
     };
   }
   watchEvents(emit: (event: RuntimeEvent) => void) {
