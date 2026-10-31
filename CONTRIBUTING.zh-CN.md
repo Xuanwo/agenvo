@@ -38,7 +38,7 @@ Herdr 会话测试通过公开 MCP 入口接入已有 Codex 或启动具名 Code
 
 私有配置、凭据、原生日志和生成的构建产物不能进入 Git。
 
-更新 Codex schema 时，使用 `scripts/import-codex-schema.py` 指定支持的 CLI 版本，并验证执行配置与适配器。更新 herdr-core 基线时，用 `scripts/import-herdr-core-schema.py` 从对应版本的 `schema/hc.openrpc.json` 重新冻结测试用 OpenRPC 子集，并审阅差异。
+更新 Codex schema 时，使用 `scripts/import-codex-schema.py` 指定支持的 CLI 版本，并验证执行配置与适配器。更新 herdr-core 基线时，用 `scripts/import-herdr-core-schema.py` 从对应版本的 `schema/hc.openrpc.json` 重新生成 `apps/herdr-core/src/schema.json`（运行时参数 schema 与测试用结果 schema），并审阅差异。
 
 源码职责：
 

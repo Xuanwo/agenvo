@@ -158,6 +158,6 @@ herdr-core（`hc`）只有一种资源：运行程序或交互式 Agent 的 term
 
 用 `terminal.read` 读取输出：屏幕加 `lines` 行历史（默认 `0`，即只读屏幕）。`complete: false` 表示可能缺失部分内容；全屏程序工作时不会被滚动读取，停止后再读。与 Herdr 一样，在 `execute` 内筛选 `result.text`。Agenvo 不提供阻塞等待：观察 `status` 和 `turn` 事件，或在之后的 `execute` 中再次读取。
 
-原生错误保留 herdr-core 的 `error.native.kind` 和 `hint`，例如 `not_found`、`name_taken`、`blocked`、`finished`、`unavailable`。`core_identity_changed` 表示端点已换成另一个 core，需要重新配置实例。回复丢失时结果为 `unknown`：重复输入前先用 `terminal.get` 或 `terminal.read` 检查。terminal 之外的命令执行（`machine.exec`）、文件、文档、attach 流以及 core 和 machine 管理均不暴露。
+原生错误保留 herdr-core 的 `error.native.kind` 和 `hint`，例如 `not_found`、`name_taken`、`blocked`、`finished`、`unavailable`。`core_identity_changed` 表示端点已换成另一个 core，需要重新配置实例。回复丢失时结果为 `unknown`：重复输入前先用 `terminal.get` 或 `terminal.read` 检查。Connector 类型 `herdr-core` 包含 `herdr`，搜索 `herdr` 也会匹配 herdr-core 的方法；用 `instanceId` 或更具体的关键词限定。terminal 之外的命令执行（`machine.exec`）、文件、文档、attach 流以及 core 和 machine 管理均不暴露。
 
 Lody 通过 `lody.*` 方法暴露原生 Session、历史、精确轮次取消和交互。云端与本地连接边界见 [Lody 指南](lody.zh-CN.md)。

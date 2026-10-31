@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { Ajv } from "ajv";
 import type { RuntimeEvent } from "@agenvo/protocol/events";
 import { HerdrCoreAdapter } from "../apps/herdr-core/src/herdr-core.js";
 import { backend } from "../apps/herdr-core/src/backend.js";
 import { defaultEndpoint } from "../apps/herdr-core/src/endpoint.js";
 import { methods } from "../apps/herdr-core/src/methods.js";
+import schema from "../apps/herdr-core/src/schema.json" with { type: "json" };
 import {
   DROP,
   herdrCoreFixture,
@@ -15,33 +15,12 @@ import {
 } from "./fixtures/herdr-core.js";
 import { until } from "./support/environment.js";
 
-const openrpc = JSON.parse(
-  await readFile(
-    new URL("./fixtures/herdr-core.openrpc.json", import.meta.url),
-    "utf8",
-  ),
-);
+// Native result schemas are frozen beside the runtime input schemas.
 const ajv = new Ajv({ strict: false, validateFormats: false, allErrors: true });
-const nativeMethod = (name: string) =>
-  openrpc.methods.find((m: any) => m.name === name);
-const paramsValidator = (name: string) => {
-  const method = nativeMethod(name);
-  return ajv.compile({
-    type: "object",
-    properties: Object.fromEntries(
-      method.params.map((p: any) => [p.name, p.schema]),
-    ),
-    required: method.params
-      .filter((p: any) => p.required)
-      .map((p: any) => p.name),
-    additionalProperties: false,
-    components: openrpc.components,
-  });
-};
 const resultValidator = (name: string) =>
   ajv.compile({
-    ...nativeMethod(name).result.schema,
-    components: openrpc.components,
+    ...(schema.results as Record<string, object>)[name],
+    components: schema.components,
   });
 
 const adapterFor = (fixture: HerdrCoreFixture, callMs?: number) =>
@@ -63,15 +42,19 @@ test("herdr-core catalog keeps native names and parameters accepted by the nativ
   await adapter.init();
   assert.equal(adapter.available, true);
   assert.equal(adapter.version, "0.1.15");
-  for (const method of adapter.methods()) {
-    const native = nativeMethod(method.name);
-    assert.ok(native, `${method.name} is a native method`);
-    const names = new Set(native.params.map((p: any) => p.name));
-    for (const property of Object.keys(
-      (method.inputSchema as any).properties ?? {},
-    ))
-      assert.ok(names.has(property), `${method.name}.${property} is native`);
-  }
+  // The catalog is the frozen native input schema, not a second definition.
+  assert.deepEqual(
+    adapter.methods().map((m) => [m.name, m.inputSchema]),
+    Object.entries(schema.methods),
+  );
+  const runSchema = schema.methods["terminal.run"];
+  assert.ok(runSchema.required.includes("name"));
+  for (const name of ["wait", "timeout", "caller", "no_parent"])
+    assert.equal(Object.hasOwn(runSchema.properties, name), false, name);
+  assert.equal(
+    Object.hasOwn(schema.methods["terminal.send"].properties, "wait"),
+    false,
+  );
   for (const excluded of [
     "machine.exec",
     "file.write",
@@ -80,7 +63,11 @@ test("herdr-core catalog keeps native names and parameters accepted by the nativ
     "terminal.attach",
     "terminal.wait",
   ])
-    assert.equal(Object.hasOwn(methods, excluded), false, excluded);
+    assert.equal(
+      methods.some((m) => m.name === excluded),
+      false,
+      excluded,
+    );
 
   const run = await adapter.call("terminal.run", {
     name: "worker",
@@ -118,13 +105,14 @@ test("herdr-core catalog keeps native names and parameters accepted by the nativ
     read.error?.native && (read.error.native as any).kind,
     "not_found",
   );
-  for (const request of fixture.requests) {
-    const validate = paramsValidator(request.method);
-    assert.ok(
-      validate(request.params),
-      `${request.method}: ${JSON.stringify(validate.errors)}`,
-    );
-  }
+  // Schema defaults reach the core; the interrupt watch fits the call budget.
+  const interrupt = fixture.requests.find(
+    (r) => r.method === "terminal.interrupt",
+  )!;
+  assert.equal(interrupt.params.timeout, 5);
+  const sent = fixture.requests.find((r) => r.method === "terminal.run")!;
+  assert.deepEqual(sent.params.argv, ["agent", "--flag"]);
+  assert.equal(sent.params.keep, false);
   // Every connection opens with the handshake before any native operation.
   assert.equal(
     fixture.requests.filter((r) => r.method === "hello").length,
@@ -162,16 +150,25 @@ test("herdr-core preserves native rejections, invalid input and unknown confirma
 
   const before = fixture.requests.length;
   for (const params of [
-    { terminal: "dialog", text: "" },
-    { terminal: "a/b/c", text: "a" },
+    { terminal: "dialog" },
+    { terminal: "dialog", text: 1 },
+    { terminal: "dialog", text: "a", if: "done" },
     { terminal: "dialog", text: "a", wait: true },
   ]) {
     const outcome = await adapter.call("terminal.send", params);
     assert.equal(outcome.execution, "not_started");
     assert.equal(outcome.error?.code, "invalid_params");
   }
+  const unnamed = await adapter.call("terminal.run", { argv: ["a"] });
+  assert.equal(unnamed.error?.code, "invalid_params");
+  assert.match(unnamed.error!.message, /name/);
+  const waited = await adapter.call("terminal.run", {
+    name: "x",
+    wait: true,
+  });
+  assert.match(waited.error!.message, /additional properties \(wait\)/);
   assert.equal(
-    (await adapter.call("terminal.run", { name: "x", argv: ["a"], line: "b" }))
+    (await adapter.call("terminal.interrupt", { terminal: "x", timeout: 10 }))
       .error?.code,
     "invalid_params",
   );

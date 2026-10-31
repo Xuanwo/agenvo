@@ -35,6 +35,8 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "pino": "10.4.0",
     "ws": "8.22.0"
   }

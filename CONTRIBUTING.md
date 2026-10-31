@@ -38,7 +38,7 @@ The local webhook receiver verifies signatures with test keys. A test-only callb
 
 Keep private configuration, credentials, native logs and generated outputs out of Git.
 
-When updating Codex schemas, run `scripts/import-codex-schema.py` against the supported CLI version and validate execution settings and adapters. When moving the herdr-core baseline, run `scripts/import-herdr-core-schema.py` against that version's `schema/hc.openrpc.json` to refreeze the OpenRPC subset used by tests, and review the diff.
+When updating Codex schemas, run `scripts/import-codex-schema.py` against the supported CLI version and validate execution settings and adapters. When moving the herdr-core baseline, run `scripts/import-herdr-core-schema.py` against that version's `schema/hc.openrpc.json` to regenerate `apps/herdr-core/src/schema.json` (runtime parameter schemas and the result schemas used by tests), and review the diff.
 
 Source responsibilities:
 

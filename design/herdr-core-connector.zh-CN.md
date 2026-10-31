@@ -18,7 +18,7 @@ herdr-core 不是 Herdr 的新版本接口。Herdr 的资源是 session、worksp
 - [`api/run.rs`](https://github.com/Lutra-Fs/herdr-core/blob/4a3591a/crates/herdr-core/src/api/run.rs) 与 [`templates.rs`](https://github.com/Lutra-Fs/herdr-core/blob/4a3591a/crates/herdr-core/src/templates.rs)：模板启动等待就绪后才发送第一条消息。
 - [`docs/security.md`](https://github.com/Lutra-Fs/herdr-core/blob/4a3591a/docs/security.md)：同账户进程即信任边界，没有 API 密码或逐客户端权限。
 
-`scripts/import-herdr-core-schema.py` 从 OpenRPC 文档冻结 Connector 使用的方法子集到 `tests/fixtures/herdr-core.openrpc.json`，测试据此校验发出的参数和 fixture 的结果。升级基线时用新版本文档重新生成并审阅差异。
+与 Codex、OpenCode 相同，参数 schema 从原生文档生成，不在代码中另写一份。`scripts/import-herdr-core-schema.py` 从 OpenRPC 文档冻结审阅过的子集到 `apps/herdr-core/src/schema.json`：每个暴露方法的参数（按字段白名单选取、展开 `$ref`、`additionalProperties: false`），以及测试使用的原生结果 schema。运行时目录的 `inputSchema` 直接取自该文件，调用前用 ajv 校验并应用其中的默认值；方法描述和只读标志由 `methods.ts` 补充。升级基线时，用新版本文档重新生成并审阅差异。
 
 ## 连接与身份
 
@@ -46,7 +46,15 @@ Connector 直接连接 core 的客户端端点，使用 plain 模式（每行一
 | `terminal.label/keep` | 标签与丢失后保留 shell 的原生设置 |
 | `templates.list`、`machine.list`、`server.status` | 只读发现 |
 
-调用参数用 zod 严格校验，拒绝原生不存在或 Agenvo 不暴露的字段，例如 `wait` 和 `caller`。`terminal.run` 不接受同时给出 `argv` 与 `line`。执行权限遵循[共同原则](agent-management.zh-CN.md#职责与信任)：Agent 参数原样放在 `argv`，配置者用实例 `context` 声明约定，Connector 不维护 Agent 类型白名单，也不注入权限参数。
+导入脚本省略原生的 `caller`（Connector 不是 terminal）、`terminal.run`/`terminal.send` 的 `wait` 与 `timeout`（阻塞等待）、`no_parent` 和已被忽略的 `die_with_parent`。传入这些字段会因 `additionalProperties` 被拒绝，不会写入 core。在原生 schema 上做的 Agenvo 覆盖只有三处，均写在脚本中：
+
+- `terminal.run` 的 `name` 改为必填，作为超出调用预算时的查询键（见下文模板启动）。
+- `terminal.interrupt` 的 `timeout` 默认值和上限为 5 秒（原生默认 10 秒），保证在 Relay 调用预算内返回。
+- `terminal.read` 的 `lines` 上限为 1000，避免结果超过通信帧。
+
+其余约束沿用原生：例如 `argv` 与 `line` 同时给出、名称格式不合法，由 core 返回 `invalid_params`。执行权限遵循[共同原则](agent-management.zh-CN.md#职责与信任)：Agent 参数原样放在 `argv`，配置者用实例 `context` 声明约定，Connector 不维护 Agent 类型白名单，也不注入权限参数。
+
+Connector 类型 `herdr-core` 包含 `herdr`，因此搜索 `herdr` 会同时匹配 Herdr 和 herdr-core 的方法；用 `instanceId` 或更具体的关键词限定目标。
 
 ### 不暴露的原生能力
 
@@ -85,7 +93,7 @@ core 没有 API 密码，能连接端点即可用 core 账户控制 terminal，�
 
 ## 验证
 
-- `tests/herdr-core.test.ts`：方法与参数均存在于原生 OpenRPC；发出的参数和 fixture 结果通过冻结 schema 校验；每个连接先握手；原生拒绝保留 kind/hint；输入校验失败不写入；断线与超时返回 unknown 且不重发；core 身份变化不写入；模板启动超出预算后通过 `terminal.get` 返回最终结果和原生失败；事件转发、`doc` 过滤、`missed` 与断线后的 resync 和重新订阅；配置只握手、不启动 core；默认端点规则。
+- `tests/herdr-core.test.ts`：目录即冻结的原生输入 schema，不暴露字段被拒绝且不写入；schema 默认值随请求送达；fixture 结果通过冻结的原生结果 schema 校验；每个连接先握手；原生拒绝保留 kind/hint；断线与超时返回 unknown 且不重发；core 身份变化不写入；模板启动超出预算后通过 `terminal.get` 返回最终结果和原生失败；事件转发、`doc` 过滤、`missed` 与断线后的 resync 和重新订阅；配置只握手、不启动 core；默认端点规则。
 - `tests/native-contracts.test.ts`：共同搜索词能发现 `terminal.run/send/read/interrupt`。
 - `tests/integration/herdr-core.test.ts`：经真实 Relay、OAuth 配对、MCP search/execute 和构建后的 Connector，连接协议 fixture，覆盖外部 terminal 发现、输入、事件经 webhook 投递、blocked 拒绝、中断和断线 unknown。
 - `tests/system/herdr-core-events.test.ts`：安装器固定的 herdr-core 0.1.15、隔离的 `HC_SESSION` 与 XDG 目录、自报 OSC 7501 的确定性 fixture Agent。覆盖外部启动的 Agent 被发现、输入后的回复与 turn 事件、执行中重启 Connector 后仍在工作且无重放、esc 中断、模板第一条消息、结束与删除，以及断开 Connector 后 terminal 继续运行。Windows 跳过：ConPTY 下 fixture 的 OSC 7501 报告尚未验证。

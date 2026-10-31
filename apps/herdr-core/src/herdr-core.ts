@@ -1,4 +1,3 @@
-import { z } from "zod";
 import type { RuntimeEvent } from "@agenvo/protocol/events";
 import { Fault, type Outcome } from "@agenvo/protocol";
 import {
@@ -7,7 +6,7 @@ import {
   type Method,
 } from "@agenvo/connector/adapters/adapter";
 import type { HerdrCoreConfig } from "./config.js";
-import { methods } from "./methods.js";
+import { methods, nativeParams } from "./methods.js";
 import { call, HcConnection } from "./rpc.js";
 import { HcEvents } from "./events.js";
 
@@ -40,15 +39,7 @@ export class HerdrCoreAdapter implements Adapter {
     }
   }
   methods(): Method[] {
-    return Object.entries(methods).map(([name, method]) => ({
-      name,
-      description: method.description,
-      readOnly: method.readOnly,
-      inputSchema: z.toJSONSchema(method.schema, {
-        io: "input",
-        unrepresentable: "any",
-      }),
-    }));
+    return methods;
   }
   private native(
     method: string,
@@ -58,19 +49,12 @@ export class HerdrCoreAdapter implements Adapter {
     return call(this.config.endpoint, this.config.coreId, method, params, ms);
   }
   async call(method: string, input: Record<string, unknown>): Promise<Outcome> {
-    const definition = Object.hasOwn(methods, method)
-      ? methods[method]
-      : undefined;
-    if (!definition) return new Fault("unsupported_method").outcome();
-    const parsed = definition.schema.safeParse(input);
-    if (!parsed.success)
-      return new Fault(
-        "invalid_params",
-        parsed.error.issues
-          .map((issue) => `${JSON.stringify(issue.path)}: ${issue.message}`)
-          .join("; "),
-      ).outcome();
-    const params = parsed.data as Record<string, any>;
+    let params: Record<string, any>;
+    try {
+      params = nativeParams(method, input);
+    } catch (error) {
+      return (error as Fault).outcome();
+    }
     try {
       if (method === "terminal.run") return await this.run(params);
       const result = await this.native(method, params);
