@@ -1,6 +1,6 @@
 # herdr-core Connector
 
-状态：已实现。协议 fixture 依据 herdr-core 0.1.15 的 OpenRPC 文档校验；真实 `hc` 系统测试在安装固定版本后运行，Windows 尚未验证。
+状态：已实现。协议 fixture 依据 herdr-core 0.1.15 的 OpenRPC 文档校验；真实 `hc` 系统测试在安装固定版本后于 Linux、macOS 和 Windows 运行。
 
 herdr-core（命令 `hc`）是 Herdr 推出的无界面终端运行时：terminal 在客户端离开后继续运行，程序通过 OSC 7501 自报状态，核心不绘制界面，也不识别 Agent 品牌。新增独立的 `@agenvo/herdr-core` Connector，附着已运行的 core，暴露整个 core 的 terminal，包括 CLI、其他 Agent 和其他客户端创建的 terminal。共同契约见 [MCP 与 Connector 设计原则](agent-management.zh-CN.md)，调用方式见[管理指南](../docs/management.zh-CN.md#herdr-core)。
 
@@ -96,6 +96,6 @@ core 没有 API 密码，能连接端点即可用 core 账户控制 terminal，�
 - `tests/herdr-core.test.ts`：目录即冻结的原生输入 schema，不暴露字段被拒绝且不写入；schema 默认值随请求送达；fixture 结果通过冻结的原生结果 schema 校验；每个连接先握手；原生拒绝保留 kind/hint；断线与超时返回 unknown 且不重发；core 身份变化不写入；模板启动超出预算后通过 `terminal.get` 返回最终结果和原生失败；事件转发、`doc` 过滤、`missed` 与断线后的 resync 和重新订阅；配置只握手、不启动 core；默认端点规则。
 - `tests/native-contracts.test.ts`：共同搜索词能发现 `terminal.run/send/read/interrupt`。
 - `tests/integration/herdr-core.test.ts`：经真实 Relay、OAuth 配对、MCP search/execute 和构建后的 Connector，连接协议 fixture，覆盖外部 terminal 发现、输入、事件经 webhook 投递、blocked 拒绝、中断和断线 unknown。
-- `tests/system/herdr-core-events.test.ts`：安装器固定的 herdr-core 0.1.15、隔离的 `HC_SESSION` 与 XDG 目录、自报 OSC 7501 的确定性 fixture Agent。覆盖外部启动的 Agent 被发现、输入后的回复与 turn 事件、执行中重启 Connector 后仍在工作且无重放、esc 中断、模板第一条消息、结束与删除，以及断开 Connector 后 terminal 继续运行。Windows 跳过：ConPTY 下 fixture 的 OSC 7501 报告尚未验证。
+- `tests/system/herdr-core-events.test.ts`：安装器固定的 herdr-core 0.1.15、隔离的 `HC_SESSION` 与 XDG 目录、自报 OSC 7501 的确定性 fixture Agent。覆盖外部启动的 Agent 被发现、输入后的回复与 turn 事件、执行中重启 Connector 后仍在工作且无重放、esc 中断、模板第一条消息、结束与删除，以及断开 Connector 后 terminal 继续运行。Windows 上同样运行：hc 自带新版 ConPTY（`conpty\conpty.dll`），上游自身的 OSC 7501 测试只覆盖 Unix，因此该用例也是 Windows 上状态上报的验证；模板命令经 `sh` 运行，Windows 需要 PATH 中有 `sh`（如 Git for Windows）。
 
 本次开发环境无法执行下载的 `hc` 二进制，真实系统测试未在本地运行，交由 CI 执行。

@@ -17,9 +17,6 @@ test(
   "native herdr-core: MCP attaches to an external agent terminal, submits input across a connector restart, interrupts and starts a template",
   {
     timeout: 90000,
-    skip:
-      process.platform === "win32" &&
-      "OSC 7501 fixture reporting through ConPTY is not verified yet",
   },
   async (t) => {
     const hc = await binary("herdr-core", {});
