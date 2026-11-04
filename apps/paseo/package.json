@@ -14,7 +14,7 @@
   "devDependencies": {
     "@agenvo/connector": "0.2.0",
     "@agenvo/protocol": "0.2.0",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   },
   "description": "Paseo daemon connector for Agenvo",
   "bin": {
